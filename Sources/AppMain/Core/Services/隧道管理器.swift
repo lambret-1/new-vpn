@@ -189,9 +189,26 @@ final class 隧道管理器: NSObject, ObservableObject {
             guard let self = self else { return }
 
             if let 错误 = 错误 {
+                let 错误描述 = 错误.localizedDescription.lowercased()
                 self.记录日志(级别: .错误, 模块: "描述文件", 内容: "检测描述文件状态失败：\(错误.localizedDescription)")
                 调试日志管理器.共享.错误("隧道", "检测描述文件状态失败：\(错误.localizedDescription)")
-                完成?(false)
+
+                // 如果是权限错误，尝试通过创建临时配置触发权限请求
+                if 错误描述.contains("permission") || 错误描述.contains("denied") {
+                    调试日志管理器.共享.警告("隧道", "检测到VPN权限被拒绝，尝试触发权限请求...")
+                    self.请求VPN权限 { 授权成功 in
+                        if 授权成功 {
+                            调试日志管理器.共享.信息("隧道", "VPN权限授权成功，重新检测描述文件状态")
+                            // 授权成功后重新检测
+                            self.检测描述文件状态(完成: 完成)
+                        } else {
+                            调试日志管理器.共享.错误("隧道", "VPN权限授权失败")
+                            完成?(false)
+                        }
+                    }
+                } else {
+                    完成?(false)
+                }
                 return
             }
 
@@ -229,6 +246,45 @@ final class 隧道管理器: NSObject, ObservableObject {
                 self.记录日志(级别: .信息, 模块: "描述文件", 内容: 已安装 ? "VPN 描述文件已安装" : "VPN 描述文件未安装")
                 调试日志管理器.共享.信息("隧道", 已安装 ? "VPN 描述文件已安装（bundleID匹配）" : "VPN 描述文件未安装或bundleID不匹配")
                 完成?(已安装)
+            }
+        }
+    }
+
+    /// 请求 VPN 权限（通过创建临时配置触发系统权限对话框）
+    /// - Parameter 完成: 完成回调（是否授权成功）
+    private func 请求VPN权限(完成: @escaping (Bool) -> Void) {
+        let 临时管理器 = NETunnelProviderManager()
+        let 临时协议 = NETunnelProviderProtocol()
+        临时协议.providerBundleIdentifier = 隧道常量.扩展BundleID
+        临时协议.serverAddress = "127.0.0.1"
+        临时管理器.protocolConfiguration = 临时协议
+        临时管理器.localizedDescription = "NewVPN 临时配置"
+        临时管理器.isEnabled = false
+
+        临时管理器.saveToPreferences { [weak self] 保存错误 in
+            guard let self = self else { return }
+
+            if let 保存错误 = 保存错误 {
+                let 错误描述 = 保存错误.localizedDescription.lowercased()
+                调试日志管理器.共享.错误("隧道", "请求VPN权限失败：\(保存错误.localizedDescription)")
+
+                // 如果仍然是权限错误，说明用户拒绝了
+                if 错误描述.contains("permission") || 错误描述.contains("denied") {
+                    DispatchQueue.main.async {
+                        self.需要手动安装描述文件 = true
+                    }
+                    完成(false)
+                } else {
+                    // 其他错误，可能是配置已存在，视为成功
+                    调试日志管理器.共享.信息("隧道", "保存临时配置返回非权限错误，视为已授权")
+                    完成(true)
+                }
+            } else {
+                调试日志管理器.共享.信息("隧道", "VPN权限请求成功")
+                // 删除临时配置
+                临时管理器.removeFromPreferences { _ in
+                    完成(true)
+                }
             }
         }
     }

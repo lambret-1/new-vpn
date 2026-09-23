@@ -94,6 +94,8 @@ jobs:
         run: |
           # 先获取最新的 tag（确保能获取到之前 CI 创建的 tag）
           git fetch --tags --force
+          # 刷新本地 tag 列表
+          git tag -l > /dev/null
 
           if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
             # tag 触发：直接使用 tag 版本号，不进位
@@ -102,9 +104,15 @@ jobs:
             echo "version=$TAG_VERSION" >> $GITHUB_OUTPUT
           else
             # push / 手动触发：从最近 tag 读取版本并进位
-            LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.1.0")
+            # 使用 git tag 按创建时间排序获取最新 tag（比 git describe 更可靠）
+            LATEST_TAG=$(git tag --sort=-creatordate | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1)
+            if [ -z "$LATEST_TAG" ]; then
+              LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.1.0")
+            fi
             CURRENT="${LATEST_TAG#v}"
             CURRENT=${CURRENT:-0.1.0}
+
+            echo "获取到的最新 tag: $LATEST_TAG"
 
             MAJOR=$(echo $CURRENT | cut -d. -f1)
             MINOR=$(echo $CURRENT | cut -d. -f2)

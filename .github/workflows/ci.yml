@@ -1,0 +1,191 @@
+name: 快速打包
+
+# 触发条件：推送 main 分支、打 tag、手动触发
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "版本号进位方式"
+        required: false
+        default: "patch"
+        type: choice
+        options: [patch, minor, major, none]
+
+# 并发控制：同一分支只跑最新一次
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: 编译未签名 IPA
+    runs-on: macos-14
+
+    # 设置默认 shell 为 zsh，兼容 macOS
+    defaults:
+      run:
+        shell: zsh -e {0}
+
+    env:
+      # 项目配置
+      PROJECT_NAME: NewVPN
+      SCHEME: NewVPN
+      BUILD_DIR: build
+      CONFIGURATION: Release
+      EXPORT_METHOD: ad-hoc
+
+    steps:
+      # ── 1. 拉取代码 ──
+      - name: 拉取代码
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # ── 2. 选择 Xcode 版本 ──
+      - name: 选择 Xcode 15.4
+        run: sudo xcode-select -s /Applications/Xcode_15.4.app
+
+      - name: 验证 Xcode 版本
+        run: xcodebuild -version
+
+      # ── 3. 安装 XcodeGen ──
+      - name: 安装 XcodeGen
+        run: brew install xcodegen
+
+      # ── 4. 生成 Xcode 工程 ──
+      - name: 生成 Xcode 工程
+        run: xcodegen generate
+
+      # ── 5. 版本号自动进位 ──
+      - name: 版本号进位
+        id: version
+        run: |
+          # 读取当前版本号（从 project.yml 或 git tag）
+          if [ -f project.yml ]; then
+            CURRENT=$(grep -m1 'MARKETING_VERSION' project.yml | awk '{print $2}' | tr -d '"')
+          fi
+          CURRENT=${CURRENT:-0.1.0}
+          
+          MAJOR=$(echo $CURRENT | cut -d. -f1)
+          MINOR=$(echo $CURRENT | cut -d. -f2)
+          PATCH=$(echo $CURRENT | cut -d. -f3)
+          
+          BUMP="${{ github.event.inputs.bump }}"
+          BUMP=${BUMP:-patch}
+          
+          case $BUMP in
+            major) MAJOR=$((MAJOR+1)); MINOR=0; PATCH=0 ;;
+            minor) MINOR=$((MINOR+1)); PATCH=0 ;;
+            patch) PATCH=$((PATCH+1)) ;;
+            none) ;;
+          esac
+          
+          NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+          echo "当前版本: v${CURRENT}"
+          echo "新版本: v${NEW_VERSION}"
+          echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          
+          # 写入 project.yml（如果存在）
+          if [ -f project.yml ]; then
+            sed -i '' "s/MARKETING_VERSION: \".*\"/MARKETING_VERSION: \"$NEW_VERSION\"/" project.yml
+            # 重新生成工程
+            xcodegen generate
+          fi
+
+      # ── 6. 更新构建号 ──
+      - name: 更新构建号
+        run: |
+          BUILD_NUMBER=${{ github.run_number }}
+          echo "构建号: $BUILD_NUMBER"
+          # 写入 Info.plist（如果存在）
+          find . -name "Info.plist" -exec plutil -replace CFBundleVersion -string "$BUILD_NUMBER" {} \; 2>/dev/null || true
+
+      # ── 7. 编译归档 ──
+      - name: 编译归档
+        run: |
+          rm -rf ${{ env.BUILD_DIR }}
+          mkdir -p ${{ env.BUILD_DIR }}
+          
+          xcodebuild archive \
+            -project ${{ env.PROJECT_NAME }}.xcodeproj \
+            -scheme ${{ env.SCHEME }} \
+            -configuration ${{ env.CONFIGURATION }} \
+            -destination "generic/platform=iOS" \
+            -archivePath ${{ env.BUILD_DIR }}/${{ env.PROJECT_NAME }}.xcarchive \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            PROVISIONING_PROFILE_SPECIFIER="" \
+            DEVELOPMENT_TEAM="" \
+            | xcpretty
+
+      # ── 8. 导出未签名 IPA ──
+      - name: 导出未签名 IPA
+        run: |
+          # 创建导出配置（不签名）
+          cat > ${{ env.BUILD_DIR }}/ExportOptions.plist <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key>
+            <string>${{ env.EXPORT_METHOD }}</string>
+            <key>signingStyle</key>
+            <string>manual</string>
+            <key>stripSwiftSymbols</key>
+            <true/>
+            <key>compileBitcode</key>
+            <false/>
+            <key>uploadSymbols</key>
+            <false/>
+          </dict>
+          </plist>
+          EOF
+          
+          xcodebuild -exportArchive \
+            -archivePath ${{ env.BUILD_DIR }}/${{ env.PROJECT_NAME }}.xcarchive \
+            -exportPath ${{ env.BUILD_DIR }}/ipa \
+            -exportOptionsPlist ${{ env.BUILD_DIR }}/ExportOptions.plist \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            PROVISIONING_PROFILE_SPECIFIER="" \
+            | xcpretty
+
+      # ── 9. 重命名 IPA ──
+      - name: 重命名 IPA
+        run: |
+          IPA_PATH=$(find ${{ env.BUILD_DIR }}/ipa -name "*.ipa" | head -1)
+          cp "$IPA_PATH" "${{ env.BUILD_DIR }}/GitHub.ipa"
+          ls -lh "${{ env.BUILD_DIR }}/GitHub.ipa"
+
+      # ── 10. 上传构建产物 ──
+      - name: 上传 IPA 产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: GitHub-unsigned-v${{ steps.version.outputs.version }}
+          path: ${{ env.BUILD_DIR }}/GitHub.ipa
+          retention-days: 90
+
+      # ── 11. 如果是 tag，创建 Release ──
+      - name: 创建 Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.BUILD_DIR }}/GitHub.ipa
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+
+      # ── 12. 提交版本号变更回 main ──
+      - name: 提交版本号变更
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add project.yml || true
+          git commit -m "chore: 版本号进位至 v${{ steps.version.outputs.version }}" || echo "无变更"
+          git push origin main || echo "推送失败，跳过"

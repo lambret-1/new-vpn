@@ -177,6 +177,10 @@ private struct TCPUDP流量视图: View {
 private struct 设置视图: View {
     /// 更新管理器
     @ObservedObject private var 更新管理器 = AppUpdateManager.共享
+    /// 证书与描述文件管理器
+    @EnvironmentObject private var 证书管理: 证书与描述文件管理器
+    /// 是否显示证书与描述文件页面
+    @State private var 显示证书页面 = false
 
     var body: some View {
         List {
@@ -189,6 +193,23 @@ private struct 设置视图: View {
                 Label("DNS 设置", systemImage: "network")
                 Label("代理模式", systemImage: "arrow.left.arrow.right")
                 Label("分流规则", systemImage: "arrow.triangle.branch")
+            }
+            Section("安全") {
+                Button {
+                    显示证书页面 = true
+                } label: {
+                    HStack {
+                        Label("CA 证书与描述文件", systemImage: "shield")
+                        Spacer()
+                        Text("\(证书管理.证书总数) 证书 / \(证书管理.描述文件总数) 描述文件")
+                            .font(.system(size: 12))
+                            .foregroundColor(.secondary)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 13))
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .buttonStyle(PlainButtonStyle())
             }
             Section("关于") {
                 HStack {
@@ -213,6 +234,10 @@ private struct 设置视图: View {
             }
         }
         .listStyle(.insetGrouped)
+        .fullScreenCover(isPresented: $显示证书页面) {
+            证书与描述文件页面()
+                .environmentObject(证书管理)
+        }
     }
 }
 

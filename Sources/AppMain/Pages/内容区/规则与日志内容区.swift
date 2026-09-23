@@ -66,79 +66,8 @@ private struct 重写规则行: View {
 
 /// 分流规则内容区视图
 struct 分流规则内容区: View {
-    /// 全局应用状态
-    @EnvironmentObject private var 状态: AppState
-
     var body: some View {
-        LazyVStack(spacing: 10) {
-            ForEach(状态.分流规则列表) { 规则 in
-                分流规则行(规则: 规则)
-            }
-        }
-        .padding(.horizontal, 15)
-    }
-}
-
-/// 单个分流规则行
-private struct 分流规则行: View {
-    let 规则: 分流规则模型
-
-    var body: some View {
-        HStack(spacing: 12) {
-            // 动作图标
-            Image(systemName: 动作图标(规则.动作))
-                .font(.system(size: 18))
-                .foregroundColor(动作颜色(规则.动作))
-                .frame(width: 36, height: 36)
-                .background(动作颜色(规则.动作).opacity(0.15))
-                .cornerRadius(8)
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(规则.名称)
-                    .font(.system(size: 15, weight: .medium))
-                HStack(spacing: 6) {
-                    Text(规则.匹配类型.rawValue)
-                        .font(.system(size: 11))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Color(red: 0.35, green: 0.78, blue: 0.98))
-                        .cornerRadius(4)
-                    if !规则.匹配值.isEmpty {
-                        Text(规则.匹配值)
-                            .font(.system(size: 12))
-                            .foregroundColor(.secondary)
-                            .lineLimit(1)
-                    }
-                }
-            }
-
-            Spacer()
-
-            Toggle("", isOn: .constant(规则.启用))
-                .labelsHidden()
-                .scaleEffect(0.8)
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .background(Color.卡片背景)
-        .cornerRadius(12)
-    }
-
-    private func 动作图标(_ 动作: 规则动作) -> String {
-        switch 动作 {
-        case .直连: return "arrow.right"
-        case .代理: return "arrow.up.right"
-        case .拦截: return "nosign"
-        }
-    }
-
-    private func 动作颜色(_ 动作: 规则动作) -> Color {
-        switch 动作 {
-        case .直连: return .成功色
-        case .代理: return .主题色
-        case .拦截: return .危险色
-        }
+        分流规则页面()
     }
 }
 

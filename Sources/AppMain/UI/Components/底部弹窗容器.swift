@@ -35,24 +35,43 @@ private struct 底部弹窗内容: View {
     let 关闭: () -> Void
     /// 全局状态
     @EnvironmentObject private var 状态: AppState
+    /// 更新管理器
+    @EnvironmentObject private var 更新管理器: AppUpdateManager
+    /// 下载管理器
+    @EnvironmentObject private var 下载管理器: AppDownloadManager
 
     var body: some View {
-        NavigationStack {
-            弹窗内容视图(类型: 弹窗类型)
-                .navigationTitle(弹窗类型.标题)
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .topBarLeading) {
-                        Button {
-                            关闭()
-                        } label: {
-                            Image(systemName: "chevron.down")
-                                .font(.system(size: 18, weight: .semibold))
-                                .foregroundColor(.primary)
+        ZStack {
+            NavigationStack {
+                弹窗内容视图(类型: 弹窗类型)
+                    .navigationTitle(弹窗类型.标题)
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .topBarLeading) {
+                            Button {
+                                关闭()
+                            } label: {
+                                Image(systemName: "chevron.down")
+                                    .font(.system(size: 18, weight: .semibold))
+                                    .foregroundColor(.primary)
+                            }
                         }
                     }
+            }
+
+            // 更新弹窗（在 sheet 层级之上显示）
+            if 更新管理器.是否显示弹窗 || 下载管理器.下载状态 == .下载中 {
+                AppUpdateAlert(
+                    更新管理器: 更新管理器,
+                    下载管理器: 下载管理器
+                ) {
+                    更新管理器.关闭弹窗()
                 }
+                .transition(.opacity)
+                .zIndex(100)
+            }
         }
+        .animation(.easeInOut(duration: 0.25), value: 更新管理器.是否显示弹窗)
     }
 }
 

@@ -14,7 +14,7 @@ struct NewVPNApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            DashboardView()
                 .environmentObject(状态)
                 .preferredColorScheme(颜色方案)
         }

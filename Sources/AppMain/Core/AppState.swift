@@ -99,6 +99,89 @@ enum 应用主题: String, CaseIterable {
     case 深色
 }
 
+// MARK: - 顶部功能卡片类型
+
+/// 顶部横向滑动功能卡片类型
+enum 顶部卡片类型: String, CaseIterable, Identifiable {
+    case 节点
+    case 网络活动
+    case 重写规则
+    case 分流规则
+    case 日志
+
+    var id: String { rawValue }
+
+    /// 卡片标题
+    var 标题: String { rawValue }
+
+    /// 卡片背景色（十六进制）
+    var 背景色: Color {
+        switch self {
+        case .节点: return Color(red: 0.24, green: 0.77, blue: 0.82)
+        case .网络活动: return Color(red: 0.91, green: 0.36, blue: 0.20)
+        case .重写规则: return Color(red: 0.99, green: 0.33, blue: 0.63)
+        case .分流规则: return Color(red: 0.35, green: 0.78, blue: 0.98)
+        case .日志: return Color(red: 0.42, green: 0.42, blue: 0.44)
+        }
+    }
+
+    /// 卡片 SF Symbol 图标
+    var 图标: String {
+        switch self {
+        case .节点: return "server.rack"
+        case .网络活动: return "list.clipboard"
+        case .重写规则: return "pencil"
+        case .分流规则: return "arrow.triangle.branch"
+        case .日志: return "doc.text"
+        }
+    }
+}
+
+// MARK: - 底部工具栏弹窗类型
+
+/// 底部工具栏弹出的功能页面类型
+enum 底部弹窗类型: String, CaseIterable, Identifiable {
+    case 编辑配置文件
+    case DNS记录
+    case JS脚本记录
+    case TCPUDP流量
+    case 设置
+
+    var id: String { rawValue }
+
+    /// 弹窗标题
+    var 标题: String { rawValue }
+
+    /// 工具栏 SF Symbol 图标
+    var 图标: String {
+        switch self {
+        case .编辑配置文件: return "square.and.pencil"
+        case .DNS记录: return "magnifyingglass"
+        case .JS脚本记录: return "curlybraces"
+        case .TCPUDP流量: return "chart.bar.xaxis"
+        case .设置: return "gearshape"
+        }
+    }
+}
+
+// MARK: - 节点分组模型
+
+/// 节点分组数据模型
+struct 节点分组模型: Identifiable {
+    let id = UUID()
+    /// 分组名称
+    var 名称: String
+    /// 分组内节点列表
+    var 节点列表: [节点模型]
+    /// 是否展开
+    var 是否展开: Bool
+    /// 是否正在测速
+    var 测速中: Bool
+
+    /// 节点数量
+    var 节点数量: Int { 节点列表.count }
+}
+
 // MARK: - 全局应用状态
 
 /// 全局应用状态对象，管理隧道状态、页面导航、Mock 数据
@@ -110,6 +193,10 @@ final class AppState: ObservableObject {
 
     /// 当前选中页面
     @Published var 当前页面: 页面类型 = .首页
+    /// 当前选中顶部卡片
+    @Published var 当前顶部卡片: 顶部卡片类型 = .节点
+    /// 当前底部弹窗（nil 表示未弹出）
+    @Published var 当前底部弹窗: 底部弹窗类型?
 
     // MARK: 隧道状态
 
@@ -151,6 +238,8 @@ final class AppState: ObservableObject {
     @Published var 抓包列表: [抓包会话模型] = []
     /// 网络连接列表
     @Published var 网络连接列表: [网络连接模型] = []
+    /// 节点分组列表（按分组名聚合）
+    @Published var 节点分组列表: [节点分组模型] = []
 
     /// Mock 数据刷新定时器
     private var 模拟定时器: Timer?
@@ -242,7 +331,35 @@ final class AppState: ObservableObject {
         日志列表 = Mock数据.生成日志()
         抓包列表 = Mock数据.生成抓包会话()
         网络连接列表 = Mock数据.生成网络连接()
+        节点分组列表 = Mock数据.生成节点分组(节点列表: 节点列表)
         当前节点ID = 节点列表.first?.id
+    }
+
+    // MARK: - 分组测速
+
+    /// 对指定分组内所有节点执行模拟测速
+    func 执行分组测速(分组ID: UUID) {
+        guard let 索引 = 节点分组列表.firstIndex(where: { $0.id == 分组ID }) else { return }
+        节点分组列表[索引].测速中 = true
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+            guard let self = self else { return }
+            // 模拟更新每个节点的测速数据
+            for (节点索引, _) in self.节点分组列表[索引].节点列表.enumerated() {
+                let 延迟 = Int.random(in: 50...300)
+                let 下载 = Double.random(in: 50...300)
+                self.节点分组列表[索引].节点列表[节点索引].测速数据 = 测速结果(
+                    延迟毫秒: 延迟,
+                    抖动毫秒: Int.random(in: 1...20),
+                    丢包率: Double.random(in: 0...2),
+                    下载速率: 下载,
+                    上传速率: Double.random(in: 10...80),
+                    测速时间: Date(),
+                    成功: true
+                )
+            }
+            self.节点分组列表[索引].测速中 = false
+        }
     }
 }
 
@@ -543,5 +660,18 @@ enum Mock数据 {
                         出站策略: "代理", 开始时间: Date().addingTimeInterval(-10),
                         已关闭: true, 上行字节: 64, 下行字节: 128)
         ]
+    }
+
+    /// 根据节点列表按分组名聚合生成分组
+    static func 生成节点分组(节点列表: [节点模型]) -> [节点分组模型] {
+        let 分组字典 = Dictionary(grouping: 节点列表) { $0.分组 }
+        return 分组字典.map { 分组名, 节点 in
+            节点分组模型(
+                名称: 分组名,
+                节点列表: 节点,
+                是否展开: false,
+                测速中: false
+            )
+        }.sorted { $0.名称 < $1.名称 }
     }
 }

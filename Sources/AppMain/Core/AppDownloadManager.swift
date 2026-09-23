@@ -46,6 +46,20 @@ final class AppDownloadManager: NSObject, ObservableObject {
         下载会话 = URLSession(configuration: 配置, delegate: self, delegateQueue: .main)
     }
 
+    // MARK: - 计算属性
+
+    /// 是否可以开始新的下载
+    private var 是否可开始下载: Bool {
+        switch 下载状态 {
+        case .空闲, .已取消:
+            return true
+        case .下载失败:
+            return true
+        default:
+            return false
+        }
+    }
+
     // MARK: - 开始下载
 
     /// 开始下载 IPA 文件
@@ -53,7 +67,7 @@ final class AppDownloadManager: NSObject, ObservableObject {
     ///   - 下载地址: IPA 下载 URL
     ///   - 完成回调: 下载完成后回调临时文件路径
     func 开始下载(下载地址: String, 完成回调: @escaping (URL?) -> Void) {
-        guard 下载状态 == .空闲 || 下载状态 == .已取消 || 下载状态 == .下载失败 else { return }
+        guard 是否可开始下载 else { return }
 
         guard let url = URL(string: 下载地址) else {
             下载状态 = .下载失败("无效的下载地址")

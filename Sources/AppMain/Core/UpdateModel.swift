@@ -30,6 +30,20 @@ struct 版本信息模型: Codable, Equatable {
     /// 更新内容说明
     let 更新说明: String
 
+    /// 成员初始化器
+    init(最新版本: String, 发布日期: String, 构建环境: String, 最低iOS版本: String,
+         产物文件名: String, 产物描述: String, 下载地址: String, 详情地址: String, 更新说明: String) {
+        self.最新版本 = 最新版本
+        self.发布日期 = 发布日期
+        self.构建环境 = 构建环境
+        self.最低iOS版本 = 最低iOS版本
+        self.产物文件名 = 产物文件名
+        self.产物描述 = 产物描述
+        self.下载地址 = 下载地址
+        self.详情地址 = 详情地址
+        self.更新说明 = 更新说明
+    }
+
     /// 从 JSON 字典初始化
     init?(字典: [String: Any]) {
         guard let 版本 = 字典["latest_version"] as? String,

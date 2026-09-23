@@ -190,18 +190,44 @@ final class 隧道管理器: NSObject, ObservableObject {
 
             if let 错误 = 错误 {
                 self.记录日志(级别: .错误, 模块: "描述文件", 内容: "检测描述文件状态失败：\(错误.localizedDescription)")
+                调试日志管理器.共享.错误("隧道", "检测描述文件状态失败：\(错误.localizedDescription)")
                 完成?(false)
                 return
             }
 
-            // 查找已安装的配置
-            let 已安装 = 管理器列表?.contains(where: { 管理器 in
-                管理器.protocolConfiguration != nil
-            }) ?? false
+            // 打印所有已安装的 VPN 配置信息（调试用）
+            调试日志管理器.共享.调试("隧道", "检测到 \(管理器列表?.count ?? 0) 个已安装的 VPN 配置")
+            if let 列表 = 管理器列表 {
+                for (索引, 管理器) in 列表.enumerated() {
+                    if let 协议配置 = 管理器.protocolConfiguration as? NETunnelProviderProtocol {
+                        let bundleID = 协议配置.providerBundleIdentifier ?? "nil"
+                        let 服务器 = 协议配置.serverAddress ?? "nil"
+                        调试日志管理器.共享.调试("隧道", "配置[\(索引)]: bundleID=\(bundleID), server=\(服务器), 期望=\(隧道常量.扩展BundleID)")
+                    } else if let 协议配置 = 管理器.protocolConfiguration {
+                        调试日志管理器.共享.调试("隧道", "配置[\(索引)]: 非PacketTunnel类型, 类型=\(type(of: 协议配置))")
+                    } else {
+                        调试日志管理器.共享.调试("隧道", "配置[\(索引)]: 无协议配置")
+                    }
+                }
+            }
+
+            // 查找已安装且 providerBundleIdentifier 匹配的配置
+            let 匹配的管理器 = 管理器列表?.first(where: { 管理器 in
+                guard let 协议配置 = 管理器.protocolConfiguration as? NETunnelProviderProtocol else {
+                    return false
+                }
+                return 协议配置.providerBundleIdentifier == 隧道常量.扩展BundleID
+            })
+            let 已安装 = 匹配的管理器 != nil
 
             DispatchQueue.main.async {
                 self.需要安装描述文件 = !已安装
+                if let 管理器 = 匹配的管理器 {
+                    self.vpn管理器 = 管理器
+                    调试日志管理器.共享.信息("隧道", "已匹配 VPN 配置并设置管理器")
+                }
                 self.记录日志(级别: .信息, 模块: "描述文件", 内容: 已安装 ? "VPN 描述文件已安装" : "VPN 描述文件未安装")
+                调试日志管理器.共享.信息("隧道", 已安装 ? "VPN 描述文件已安装（bundleID匹配）" : "VPN 描述文件未安装或bundleID不匹配")
                 完成?(已安装)
             }
         }

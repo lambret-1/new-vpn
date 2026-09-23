@@ -14,6 +14,10 @@ on:
         type: choice
         options: [patch, minor, major, none]
 
+# 权限：需要写入内容以创建 Release 和打 tag
+permissions:
+  contents: write
+
 # 并发控制：main 分支只跑最新一次，tag 不取消
 concurrency:
   group: ci-${{ github.ref }}
@@ -196,12 +200,30 @@ jobs:
           path: ${{ env.BUILD_DIR }}/newVPN-v${{ steps.version.outputs.version }}.ipa
           retention-days: 90
 
-      # ── 14. 如果是 tag，创建 Release ──
+      # ── 14. 自动创建 Release（push main 和 tag 均触发）──
       - name: 创建 Release
-        if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: ${{ env.BUILD_DIR }}/newVPN-v${{ steps.version.outputs.version }}.ipa
+          tag_name: v${{ steps.version.outputs.version }}
+          name: newVPN v${{ steps.version.outputs.version }}
+          body: |
+            ## newVPN v${{ steps.version.outputs.version }}
+
+            **构建信息**
+            - 版本：v${{ steps.version.outputs.version }}
+            - 构建号：${{ github.run_number }}
+            - 构建环境：Xcode 15.4 / macOS 14
+            - 最低支持：iOS 16.0
+            - 产物：未签名 IPA（需自签名或侧载安装）
+            - 提交：${{ github.sha }}
+
+            **安装说明**
+            1. 下载下方 IPA 文件
+            - 使用 AltStore / Sideloadly 等工具侧载安装
+            - 或使用企业证书签名后安装
+          files: |
+            ${{ env.BUILD_DIR }}/newVPN-v${{ steps.version.outputs.version }}.ipa
           generate_release_notes: true
           draft: false
           prerelease: false
+          fail_on_unmatched_files: true

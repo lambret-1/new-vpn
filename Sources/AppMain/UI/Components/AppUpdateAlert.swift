@@ -108,7 +108,7 @@ struct AppUpdateAlert: View {
 
             Spacer(minLength: 0)
         }
-        .frame(height: 160)
+        .frame(height: 70)
         .padding(.horizontal, 24)
     }
 

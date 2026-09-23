@@ -95,10 +95,6 @@ final class VPN描述文件服务 {
                                 <string>Connect</string>
                             </dict>
                         </array>
-                        <key>PayloadCertificateUUID</key>
-                        <string></string>
-                        <key>PrimaryUserIdentifier</key>
-                        <string></string>
                         <key>ProviderBundleIdentifier</key>
                         <string>\(描述文件.扩展BundleID)</string>
                         <key>ProviderConfiguration</key>
@@ -107,8 +103,6 @@ final class VPN描述文件服务 {
                         <string>packet-tunnel</string>
                         <key>RemoteAddress</key>
                         <string>\(描述文件.服务器地址)</string>
-                        <key>SecondaryUserIdentifier</key>
-                        <string></string>
                         <key>SendAllTraffic</key>
                         <\(描述文件.包含所有流量 ? "true" : "false")/>
                         <key>DNSSettings</key>
@@ -125,6 +119,8 @@ final class VPN描述文件服务 {
                     </dict>
                     <key>VPNType</key>
                     <string>VPN</string>
+                    <key>VPNSubType</key>
+                    <string>\(描述文件.扩展BundleID)</string>
                 </dict>
             </array>
             <key>PayloadDescription</key>

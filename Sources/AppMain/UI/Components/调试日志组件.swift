@@ -177,7 +177,7 @@ struct 调试日志内容区: View {
     // MARK: - 日志输出窗口
 
     private var 日志输出窗口: some View {
-        Group {
+        ZStack {
             if 日志管理.是否加载中 {
                 VStack {
                     Spacer()
@@ -198,22 +198,24 @@ struct 调试日志内容区: View {
                 日志列表
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.页面背景)
     }
 
     private var 日志列表: some View {
         ScrollViewReader { 代理 in
-            List {
-                ForEach(日志管理.筛选后的日志列表) { 日志 in
-                    日志行(日志: 日志) {
-                        复制单条日志(日志)
+            ScrollView {
+                LazyVStack(spacing: 4) {
+                    ForEach(日志管理.筛选后的日志列表) { 日志 in
+                        日志行(日志: 日志) {
+                            复制单条日志(日志)
+                        }
+                        .id(日志.id)
                     }
-                    .listRowInsets(EdgeInsets(top: 2, leading: 15, bottom: 2, trailing: 15))
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
-                    .id(日志.id)
                 }
+                .padding(.horizontal, 15)
+                .padding(.vertical, 8)
             }
-            .listStyle(.plain)
             .onChange(of: 日志管理.日志列表.count) { _ in
                 if 日志管理.自动滚动, let 最后一条 = 日志管理.筛选后的日志列表.last {
                     withAnimation {

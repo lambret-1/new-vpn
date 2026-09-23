@@ -460,13 +460,15 @@ final class 隧道管理器: NSObject, ObservableObject {
         let 当前节点 = 节点ID.flatMap { id in 所有节点.first(where: { $0.id == id }) }
 
         // 生成 sing-box 配置
-        let 配置生成器 = SingBox配置生成器()
-        let 成功 = 配置生成器.生成并保存配置(
+        let 配置 = SingBox配置生成器.共享.生成配置(
             节点: 当前节点,
             节点列表: 所有节点,
             分流规则: [],
             DNS配置: nil
         )
+
+        // 保存配置到 App Group 共享目录
+        let 成功 = SingBox配置生成器.共享.保存配置(配置, 到路径: "singbox_config.json")
 
         调试日志管理器.共享.信息("隧道", "sing-box 配置生成\(成功 ? "成功" : "失败")")
         完成(成功)

@@ -46,7 +46,7 @@ struct 隧道状态指示器: View {
     private var 状态颜色: Color {
         switch 状态 {
         case .已连接: return .成功色
-        case .正在连接, .重新加载中: return .警告色
+        case .正在连接, .重新加载中, .准备中, .重连中: return .警告色
         case .已断开: return .secondary
         case .正在断开: return .警告色
         case .连接失败, .配置无效: return .危险色

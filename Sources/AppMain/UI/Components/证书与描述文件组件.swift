@@ -761,6 +761,12 @@ struct 描述文件详情页面: View {
     let 描述文件: VPN描述文件模型
     @EnvironmentObject private var 管理: 证书与描述文件管理器
     @Environment(\.dismiss) private var 关闭
+    /// 是否正在安装
+    @State private var 安装中 = false
+    /// 是否显示分享面板
+    @State private var 显示分享面板 = false
+    /// 分享文件 URL
+    @State private var 分享文件URL: URL?
 
     var body: some View {
         NavigationView {
@@ -843,12 +849,18 @@ struct 描述文件详情页面: View {
                         } label: {
                             HStack {
                                 Spacer()
-                                Text("安装 VPN 配置")
-                                    .font(.system(size: 16, weight: .medium))
-                                    .foregroundColor(.主题色)
+                                if 安装中 {
+                                    ProgressView()
+                                        .tint(.主题色)
+                                } else {
+                                    Text("安装 VPN 配置")
+                                        .font(.system(size: 16, weight: .medium))
+                                        .foregroundColor(.主题色)
+                                }
                                 Spacer()
                             }
                         }
+                        .disabled(安装中)
                     }
 
                     if 描述文件.状态 == .已安装 || 描述文件.状态 == .已断开 {
@@ -915,6 +927,19 @@ struct 描述文件详情页面: View {
                         关闭()
                     }
                 }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        分享描述文件()
+                    } label: {
+                        Image(systemName: "square.and.arrow.up")
+                            .foregroundColor(.主题色)
+                    }
+                }
+            }
+            .sheet(isPresented: $显示分享面板) {
+                if let url = 分享文件URL {
+                    分享视图(分享内容: [url])
+                }
             }
         }
         .navigationViewStyle(.stack)
@@ -929,7 +954,21 @@ struct 描述文件详情页面: View {
 
     /// 安装配置
     private func 安装配置() {
-        管理.安装VPN配置(描述文件) { _ in }
+        安装中 = true
+        管理.安装VPN配置(描述文件) { 结果 in
+            安装中 = false
+            if !结果.成功, let 错误 = 结果.错误信息 {
+                print("安装失败：\(错误)")
+            }
+        }
+    }
+
+    /// 分享描述文件
+    private func 分享描述文件() {
+        if let 文件URL = VPN描述文件服务.共享.保存描述文件到临时目录(描述文件) {
+            分享文件URL = 文件URL
+            显示分享面板 = true
+        }
     }
 }
 
@@ -1059,6 +1098,23 @@ struct 新建描述文件页面: View {
 
         管理.添加描述文件(新描述文件)
         关闭()
+    }
+}
+
+// MARK: - 分享视图
+
+/// 分享视图（封装 UIActivityViewController）
+private struct 分享视图: UIViewControllerRepresentable {
+    /// 分享内容数组
+    let 分享内容: [Any]
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        let 控制器 = UIActivityViewController(activityItems: 分享内容, applicationActivities: nil)
+        return 控制器
+    }
+
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {
+        // 无需更新
     }
 }
 

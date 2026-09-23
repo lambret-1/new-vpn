@@ -234,7 +234,7 @@ private struct 设置视图: View {
             }
         }
         .listStyle(.insetGrouped)
-        .fullScreenCover(isPresented: $显示证书页面) {
+        .sheet(isPresented: $显示证书页面) {
             证书与描述文件页面()
                 .environmentObject(证书管理)
         }

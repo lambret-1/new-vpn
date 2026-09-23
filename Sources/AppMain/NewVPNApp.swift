@@ -32,6 +32,8 @@ struct NewVPNApp: App {
     @StateObject private var 隧道管理 = 隧道管理器.共享
     /// sing-box 内核管理器
     @StateObject private var 内核管理 = SingBox内核管理器.共享
+    /// 配置描述文件管理器
+    @StateObject private var 配置管理 = 配置描述文件管理器.共享
     /// App 代理
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
@@ -46,6 +48,7 @@ struct NewVPNApp: App {
                 .environmentObject(分流管理)
                 .environmentObject(隧道管理)
                 .environmentObject(内核管理)
+                .environmentObject(配置管理)
                 .preferredColorScheme(颜色方案)
         }
     }

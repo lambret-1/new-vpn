@@ -40,7 +40,7 @@ enum 订阅状态: Equatable {
 // MARK: - 自动更新周期枚举
 
 /// 订阅自动更新周期
-enum 自动更新周期: String, CaseIterable, Identifiable {
+enum 自动更新周期: String, CaseIterable, Identifiable, Codable {
     case 六小时 = "6小时"
     case 十二小时 = "12小时"
     case 二十四小时 = "24小时"
@@ -62,7 +62,7 @@ enum 自动更新周期: String, CaseIterable, Identifiable {
 // MARK: - 远程订阅模型
 
 /// 远程订阅源数据模型
-struct 远程订阅模型: Identifiable, Codable, Hashable {
+struct 远程订阅模型: Identifiable, Codable {
     /// 唯一标识
     var id: UUID = UUID()
     /// 订阅名称

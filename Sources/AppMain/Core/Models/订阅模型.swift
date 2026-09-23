@@ -80,7 +80,7 @@ struct 远程订阅模型: Identifiable, Codable {
     /// 是否启用自动更新
     var 自动更新启用: Bool = false
     /// 自动更新周期
-    var 自动更新周期: 自动更新周期 = .二十四小时
+    var 更新周期: 自动更新周期 = .二十四小时
 
     /// 上次更新时间显示文字
     var 上次更新显示: String {
@@ -102,7 +102,7 @@ struct 远程订阅模型: Identifiable, Codable {
 
     // Codable 支持：订阅状态不持久化
     enum 编码键: String, CodingKey {
-        case id, 名称, 地址, 自定义UA, 请求头, 上次更新时间, 自动更新启用, 自动更新周期
+        case id, 名称, 地址, 自定义UA, 请求头, 上次更新时间, 自动更新启用, 更新周期
     }
 
     init(from 解码器: Decoder) throws {
@@ -114,7 +114,7 @@ struct 远程订阅模型: Identifiable, Codable {
         请求头 = try 容器.decode([String: String].self, forKey: .请求头)
         上次更新时间 = try 容器.decodeIfPresent(Date.self, forKey: .上次更新时间)
         自动更新启用 = try 容器.decode(Bool.self, forKey: .自动更新启用)
-        自动更新周期 = try 容器.decode(自动更新周期.self, forKey: .自动更新周期)
+        更新周期 = try 容器.decode(自动更新周期.self, forKey: .更新周期)
         上次状态 = .空闲
     }
 
@@ -127,7 +127,7 @@ struct 远程订阅模型: Identifiable, Codable {
         try 容器.encode(请求头, forKey: .请求头)
         try 容器.encodeIfPresent(上次更新时间, forKey: .上次更新时间)
         try 容器.encode(自动更新启用, forKey: .自动更新启用)
-        try 容器.encode(自动更新周期, forKey: .自动更新周期)
+        try 容器.encode(更新周期, forKey: .更新周期)
     }
 
     /// 默认初始化

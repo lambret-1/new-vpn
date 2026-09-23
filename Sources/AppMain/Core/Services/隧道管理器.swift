@@ -370,32 +370,71 @@ final class 隧道管理器: NSObject, ObservableObject {
 
     // MARK: - 连接控制
 
-    /// 启动隧道连接
+    /// 启动隧道连接（不检测描述文件，直接尝试连接）
     func 启动连接(节点ID: UUID? = nil, 节点名称: String? = nil) {
-        // 先检测描述文件状态
-        检测描述文件状态 { [weak self] 已安装 in
-            guard let self = self else { return }
+        调试日志管理器.共享.信息("隧道", "用户请求启动隧道连接")
+        执行隧道连接(节点ID: 节点ID, 节点名称: 节点名称)
+    }
 
-            if !已安装 {
-                // 未安装描述文件，提示安装
-                DispatchQueue.main.async {
-                    self.需要安装描述文件 = true
-                    self.最近错误 = .扩展未安装
-                    self.记录日志(级别: .警告, 模块: "连接", 内容: "VPN 描述文件未安装，请先安装描述文件")
+    /// 执行隧道连接
+    private func 执行隧道连接(节点ID: UUID? = nil, 节点名称: String? = nil) {
+        // 如果 vpn管理器 为 nil，先创建并保存配置
+        if vpn管理器 == nil {
+            调试日志管理器.共享.信息("隧道", "VPN管理器为空，创建新配置并保存")
+            创建并保存配置 { [weak self] 成功 in
+                guard let self = self else { return }
+                if 成功 {
+                    self.开始隧道连接(节点ID: 节点ID, 节点名称: 节点名称)
+                } else {
+                    self.当前状态 = .配置无效
+                    self.最近错误 = .配置无效("创建VPN配置失败")
+                    调试日志管理器.共享.错误("隧道", "创建VPN配置失败")
                 }
-                return
             }
-
-            // 已安装，继续连接流程
-            self.执行隧道连接(节点ID: 节点ID, 节点名称: 节点名称)
+        } else {
+            开始隧道连接(节点ID: 节点ID, 节点名称: 节点名称)
         }
     }
 
-    /// 执行隧道连接（内部方法，描述文件已确认安装后调用）
-    private func 执行隧道连接(节点ID: UUID? = nil, 节点名称: String? = nil) {
+    /// 创建并保存 VPN 配置
+    private func 创建并保存配置(完成: @escaping (Bool) -> Void) {
+        let 管理器 = NETunnelProviderManager()
+        管理器.localizedDescription = "newVPN 隧道"
+
+        let 协议配置 = NETunnelProviderProtocol()
+        协议配置.providerBundleIdentifier = 隧道常量.扩展BundleID
+        协议配置.serverAddress = "newVPN"
+        管理器.protocolConfiguration = 协议配置
+        管理器.isEnabled = true
+
+        管理器.saveToPreferences { 错误 in
+            if let 错误 = 错误 {
+                调试日志管理器.共享.错误("隧道", "保存VPN配置失败：\(错误.localizedDescription)")
+                完成(false)
+                return
+            }
+            调试日志管理器.共享.信息("隧道", "VPN配置保存成功")
+            // 重新加载配置
+            NETunnelProviderManager.loadAllFromPreferences { 列表, _ in
+                if let 匹配的管理器 = 列表?.first(where: { 管理器 in
+                    guard let 协议 = 管理器.protocolConfiguration as? NETunnelProviderProtocol else { return false }
+                    return 协议.providerBundleIdentifier == 隧道常量.扩展BundleID
+                }) {
+                    self.vpn管理器 = 匹配的管理器
+                    调试日志管理器.共享.信息("隧道", "已匹配并设置VPN管理器")
+                }
+                完成(true)
+            }
+        }
+    }
+
+    /// 开始隧道连接（配置已就绪）
+    private func 开始隧道连接(节点ID: UUID? = nil, 节点名称: String? = nil) {
         guard let 管理器 = vpn管理器 else {
             最近错误 = .扩展未安装
-            记录日志(级别: .错误, 模块: "连接", 内容: "隧道扩展未安装，无法连接")
+            当前状态 = .连接失败
+            记录日志(级别: .错误, 模块: "连接", 内容: "VPN管理器为空，无法连接")
+            调试日志管理器.共享.错误("隧道", "VPN管理器为空，无法连接")
             return
         }
 
@@ -417,6 +456,7 @@ final class 隧道管理器: NSObject, ObservableObject {
                 guard 成功 else {
                     self.最近错误 = .配置无效(错误?.localizedDescription ?? "未知错误")
                     self.当前状态 = .配置无效
+                    调试日志管理器.共享.错误("隧道", "保存配置失败：\(错误?.localizedDescription ?? "未知错误")")
                     return
                 }
 
@@ -437,7 +477,7 @@ final class 隧道管理器: NSObject, ObservableObject {
                     )
                     self.当前状态 = .正在连接
                     self.记录日志(级别: .信息, 模块: "连接", 内容: "开始连接隧道\(节点名称.map { "：\($0)" } ?? "")")
-                    调试日志管理器.共享.信息("隧道", "状态切换为正在连接")
+                    调试日志管理器.共享.信息("隧道", "状态切换为正在连接，隧道已启动")
 
                     // 启动统计定时器
                     self.启动统计定时器()

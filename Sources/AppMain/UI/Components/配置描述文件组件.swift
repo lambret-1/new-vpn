@@ -159,7 +159,7 @@ private struct 配置行: View {
                             .foregroundColor(.secondary)
                             .padding(.horizontal, 5)
                             .padding(.vertical, 1)
-                            .background(Color.次要背景)
+                            .background(Color.gray.opacity(0.15))
                             .cornerRadius(4)
                     }
                 }

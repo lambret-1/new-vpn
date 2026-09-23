@@ -65,11 +65,25 @@ private struct 顶部状态区: View {
     @EnvironmentObject private var 隧道管理: 隧道管理器
 
     var body: some View {
-        HStack {
-            // 左侧：隧道状态文字
-            Text(隧道管理.当前状态.rawValue)
-                .font(.system(size: 28, weight: .bold))
-                .foregroundColor(状态文字颜色)
+        HStack(alignment: .top) {
+            // 左侧：隧道状态文字 + 当前节点
+            VStack(alignment: .leading, spacing: 4) {
+                Text(隧道管理.当前状态.rawValue)
+                    .font(.system(size: 28, weight: .bold))
+                    .foregroundColor(状态文字颜色)
+
+                if let 当前节点 = 状态.当前节点 {
+                    HStack(spacing: 4) {
+                        Image(systemName: "dot.radiowaves.left.and.right")
+                            .font(.system(size: 10))
+                            .foregroundColor(.secondary)
+                        Text(当前节点.名称)
+                            .font(.system(size: 12))
+                            .foregroundColor(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+            }
 
             Spacer()
 
@@ -80,6 +94,7 @@ private struct 顶部状态区: View {
             ))
             .labelsHidden()
             .toggleStyle(SwitchToggleStyle(tint: .成功色))
+            .padding(.top, 4)
         }
         .frame(height: 50)
     }

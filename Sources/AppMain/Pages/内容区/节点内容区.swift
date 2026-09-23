@@ -134,11 +134,25 @@ private struct 分组行视图: View {
 private struct 节点行视图: View {
     /// 节点数据
     let 节点: 节点模型
+    /// 全局状态
+    @EnvironmentObject private var 状态: AppState
     /// 测速管理器
     @EnvironmentObject private var 测速管理器: 测速管理器
 
+    /// 是否为当前选中节点
+    private var 是否选中: Bool {
+        状态.当前节点ID == 节点.id
+    }
+
     var body: some View {
         HStack(spacing: 10) {
+            // 选中指示器
+            if 是否选中 {
+                Capsule()
+                    .fill(Color.主题色)
+                    .frame(width: 3, height: 28)
+            }
+
             // 左侧：协议 + 名称 + 标签
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
@@ -147,10 +161,10 @@ private struct 节点行视图: View {
                         .foregroundColor(.white)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
-                        .background(Color.主题色)
+                        .background(是否选中 ? Color.主题色 : Color.主题色.opacity(0.7))
                         .cornerRadius(4)
                     Text(节点.地址)
-                        .font(.system(size: 14))
+                        .font(.system(size: 14, weight: 是否选中 ? .medium : .regular))
                         .lineLimit(1)
                 }
                 Text(节点.标签.joined(separator: " · "))
@@ -162,21 +176,41 @@ private struct 节点行视图: View {
 
             // 右侧：测速按钮 + 测速结果
             HStack(spacing: 8) {
+                // 选中标记
+                if 是否选中 {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 16))
+                        .foregroundColor(.主题色)
+                }
+
                 // 测速结果展示
                 测速结果展示(节点ID: 节点.id)
 
                 // 测速按钮
                 测速按钮(节点ID: 节点.id) {
-                    测速管理器.测速节点(节点) { 结果 in
-                        // 测速完成后更新节点数据
-                    }
+                    测速管理器.测速节点(节点) { _ in }
                 }
             }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .background(Color.卡片背景)
+        .background(是否选中 ? Color.主题色.opacity(0.12) : Color.卡片背景)
         .cornerRadius(12)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(是否选中 ? Color.主题色.opacity(0.5) : Color.clear, lineWidth: 1)
+        )
+        .contentShape(Rectangle())
+        .onTapGesture {
+            选中节点()
+        }
+    }
+
+    /// 选中节点
+    private func 选中节点() {
+        withAnimation(.easeInOut(duration: 0.2)) {
+            状态.当前节点ID = 节点.id
+        }
     }
 }
 

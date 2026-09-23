@@ -21,7 +21,6 @@ struct 底部弹窗容器: ViewModifier {
                 }
                 .presentationDetents([.height(UIScreen.main.bounds.height * 0.9)])
                 .presentationDragIndicator(.visible)
-                .presentationCornerRadius(20)
             }
     }
 }

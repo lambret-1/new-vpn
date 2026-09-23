@@ -34,6 +34,10 @@ final class 隧道管理器: NSObject, ObservableObject {
     @Published var 当前连接: 隧道连接信息?
     /// 历史连接记录
     @Published var 历史连接: [隧道连接信息] = []
+    /// 是否需要安装 VPN 描述文件
+    @Published var 需要安装描述文件 = false
+    /// 是否正在安装描述文件
+    @Published var 正在安装描述文件 = false
 
     // MARK: - 内部属性
 
@@ -52,6 +56,8 @@ final class 隧道管理器: NSObject, ObservableObject {
         super.init()
         加载配置()
         注册通知监听()
+        // 首次初始化时检测描述文件状态
+        检测描述文件状态()
     }
 
     // MARK: - 配置管理
@@ -165,10 +171,125 @@ final class 隧道管理器: NSObject, ObservableObject {
         保存配置()
     }
 
+    // MARK: - VPN 描述文件管理
+
+    /// 描述文件是否已安装
+    var 描述文件是否已安装: Bool {
+        guard let 管理器 = vpn管理器 else { return false }
+        return 管理器.protocolConfiguration != nil
+    }
+
+    /// 检测 VPN 描述文件状态
+    /// - Parameter 完成: 完成回调（是否已安装）
+    func 检测描述文件状态(完成: ((Bool) -> Void)? = nil) {
+        NETunnelProviderManager.loadAllFromPreferences { [weak self] 管理器列表, 错误 in
+            guard let self = self else { return }
+
+            if let 错误 = 错误 {
+                self.记录日志(级别: .错误, 模块: "描述文件", 内容: "检测描述文件状态失败：\(错误.localizedDescription)")
+                完成?(false)
+                return
+            }
+
+            // 查找已安装的配置
+            let 已安装 = 管理器列表?.contains(where: { 管理器 in
+                管理器.protocolConfiguration != nil
+            }) ?? false
+
+            DispatchQueue.main.async {
+                self.需要安装描述文件 = !已安装
+                self.记录日志(级别: .信息, 模块: "描述文件", 内容: 已安装 ? "VPN 描述文件已安装" : "VPN 描述文件未安装")
+                完成?(已安装)
+            }
+        }
+    }
+
+    /// 自动生成并安装默认 VPN 描述文件
+    /// - Parameter 完成: 完成回调（是否成功）
+    func 自动安装默认描述文件(完成: @escaping (Bool, String?) -> Void) {
+        正在安装描述文件 = true
+        记录日志(级别: .信息, 模块: "描述文件", 内容: "开始自动生成并安装 VPN 描述文件")
+
+        let 管理器 = vpn管理器 ?? NETunnelProviderManager()
+
+        管理器.loadFromPreferences { [weak self] 错误 in
+            guard let self = self else { return }
+
+            if let 错误 = 错误 {
+                DispatchQueue.main.async {
+                    self.正在安装描述文件 = false
+                    self.记录日志(级别: .错误, 模块: "描述文件", 内容: "加载配置失败：\(错误.localizedDescription)")
+                    完成(false, "加载配置失败：\(错误.localizedDescription)")
+                }
+                return
+            }
+
+            // 创建 PacketTunnel 协议配置
+            let 协议 = NETunnelProviderProtocol()
+            协议.providerBundleIdentifier = "com.newvpn.app.tunnel"
+            协议.serverAddress = "127.0.0.1"
+            协议.providerConfiguration = [
+                "serverAddress": "127.0.0.1"
+            ]
+
+            // 配置管理器
+            管理器.protocolConfiguration = 协议
+            管理器.localizedDescription = self.配置.隧道名称
+            管理器.isEnabled = true
+            管理器.isOnDemandEnabled = false
+
+            // 保存配置
+            管理器.saveToPreferences { [weak self] 保存错误 in
+                guard let self = self else { return }
+
+                DispatchQueue.main.async {
+                    self.正在安装描述文件 = false
+
+                    if let 保存错误 = 保存错误 {
+                        self.记录日志(级别: .错误, 模块: "描述文件", 内容: "安装描述文件失败：\(保存错误.localizedDescription)")
+                        完成(false, "安装描述文件失败：\(保存错误.localizedDescription)")
+                        return
+                    }
+
+                    // 重新加载以确认
+                    管理器.loadFromPreferences { _ in
+                        DispatchQueue.main.async {
+                            self.vpn管理器 = 管理器
+                            self.需要安装描述文件 = false
+                            self.记录日志(级别: .信息, 模块: "描述文件", 内容: "VPN 描述文件安装成功")
+                            完成(true, nil)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     // MARK: - 连接控制
 
     /// 启动隧道连接
     func 启动连接(节点ID: UUID? = nil, 节点名称: String? = nil) {
+        // 先检测描述文件状态
+        检测描述文件状态 { [weak self] 已安装 in
+            guard let self = self else { return }
+
+            if !已安装 {
+                // 未安装描述文件，提示安装
+                DispatchQueue.main.async {
+                    self.需要安装描述文件 = true
+                    self.最近错误 = .扩展未安装
+                    self.记录日志(级别: .警告, 模块: "连接", 内容: "VPN 描述文件未安装，请先安装描述文件")
+                }
+                return
+            }
+
+            // 已安装，继续连接流程
+            self.执行隧道连接(节点ID: 节点ID, 节点名称: 节点名称)
+        }
+    }
+
+    /// 执行隧道连接（内部方法，描述文件已确认安装后调用）
+    private func 执行隧道连接(节点ID: UUID? = nil, 节点名称: String? = nil) {
         guard let 管理器 = vpn管理器 else {
             最近错误 = .扩展未安装
             记录日志(级别: .错误, 模块: "连接", 内容: "隧道扩展未安装，无法连接")

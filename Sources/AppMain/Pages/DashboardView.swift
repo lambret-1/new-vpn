@@ -276,7 +276,11 @@ private struct 安装描述文件进度页面: View {
                     VStack(spacing: 12) {
                         // 前往设置按钮
                         Button {
-                            隧道管理.跳转到设置页面()
+                            // 先关闭弹窗，延迟后再跳转，避免弹窗显示时跳转失败
+                            关闭()
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                隧道管理.跳转到设置页面()
+                            }
                         } label: {
                             HStack {
                                 Image(systemName: "gearshape")

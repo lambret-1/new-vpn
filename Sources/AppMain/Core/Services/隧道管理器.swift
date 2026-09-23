@@ -227,7 +227,7 @@ final class 隧道管理器: NSObject, ObservableObject {
                     // 检测是否是权限错误
                     let 错误描述 = 错误.localizedDescription.lowercased()
                     if 错误描述.contains("permission") || 错误描述.contains("denied") {
-                        完成(false, "VPN 权限被拒绝\n\n请前往「设置 > 通用 > VPN 与设备管理」检查 VPN 权限，或尝试卸载后重新安装应用")
+                        完成(false, "VPN 权限被拒绝\n\n请在弹出的 App 设置页面中检查 VPN 权限，或手动前往「设置 > 通用 > VPN 与设备管理」操作，也可尝试卸载后重新安装应用")
                     } else {
                         完成(false, "加载配置失败：\(错误.localizedDescription)\n\n请前往「设置 > 通用 > VPN」手动添加 VPN 配置")
                     }
@@ -275,7 +275,7 @@ final class 隧道管理器: NSObject, ObservableObject {
                         // 检测是否是权限错误
                         let 错误描述 = 保存错误.localizedDescription.lowercased()
                         if 错误描述.contains("permission") || 错误描述.contains("denied") {
-                            完成(false, "VPN 权限被拒绝\n\n请前往「设置 > 通用 > VPN 与设备管理」检查 VPN 权限，或尝试卸载后重新安装应用")
+                            完成(false, "VPN 权限被拒绝\n\n请在弹出的 App 设置页面中检查 VPN 权限，或手动前往「设置 > 通用 > VPN 与设备管理」操作，也可尝试卸载后重新安装应用")
                         } else {
                             完成(false, "安装描述文件失败：\(保存错误.localizedDescription)\n\n请前往「设置 > 通用 > VPN」手动添加 VPN 配置")
                         }
@@ -299,19 +299,18 @@ final class 隧道管理器: NSObject, ObservableObject {
         }
     }
 
-    /// 跳转到 iOS 设置页面（VPN 设置）
-    func 跳转到设置页面() {
-        // 优先尝试跳转到 VPN 设置页面
-        if let VPN设置URL = URL(string: "App-Prefs:root=General&path=VPN") {
-            if UIApplication.shared.canOpenURL(VPN设置URL) {
-                UIApplication.shared.open(VPN设置URL)
-                return
-            }
+    /// 跳转到 iOS 设置页面（App 设置）
+    /// - Parameter 完成: 完成回调（是否成功跳转）
+    func 跳转到设置页面(完成: ((Bool) -> Void)? = nil) {
+        // iOS 10+ 禁止使用 App-Prefs: URL scheme 跳转到系统设置
+        // 只能跳转到 App 自身的设置页面
+        guard let 设置URL = URL(string: UIApplication.openSettingsURLString) else {
+            完成?(false)
+            return
         }
 
-        // 退而求其次，跳转到 App 设置页面
-        if let 设置URL = URL(string: UIApplication.openSettingsURLString) {
-            UIApplication.shared.open(设置URL)
+        UIApplication.shared.open(设置URL) { 成功 in
+            完成?(成功)
         }
     }
 

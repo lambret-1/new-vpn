@@ -368,12 +368,4 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         @unknown default: return "未知原因"
         }
     }
-
-    // MARK: - 内存管理
-
-    /// 内存警告处理
-    override func didReceiveMemoryWarning() {
-        日志.warning("收到内存警告")
-        super.didReceiveMemoryWarning()
-    }
 }

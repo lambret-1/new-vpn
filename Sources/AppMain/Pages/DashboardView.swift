@@ -13,62 +13,45 @@ import SwiftUI
 struct DashboardView: View {
     /// 全局应用状态
     @EnvironmentObject private var 状态: AppState
-    /// 更新管理器
-    @StateObject private var 更新管理器 = AppUpdateManager.共享
-    /// 下载管理器
-    @StateObject private var 下载管理器 = AppDownloadManager.共享
+    /// 更新管理器（从全局环境获取）
+    @EnvironmentObject private var 更新管理器: AppUpdateManager
     /// 场景阶段
     @Environment(\.scenePhase) private var 场景阶段
 
     var body: some View {
-        ZStack {
-            VStack(spacing: 0) {
-                // 可滚动内容区
-                ScrollView {
-                    VStack(spacing: 16) {
-                        // 顶部状态区
-                        顶部状态区()
-                            .padding(.horizontal, 16)
-                            .padding(.top, 8)
+        VStack(spacing: 0) {
+            // 可滚动内容区
+            ScrollView {
+                VStack(spacing: 16) {
+                    // 顶部状态区
+                    顶部状态区()
+                        .padding(.horizontal, 16)
+                        .padding(.top, 8)
 
-                        // 横向功能卡片栏
-                        顶部功能卡片栏()
+                    // 横向功能卡片栏
+                    顶部功能卡片栏()
 
-                        // 主内容区（根据选中卡片切换）
-                        主内容区()
-                            .padding(.bottom, 16)
-                    }
-                }
-
-                // 底部固定工具栏
-                底部工具栏()
-            }
-            .background(Color.页面背景.ignoresSafeArea())
-            .底部弹窗(弹窗类型: $状态.当前底部弹窗)
-            .onAppear {
-                // 启动时每日检测更新
-                更新管理器.每日启动检测()
-            }
-            .onChange(of: 场景阶段) { 新阶段 in
-                if 新阶段 == .active {
-                    // 回到前台时间隔>6小时则检测
-                    更新管理器.前台检测()
+                    // 主内容区（根据选中卡片切换）
+                    主内容区()
+                        .padding(.bottom, 16)
                 }
             }
 
-            // 更新弹窗（居中显示）
-            if 更新管理器.检测状态.是否显示弹窗 || 下载管理器.下载状态 == .下载中 {
-                AppUpdateAlert(
-                    更新管理器: 更新管理器,
-                    下载管理器: 下载管理器
-                ) {
-                    更新管理器.关闭弹窗()
-                }
-                .transition(.opacity)
-                .zIndex(100)
+            // 底部固定工具栏
+            底部工具栏()
+        }
+        .background(Color.页面背景.ignoresSafeArea())
+        .底部弹窗(弹窗类型: $状态.当前底部弹窗)
+        .onAppear {
+            // 启动时每日检测更新
+            更新管理器.每日启动检测()
+        }
+        .onChange(of: 场景阶段) { 新阶段 in
+            if 新阶段 == .active {
+                // 回到前台时间隔>6小时则检测
+                更新管理器.前台检测()
             }
         }
-        .animation(.easeInOut(duration: 0.25), value: 更新管理器.检测状态.是否显示弹窗)
     }
 }
 
@@ -141,4 +124,6 @@ private struct 主内容区: View {
 #Preview {
     DashboardView()
         .environmentObject(AppState.共享)
+        .environmentObject(AppUpdateManager.共享)
+        .environmentObject(AppDownloadManager.共享)
 }

@@ -18,6 +18,19 @@ final class AppUpdateManager: ObservableObject {
     /// 当前检测状态
     @Published var 检测状态: 更新检测状态 = .空闲
 
+    /// 当前是否为静默检测模式（静默模式下检测中不弹窗，只有新版本才弹窗）
+    private var 当前静默模式 = false
+
+    /// 是否需要显示弹窗（考虑静默模式）
+    var 是否显示弹窗: Bool {
+        if 当前静默模式 {
+            // 静默模式：只有发现新版本才弹窗
+            if case .发现新版本 = 检测状态 { return true }
+            return false
+        }
+        return 检测状态.是否显示弹窗
+    }
+
     /// 当前版本号（从 Info.plist 读取）
     var 当前版本号: String {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.1.0"
@@ -67,6 +80,9 @@ final class AppUpdateManager: ObservableObject {
             return
         }
 
+        // 记录当前模式
+        当前静默模式 = 静默模式
+
         // 记录检测时间
         UserDefaults.standard.set(Date(), forKey: 上次检测时间键)
 
@@ -106,7 +122,7 @@ final class AppUpdateManager: ObservableObject {
 
     // MARK: - 检测流程
 
-    /// 执行完整检测流程（真实 GitHub API）
+    /// 执行完整检测流程（真实 GitHub API，无模拟延迟）
     private func 执行检测流程(静默模式: Bool) async {
         // 步骤1：连接服务器
         await 更新状态(.检测中(.正在连接服务器))
@@ -119,17 +135,16 @@ final class AppUpdateManager: ObservableObject {
 
             // 步骤3：校验版本号
             await 更新状态(.检测中(.校验版本号))
-            try await Task.sleep(nanoseconds: 300_000_000)
 
             // 步骤4：检测完成，判断结果
             await 更新状态(.检测中(.检测完成))
-            try await Task.sleep(nanoseconds: 200_000_000)
 
             await MainActor.run {
                 if 版本比较器.有新版本(当前版本: 当前版本号, 最新版本: 版本信息.最新版本) {
                     // 检查是否被忽略
                     if 静默模式, 版本信息.最新版本 == 已忽略版本 {
                         检测状态 = .空闲
+                        当前静默模式 = false
                         return
                     }
                     检测状态 = .发现新版本(版本信息)
@@ -137,6 +152,7 @@ final class AppUpdateManager: ObservableObject {
                     if 静默模式 {
                         // 静默模式下已是最新版本不弹窗
                         检测状态 = .空闲
+                        当前静默模式 = false
                     } else {
                         检测状态 = .已是最新
                     }
@@ -147,6 +163,7 @@ final class AppUpdateManager: ObservableObject {
                 if 静默模式 {
                     // 静默模式下检测失败不弹窗
                     检测状态 = .空闲
+                    当前静默模式 = false
                 } else {
                     检测状态 = .检测失败(错误.localizedDescription)
                 }
@@ -287,6 +304,7 @@ final class AppUpdateManager: ObservableObject {
     /// 关闭弹窗
     func 关闭弹窗() {
         检测状态 = .空闲
+        当前静默模式 = false
     }
 }
 

@@ -82,33 +82,33 @@ struct AppUpdateAlert: View {
         }
     }
 
-    // MARK: - 检测中视图（固定高度220pt）
+    // MARK: - 检测中视图（紧凑高度）
 
     private func 检测中视图(步骤: 检测步骤文本) -> some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 12) {
             Spacer(minLength: 0)
 
             // 蓝色圆形加载动画
             ZStack {
                 Circle()
                     .fill(Color.主题色.opacity(0.15))
-                    .frame(width: 64, height: 64)
+                    .frame(width: 48, height: 48)
 
                 ProgressView()
                     .progressViewStyle(CircularProgressViewStyle(tint: .主题色))
-                    .scaleEffect(1.3)
+                    .scaleEffect(1.0)
             }
 
             Text("正在检测更新")
-                .font(.system(size: 18, weight: .semibold))
+                .font(.system(size: 16, weight: .semibold))
 
             Text(步骤.rawValue)
-                .font(.system(size: 14))
+                .font(.system(size: 12))
                 .foregroundColor(.secondary)
 
             Spacer(minLength: 0)
         }
-        .frame(height: 220)
+        .frame(height: 160)
         .padding(.horizontal, 24)
     }
 

@@ -1,0 +1,17 @@
+# XcodeGen 生成的工程文件（不提交，由 xcodegen generate 重新生成）
+*.xcodeproj/
+*.xcworkspace/
+
+# Xcode 构建产物
+build/
+DerivedData/
+
+# Swift Package Manager
+.build/
+.swiftpm/
+
+# macOS 系统文件
+.DS_Store
+
+# 临时文件
+*.tmp

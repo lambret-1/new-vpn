@@ -59,7 +59,7 @@ targets:
         INFOPLIST_KEY_NSExtension:
           NSExtensionPointIdentifier: com.apple.networkextension.packet-tunnel
     dependencies:
-      - s: NetworkExtension
+      - sdk: NetworkExtension.framework
 
 # Scheme
 schemes:
@@ -67,9 +67,6 @@ schemes:
     build:
       targets:
         NewVPN: all
-    test:
-      targets:
-        - NewVPNTests
     run:
       config: Debug
     profile:

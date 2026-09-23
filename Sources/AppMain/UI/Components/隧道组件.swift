@@ -100,7 +100,7 @@ struct 隧道连接开关: View {
     private var 背景颜色: Color {
         switch 隧道管理.当前状态 {
         case .已连接: return .成功色
-        case .正在连接, .重新加载中: return .警告色
+        case .正在连接, .重新加载中, .准备中, .重连中: return .警告色
         case .已断开, .正在断开: return .主题色
         case .连接失败, .配置无效: return .危险色
         }

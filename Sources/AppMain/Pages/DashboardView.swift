@@ -141,6 +141,8 @@ private struct 主内容区: View {
                 分流规则内容区()
             case .日志:
                 日志内容区()
+            case .调试日志:
+                调试日志内容区()
             }
         }
         .animation(.easeInOut(duration: 0.2), value: 状态.当前顶部卡片)

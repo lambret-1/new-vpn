@@ -108,6 +108,7 @@ enum 顶部卡片类型: String, CaseIterable, Identifiable {
     case 重写规则
     case 分流规则
     case 日志
+    case 调试日志
 
     var id: String { rawValue }
 
@@ -122,6 +123,7 @@ enum 顶部卡片类型: String, CaseIterable, Identifiable {
         case .重写规则: return Color(red: 0.99, green: 0.33, blue: 0.63)
         case .分流规则: return Color(red: 0.35, green: 0.78, blue: 0.98)
         case .日志: return Color(red: 0.42, green: 0.42, blue: 0.44)
+        case .调试日志: return Color(red: 0.56, green: 0.38, blue: 0.95)
         }
     }
 
@@ -133,6 +135,7 @@ enum 顶部卡片类型: String, CaseIterable, Identifiable {
         case .重写规则: return "pencil"
         case .分流规则: return "arrow.triangle.branch"
         case .日志: return "doc.text"
+        case .调试日志: return "ant.fill"
         }
     }
 }

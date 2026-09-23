@@ -92,6 +92,9 @@ jobs:
       - name: 计算版本号
         id: version
         run: |
+          # 先获取最新的 tag（确保能获取到之前 CI 创建的 tag）
+          git fetch --tags --force
+
           if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
             # tag 触发：直接使用 tag 版本号，不进位
             TAG_VERSION="${GITHUB_REF_NAME#v}"

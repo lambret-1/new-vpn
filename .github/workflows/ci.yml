@@ -51,9 +51,13 @@ jobs:
       - name: 验证 Xcode 版本
         run: xcodebuild -version
 
-      # ── 3. 安装 XcodeGen ──
+      # ── 3. 安装 XcodeGen（固定 2.42.0，兼容 Xcode 15.4）──
       - name: 安装 XcodeGen
-        run: brew install xcodegen
+        run: |
+          curl -L https://github.com/yonaskolb/XcodeGen/releases/download/2.42.0/xcodegen.zip -o /tmp/xcodegen.zip
+          unzip -o /tmp/xcodegen.zip -d /tmp/xcodegen-bin
+          sudo cp /tmp/xcodegen-bin/xcodegen /usr/local/bin/xcodegen
+          xcodegen --version
 
       # ── 4. 生成 Xcode 工程 ──
       - name: 生成 Xcode 工程
@@ -106,6 +110,7 @@ jobs:
       # ── 7. 编译归档 ──
       - name: 编译归档
         run: |
+          set -o pipefail
           rm -rf ${{ env.BUILD_DIR }}
           mkdir -p ${{ env.BUILD_DIR }}
           
@@ -120,11 +125,12 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             PROVISIONING_PROFILE_SPECIFIER="" \
             DEVELOPMENT_TEAM="" \
-            | xcpretty
+            2>&1 | xcpretty
 
       # ── 8. 导出未签名 IPA ──
       - name: 导出未签名 IPA
         run: |
+          set -o pipefail
           # 创建导出配置（不签名）
           cat > ${{ env.BUILD_DIR }}/ExportOptions.plist <<EOF
           <?xml version="1.0" encoding="UTF-8"?>
@@ -153,7 +159,7 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
             PROVISIONING_PROFILE_SPECIFIER="" \
-            | xcpretty
+            2>&1 | xcpretty
 
       # ── 9. 重命名 IPA（命名规范：newVPN-vX.Y.Z.ipa）──
       - name: 重命名 IPA

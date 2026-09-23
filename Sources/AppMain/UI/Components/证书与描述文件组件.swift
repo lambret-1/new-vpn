@@ -750,7 +750,16 @@ private struct 描述文件行: View {
 
     /// 安装配置
     private func 安装配置() {
-        管理.安装VPN配置(描述文件) { _ in }
+        管理.安装VPN配置(描述文件) { 结果 in
+            if 结果.成功 {
+                // 安装成功后跳转 iOS 设置页面
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    if let 设置URL = URL(string: UIApplication.openSettingsURLString) {
+                        UIApplication.shared.open(设置URL)
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -763,10 +772,6 @@ struct 描述文件详情页面: View {
     @Environment(\.dismiss) private var 关闭
     /// 是否正在安装
     @State private var 安装中 = false
-    /// 是否显示分享面板
-    @State private var 显示分享面板 = false
-    /// 分享文件 URL
-    @State private var 分享文件URL: URL?
 
     var body: some View {
         NavigationView {
@@ -936,11 +941,6 @@ struct 描述文件详情页面: View {
                     }
                 }
             }
-            .sheet(isPresented: $显示分享面板) {
-                if let url = 分享文件URL {
-                    分享视图(分享内容: [url])
-                }
-            }
         }
         .navigationViewStyle(.stack)
     }
@@ -957,17 +957,38 @@ struct 描述文件详情页面: View {
         安装中 = true
         管理.安装VPN配置(描述文件) { 结果 in
             安装中 = false
-            if !结果.成功, let 错误 = 结果.错误信息 {
-                print("安装失败：\(错误)")
+            if 结果.成功 {
+                // 安装成功后跳转 iOS 设置页面
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    if let 设置URL = URL(string: UIApplication.openSettingsURLString) {
+                        UIApplication.shared.open(设置URL)
+                    }
+                }
             }
         }
     }
 
-    /// 分享描述文件
+    /// 分享描述文件（直接弹出 iOS 系统分享面板）
     private func 分享描述文件() {
-        if let 文件URL = VPN描述文件服务.共享.保存描述文件到临时目录(描述文件) {
-            分享文件URL = 文件URL
-            显示分享面板 = true
+        guard let 文件URL = VPN描述文件服务.共享.保存描述文件到临时目录(描述文件) else { return }
+
+        let 活动视图 = UIActivityViewController(activityItems: [文件URL], applicationActivities: nil)
+
+        // iPad 需要设置 popover 来源
+        if let 弹出控制器 = 活动视图.popoverPresentationController {
+            弹出控制器.sourceView = UIApplication.shared.windows.first?.rootViewController?.view
+            弹出控制器.sourceRect = CGRect(x: UIScreen.main.bounds.midX, y: UIScreen.main.bounds.midY, width: 0, height: 0)
+            弹出控制器.permittedArrowDirections = []
+        }
+
+        // 获取当前最顶层的视图控制器来 present
+        if let 窗口 = UIApplication.shared.windows.first(where: { $0.isKeyWindow }),
+           let 根控制器 = 窗口.rootViewController {
+            var 最顶层控制器 = 根控制器
+            while let  presented = 最顶层控制器.presentedViewController {
+                最顶层控制器 =  presented
+            }
+            最顶层控制器.present(活动视图, animated: true)
         }
     }
 }

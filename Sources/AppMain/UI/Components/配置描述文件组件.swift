@@ -53,7 +53,7 @@ struct 配置描述文件列表页面: View {
                 }
             }
             .background(Color.页面背景)
-            .navigationTitle("配置文件")
+            .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {

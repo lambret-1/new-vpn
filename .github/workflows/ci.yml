@@ -124,7 +124,30 @@ jobs:
             echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
           fi
 
-      # ── 9. 编译归档（通过参数设置版本号和构建号）──
+      # ── 9. 写入版本号到 Info.plist ──
+      - name: 写入版本号到 Info.plist
+        run: |
+          INFO_PLIST="${{ env.PROJECT_NAME }}.xcodeproj/../Sources/AppMain/Info.plist"
+          # 兼容 XcodeGen 生成的 Info.plist 路径
+          if [ ! -f "$INFO_PLIST" ]; then
+            INFO_PLIST=$(find . -name "Info.plist" -path "*/AppMain/*" | head -1)
+          fi
+          echo "Info.plist 路径: $INFO_PLIST"
+
+          # 写入版本号（CFBundleShortVersionString）
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${{ steps.version.outputs.version }}" "$INFO_PLIST" 2>/dev/null || \
+          /usr/libexec/PlistBuddy -c "Add :CFBundleShortVersionString string ${{ steps.version.outputs.version }}" "$INFO_PLIST"
+
+          # 写入构建号（CFBundleVersion）
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${{ github.run_number }}" "$INFO_PLIST" 2>/dev/null || \
+          /usr/libexec/PlistBuddy -c "Add :CFBundleVersion string ${{ github.run_number }}" "$INFO_PLIST"
+
+          # 验证写入结果
+          echo "写入后版本号:"
+          /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$INFO_PLIST"
+          /usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$INFO_PLIST"
+
+      # ── 10. 编译归档（通过参数设置版本号和构建号）──
       - name: 编译归档
         run: |
           rm -rf ${{ env.BUILD_DIR }}
@@ -144,7 +167,19 @@ jobs:
             PROVISIONING_PROFILE_SPECIFIER="" \
             DEVELOPMENT_TEAM=""
 
-      # ── 10. 手动打包未签名 IPA（不使用 exportArchive，避免 Team 要求）──
+      # ── 11. 验证归档内版本号 ──
+      - name: 验证归档版本号
+        run: |
+          APP_INFO_PLIST="${{ env.BUILD_DIR }}/${{ env.PROJECT_NAME }}.xcarchive/Products/Applications/${{ env.PROJECT_NAME }}.app/Info.plist"
+          if [ -f "$APP_INFO_PLIST" ]; then
+            echo "归档内 Info.plist 版本号:"
+            /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP_INFO_PLIST"
+            /usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$APP_INFO_PLIST"
+          else
+            echo "警告：未找到归档内 Info.plist"
+          fi
+
+      # ── 12. 手动打包未签名 IPA（不使用 exportArchive，避免 Team 要求）──
       - name: 打包未签名 IPA
         run: |
           # 从归档中提取 .app
@@ -170,7 +205,7 @@ jobs:
           echo "IPA 打包完成"
           ls -lh ${{ env.BUILD_DIR }}/NewVPN-unsigned.ipa
 
-      # ── 11. 验证 IPA 产物 ──
+      # ── 13. 验证 IPA 产物 ──
       - name: 验证 IPA 产物
         run: |
           IPA_PATH="${{ env.BUILD_DIR }}/NewVPN-unsigned.ipa"
@@ -185,14 +220,14 @@ jobs:
           fi
           echo "IPA 验证通过: ${IPA_PATH} (${SIZE} 字节)"
 
-      # ── 12. 重命名 IPA（命名规范：newVPN-vX.Y.Z.ipa）──
+      # ── 14. 重命名 IPA（命名规范：newVPN-vX.Y.Z.ipa）──
       - name: 重命名 IPA
         run: |
           VERSION="v${{ steps.version.outputs.version }}"
           cp "${{ env.BUILD_DIR }}/NewVPN-unsigned.ipa" "${{ env.BUILD_DIR }}/newVPN-${VERSION}.ipa"
           ls -lh "${{ env.BUILD_DIR }}/newVPN-${VERSION}.ipa"
 
-      # ── 13. 上传构建产物 ──
+      # ── 15. 上传构建产物 ──
       - name: 上传 IPA 产物
         uses: actions/upload-artifact@v4
         with:
@@ -200,7 +235,7 @@ jobs:
           path: ${{ env.BUILD_DIR }}/newVPN-v${{ steps.version.outputs.version }}.ipa
           retention-days: 90
 
-      # ── 14. 自动创建 Release（push main 和 tag 均触发）──
+      # ── 16. 自动创建 Release（push main 和 tag 均触发）──
       - name: 创建 Release
         uses: softprops/action-gh-release@v2
         with:

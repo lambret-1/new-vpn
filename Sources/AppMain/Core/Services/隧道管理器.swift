@@ -107,36 +107,9 @@ final class 隧道管理器: NSObject, ObservableObject {
         协议配置.providerConfiguration = [
             "mtu": 配置.MTU,
             "logLevel": 配置.日志级别.rawValue,
-            "enableStats": 配置.启用流量统计
+            "enableStats": 配置.启用流量统计,
+            "dnsServers": 配置.DNS服务器
         ]
-
-        // 配置 DNS
-        if !配置.DNS服务器.isEmpty {
-            let DNS设置 = NEDNSSettings(servers: 配置.DNS服务器)
-            协议配置.dnsSettings = DNS设置
-        }
-
-        // 配置代理
-        if let 代理 = 配置.代理设置, 代理.类型 != .直连 {
-            let 代理设置 = NEProxySettings()
-            switch 代理.类型 {
-            case .HTTP, .HTTPS:
-                代理设置.httpEnabled = 代理.类型 == .HTTP
-                代理设置.httpsEnabled = 代理.类型 == .HTTPS
-                代理设置.httpServer = NEProxyServer(address: 代理.服务器, port: 代理.端口)
-                代理设置.httpsServer = NEProxyServer(address: 代理.服务器, port: 代理.端口)
-            case .SOCKS5:
-                代理设置.httpsEnabled = true
-                代理设置.httpsServer = NEProxyServer(address: 代理.服务器, port: 代理.端口)
-            default:
-                break
-            }
-            if let 用户名 = 代理.用户名, let 密码 = 代理.密码 {
-                代理设置.username = 用户名
-                代理设置.password = 密码
-            }
-            协议配置.proxySettings = 代理设置
-        }
 
         管理器.protocolConfiguration = 协议配置
         管理器.localizedDescription = 配置.隧道名称

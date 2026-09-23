@@ -12,7 +12,7 @@ import os
 /// VPN 隧道提供者：负责启动、停止隧道，运行 sing-box 内核
 class PacketTunnelProvider: NEPacketTunnelProvider {
     /// 日志记录器
-    private let 日志 = Logger(subsystem: "com.newvpn.tunnel", category: "隧道")
+    private let 日志 = Logger(subsystem: "com.newvpn.app.tunnel", category: "隧道")
 
     /// 隧道启动完成回调
     override func startTunnel(options: [String: NSObject]?,

@@ -74,7 +74,7 @@ targets:
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).PacketTunnelProvider
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.newvpn.tunnel
+        PRODUCT_BUNDLE_IDENTIFIER: com.newvpn.app.tunnel
         PRODUCT_NAME: NewVPN-Tunnel
         CODE_SIGN_ENTITLEMENTS: Sources/TunnelExtension/NewVPN-Tunnel.entitlements
     dependencies:

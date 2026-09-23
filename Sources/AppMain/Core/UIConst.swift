@@ -136,7 +136,7 @@ enum 全局常量 {
     /// App Group 共享目录标识
     static let App组标识 = "group.com.newvpn.shared"
     /// 隧道扩展 Bundle 标识
-    static let 隧道扩展标识 = "com.newvpn.tunnel"
+    static let 隧道扩展标识 = "com.newvpn.app.tunnel"
     /// GitHub 仓库地址
     static let 仓库地址 = "https://github.com/lambret-1/new-vpn"
     /// 日志环形缓冲区最大条数

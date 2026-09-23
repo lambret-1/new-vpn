@@ -53,6 +53,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.newvpn.app
         PRODUCT_NAME: NewVPN
+        CODE_SIGN_ENTITLEMENTS: Sources/AppMain/NewVPN.entitlements
     dependencies:
       - target: NewVPN-Tunnel
 
@@ -75,6 +76,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.newvpn.tunnel
         PRODUCT_NAME: NewVPN-Tunnel
+        CODE_SIGN_ENTITLEMENTS: Sources/TunnelExtension/NewVPN-Tunnel.entitlements
     dependencies:
       - sdk: NetworkExtension.framework
 

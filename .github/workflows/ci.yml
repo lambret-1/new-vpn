@@ -14,28 +14,25 @@ on:
         type: choice
         options: [patch, minor, major, none]
 
-# 并发控制：同一分支只跑最新一次
+# 并发控制：main 分支只跑最新一次，tag 不取消
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
 
 jobs:
   build:
     name: 编译未签名 IPA
     runs-on: macos-14
 
-    # 设置默认 shell 为 zsh，兼容 macOS
     defaults:
       run:
         shell: zsh -e {0}
 
     env:
-      # 项目配置
       PROJECT_NAME: NewVPN
       SCHEME: NewVPN
       BUILD_DIR: build
       CONFIGURATION: Release
-      EXPORT_METHOD: ad-hoc
 
     steps:
       # ── 1. 拉取代码 ──
@@ -51,93 +48,108 @@ jobs:
       - name: 验证 Xcode 版本
         run: xcodebuild -version
 
-      # ── 3. 安装 XcodeGen（固定 2.42.0，兼容 Xcode 15.4）──
+      # ── 3. 缓存 XcodeGen 二进制 ──
+      - name: 缓存 XcodeGen
+        id: cache-xcodegen
+        uses: actions/cache@v4
+        with:
+          path: /usr/local/bin/xcodegen
+          key: xcodegen-2.42.0
+
+      # ── 4. 安装 XcodeGen（缓存未命中时）──
       - name: 安装 XcodeGen
+        if: steps.cache-xcodegen.outputs.cache-hit != 'true'
         run: |
-          curl -L https://github.com/yonaskolb/XcodeGen/releases/download/2.42.0/xcodegen.zip -o /tmp/xcodegen.zip
+          curl -fsSL https://github.com/yonaskolb/XcodeGen/releases/download/2.42.0/xcodegen.zip -o /tmp/xcodegen.zip
           unzip -o /tmp/xcodegen.zip -d /tmp/xcodegen-bin
           sudo cp /tmp/xcodegen-bin/xcodegen/bin/xcodegen /usr/local/bin/xcodegen
           xcodegen --version
 
-      # ── 4. 生成 Xcode 工程 ──
+      # ── 5. 生成 Xcode 工程 ──
       - name: 生成 Xcode 工程
         run: xcodegen generate
 
-      # ── 5. 版本号自动进位 ──
-      - name: 版本号进位
+      # ── 6. 安装 SwiftLint ──
+      - name: 安装 SwiftLint
+        run: |
+          brew install swiftlint 2>/dev/null || true
+          swiftlint version || echo "SwiftLint 安装跳过"
+
+      # ── 7. 代码规范检查 ──
+      - name: SwiftLint 代码检查
+        run: |
+          if command -v swiftlint &>/dev/null; then
+            swiftlint lint --reporter github-actions-logging
+          else
+            echo "SwiftLint 不可用，跳过检查"
+          fi
+
+      # ── 8. 计算版本号 ──
+      - name: 计算版本号
         id: version
         run: |
-          # 读取当前版本号（从 project.yml 或 git tag）
-          if [ -f project.yml ]; then
-            CURRENT=$(grep -m1 'MARKETING_VERSION' project.yml | awk '{print $2}' | tr -d '"')
-          fi
-          CURRENT=${CURRENT:-0.1.0}
-          
-          MAJOR=$(echo $CURRENT | cut -d. -f1)
-          MINOR=$(echo $CURRENT | cut -d. -f2)
-          PATCH=$(echo $CURRENT | cut -d. -f3)
-          
-          BUMP="${{ github.event.inputs.bump }}"
-          BUMP=${BUMP:-patch}
-          
-          case $BUMP in
-            major) MAJOR=$((MAJOR+1)); MINOR=0; PATCH=0 ;;
-            minor) MINOR=$((MINOR+1)); PATCH=0 ;;
-            patch) PATCH=$((PATCH+1)) ;;
-            none) ;;
-          esac
-          
-          NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
-          echo "当前版本: v${CURRENT}"
-          echo "新版本: v${NEW_VERSION}"
-          echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
-          
-          # 写入 project.yml（如果存在）
-          if [ -f project.yml ]; then
-            sed -i '' "s/MARKETING_VERSION: \".*\"/MARKETING_VERSION: \"$NEW_VERSION\"/" project.yml
-            # 重新生成工程
-            xcodegen generate
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            # tag 触发：直接使用 tag 版本号，不进位
+            TAG_VERSION="${GITHUB_REF_NAME#v}"
+            echo "版本来源: git tag ${GITHUB_REF_NAME}"
+            echo "version=$TAG_VERSION" >> $GITHUB_OUTPUT
+          else
+            # push / 手动触发：从最近 tag 读取版本并进位
+            LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.1.0")
+            CURRENT="${LATEST_TAG#v}"
+            CURRENT=${CURRENT:-0.1.0}
+
+            MAJOR=$(echo $CURRENT | cut -d. -f1)
+            MINOR=$(echo $CURRENT | cut -d. -f2)
+            PATCH=$(echo $CURRENT | cut -d. -f3)
+
+            BUMP="${{ github.event.inputs.bump }}"
+            BUMP=${BUMP:-patch}
+
+            case $BUMP in
+              major) MAJOR=$((MAJOR+1)); MINOR=0; PATCH=0 ;;
+              minor) MINOR=$((MINOR+1)); PATCH=0 ;;
+              patch) PATCH=$((PATCH+1)) ;;
+              none) ;;
+            esac
+
+            NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+            echo "基准版本: v${CURRENT}"
+            echo "进位方式: ${BUMP}"
+            echo "新版本: v${NEW_VERSION}"
+            echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
           fi
 
-      # ── 6. 更新构建号 ──
-      - name: 更新构建号
-        run: |
-          BUILD_NUMBER=${{ github.run_number }}
-          echo "构建号: $BUILD_NUMBER"
-          # 写入 Info.plist（如果存在）
-          find . -name "Info.plist" -exec plutil -replace CFBundleVersion -string "$BUILD_NUMBER" {} \; 2>/dev/null || true
-
-      # ── 7. 编译归档 ──
+      # ── 9. 编译归档（通过参数设置版本号和构建号）──
       - name: 编译归档
         run: |
           rm -rf ${{ env.BUILD_DIR }}
           mkdir -p ${{ env.BUILD_DIR }}
-          
+
           xcodebuild archive \
             -project ${{ env.PROJECT_NAME }}.xcodeproj \
             -scheme ${{ env.SCHEME }} \
             -configuration ${{ env.CONFIGURATION }} \
             -destination "generic/platform=iOS" \
             -archivePath ${{ env.BUILD_DIR }}/${{ env.PROJECT_NAME }}.xcarchive \
+            MARKETING_VERSION=${{ steps.version.outputs.version }} \
+            CURRENT_PROJECT_VERSION=${{ github.run_number }} \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
             PROVISIONING_PROFILE_SPECIFIER="" \
             DEVELOPMENT_TEAM=""
 
-      # ── 8. 导出未签名 IPA ──
+      # ── 10. 导出未签名 IPA ──
       - name: 导出未签名 IPA
         run: |
-          # 创建导出配置（不签名）
-          cat > ${{ env.BUILD_DIR }}/ExportOptions.plist <<EOF
+          cat > ${{ env.BUILD_DIR }}/ExportOptions.plist <<'PLIST'
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
           <dict>
             <key>method</key>
-            <string>${{ env.EXPORT_METHOD }}</string>
-            <key>signingStyle</key>
-            <string>manual</string>
+            <string>development</string>
             <key>stripSwiftSymbols</key>
             <true/>
             <key>compileBitcode</key>
@@ -146,7 +158,7 @@ jobs:
             <false/>
           </dict>
           </plist>
-          EOF
+          PLIST
 
           xcodebuild -exportArchive \
             -archivePath ${{ env.BUILD_DIR }}/${{ env.PROJECT_NAME }}.xcarchive \
@@ -157,7 +169,23 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             PROVISIONING_PROFILE_SPECIFIER=""
 
-      # ── 9. 重命名 IPA（命名规范：newVPN-vX.Y.Z.ipa）──
+      # ── 11. 验证 IPA 产物 ──
+      - name: 验证 IPA 产物
+        run: |
+          IPA_PATH=$(find ${{ env.BUILD_DIR }}/ipa -name "*.ipa" | head -1)
+          if [ -z "$IPA_PATH" ]; then
+            echo "错误：未找到 IPA 文件"
+            exit 1
+          fi
+          SIZE=$(stat -f%z "$IPA_PATH" 2>/dev/null || stat -c%s "$IPA_PATH" 2>/dev/null)
+          if [ "$SIZE" -lt 100000 ]; then
+            echo "错误：IPA 文件过小（${SIZE} 字节），可能构建异常"
+            exit 1
+          fi
+          echo "IPA 验证通过: ${IPA_PATH} (${SIZE} 字节)"
+          echo "ipa_path=$IPA_PATH" >> $GITHUB_OUTPUT
+
+      # ── 12. 重命名 IPA（命名规范：newVPN-vX.Y.Z.ipa）──
       - name: 重命名 IPA
         run: |
           VERSION="v${{ steps.version.outputs.version }}"
@@ -165,7 +193,7 @@ jobs:
           cp "$IPA_PATH" "${{ env.BUILD_DIR }}/newVPN-${VERSION}.ipa"
           ls -lh "${{ env.BUILD_DIR }}/newVPN-${VERSION}.ipa"
 
-      # ── 10. 上传构建产物（命名规范：newVPN-vX.Y.Z）──
+      # ── 13. 上传构建产物 ──
       - name: 上传 IPA 产物
         uses: actions/upload-artifact@v4
         with:
@@ -173,7 +201,7 @@ jobs:
           path: ${{ env.BUILD_DIR }}/newVPN-v${{ steps.version.outputs.version }}.ipa
           retention-days: 90
 
-      # ── 11. 如果是 tag，创建 Release ──
+      # ── 14. 如果是 tag，创建 Release ──
       - name: 创建 Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
@@ -182,13 +210,3 @@ jobs:
           generate_release_notes: true
           draft: false
           prerelease: false
-
-      # ── 12. 提交版本号变更回 main ──
-      - name: 提交版本号变更
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add project.yml || true
-          git commit -m "chore: 版本号进位至 v${{ steps.version.outputs.version }}" || echo "无变更"
-          git push origin main || echo "推送失败，跳过"

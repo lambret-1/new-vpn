@@ -108,13 +108,13 @@ final class AppUpdateManager: ObservableObject {
                     }
                 }
             }
-        } catch {
+        } catch let 错误 {
             await MainActor.run {
                 if 静默模式 {
                     // 静默模式下检测失败不弹窗
                     检测状态 = .空闲
                 } else {
-                    检测状态 = .检测失败(错误.本地化描述)
+                    检测状态 = .检测失败(错误.localizedDescription)
                 }
             }
         }

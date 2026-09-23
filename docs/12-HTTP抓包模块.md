@@ -2,9 +2,9 @@
 
 ## 12.1 职责
 
-- 捕获 MITM 解密后的 HTTP/HTTPS 会话
+- 捕获 MITM 解密后的 HTTP / HTTPS 会话
 - 会话列表、请求 / 响应头 / Body 查看
-- JSON 格式化
+- JSON 自动格式化
 - 会话过滤、清空
 - HAR 导出
 
@@ -32,66 +32,111 @@ struct HttpSession: Identifiable {
     let requestBodySize: Int
     let responseBodySize: Int
     let costMs: Int
+    let isBinary: Bool              // Body 是否为二进制
 }
 ```
 
 ## 12.3 内存策略
 
-- 环形缓冲区，默认 500 条
-- 可配置 200-2000
-- FIFO 淘汰旧记录
-- Body Base64 存储
-- 二进制资源默认截断
+| 配置项 | 默认值 | 说明 |
+| --- | --- | --- |
+| 最大会话数 | 500 | 环形缓冲区，FIFO 淘汰 |
+| 文本 Body 截断 | 256KB | 超出截断 |
+| 二进制 Body | 不保存 | 仅记录大小 |
 
-### Body 截断
+### Body 截断规则
 
-| 类型 | 策略 |
+| Content-Type | 处理方式 |
 | --- | --- |
-| 文本 | 默认最多 256KB |
-| 二进制（图片 / 视频） | 默认不保存 Body，仅记录大小 |
+| text/*, application/json, application/javascript | 保存文本，截断到 256KB |
+| image/*, video/*, audio/* | 不保存 Body，仅记录大小 |
+| application/octet-stream | 不保存 Body |
+| 其他 | 默认按文本处理 |
 
 ## 12.4 抓取范围
 
 两种模式：
 
-1. **跟随 MITM（默认）**：只抓取 MITM 命中域名
-2. **自定义白名单**：独立抓取规则
+### 跟随 MITM（默认）
+
+- 只抓取 MITM 命中域名
+- 未开启 MITM 的连接不捕获
+
+### 自定义白名单
+
+- 独立抓取规则
+- 按域名匹配
+- 不依赖 MITM 启用状态
 
 ## 12.5 导出格式
 
-| 格式 | 说明 |
-| --- | --- |
-| HAR | HTTP Archive，可导入 Chrome / Charles |
-| JSON | 结构化数据 |
-| TXT | 简易文本日志 |
+| 格式 | 说明 | 用途 |
+| --- | --- | --- |
+| HAR | HTTP Archive | 导入 Chrome / Charles |
+| JSON | 结构化数据 | 脚本二次处理 |
+| TXT | 简易文本日志 | 快速查阅 |
 
-支持：
-- 导出全部
-- 导出选中
-- 导出过滤结果
+导出范围选项：
 
-## 12.6 UI 面板
+- 导出全部会话
+- 导出选中会话
+- 导出过滤后会话
 
-### 顶部控制栏
+## 12.6 数据流转
 
-- 总开关
-- 暂停 / 继续
-- 清空
-- 导出
-- 搜索
+```
+MITM 解密 HTTP 流
+    ↓
+旁路钩子（只读，不阻塞主链路）
+    ↓
+解析请求 / 响应
+    ↓
+Base64 编码 Body
+    ↓
+写入环形缓冲区
+    ↓
+UI 每 200ms 批量刷新列表
+```
 
-### 会话列表
+## 12.7 核心 API
 
-字段：时间、方法、URL、状态码、大小、耗时
+```swift
+final class HttpCaptureManager {
+    static let shared = HttpCaptureManager()
 
-### 详情弹窗
+    /// 总开关
+    var isEnabled: Bool { get set }
 
-- 概览：URL、五元组、耗时
-- 请求：请求头 + Body
-- 响应：响应头 + Body
-- 原始数据：Base64
+    /// 暂停 / 继续
+    func pause()
+    func resume()
 
-## 12.7 配置项
+    /// 清空会话
+    func clearSessions()
+
+    /// 获取会话列表
+    func getSessions(filter: CaptureFilter?) -> [HttpSession]
+
+    /// 导出会话
+    func exportSessions(format: ExportFormat, sessions: [HttpSession]) throws -> URL
+}
+
+struct CaptureFilter {
+    var keyword: String?
+    var methods: [String]?
+    var statusCodes: [Int]?
+    var hasRequestBody: Bool?
+    var hasResponseBody: Bool?
+}
+
+enum ExportFormat {
+    case har
+    case json
+    case txt
+}
+```
+
+## 12.8 配置项
 
 ```json
 "httpCapture": {
@@ -103,9 +148,21 @@ struct HttpSession: Identifiable {
 }
 ```
 
-## 12.8 性能保护
+## 12.9 性能保护
 
-- 独立旁路回调，不阻塞主链路
-- UI 每 200ms 批量刷新
-- 测速隧道默认不抓包
-- 高并发时关闭抓包避免性能下降
+| 策略 | 说明 |
+| --- | --- |
+| 旁路钩子 | 只读，不阻塞主链路 |
+| UI 节流 | 每 200ms 批量刷新 |
+| 测速隔离 | 测速隧道默认不抓包 |
+| 大 Body 截断 | 防止内存暴涨 |
+| 关闭后零开销 | 总开关关闭时不注册钩子 |
+
+## 12.10 容错策略
+
+| 异常 | 处理 |
+| --- | --- |
+| HTTP 解析失败 | 跳过该会话，记录 WARN |
+| Body 编码失败 | 不保存 Body，记录大小 |
+| 缓冲区满 | FIFO 淘汰最旧会话 |
+| 导出文件失败 | 提示错误，不影响运行 |

@@ -49,6 +49,11 @@ targets:
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
         NSLocalNetworkUsageDescription: 用于局域网连接检测
+        UIBackgroundModes:
+          - fetch
+          - processing
+        BGTaskSchedulerPermittedIdentifiers:
+          - com.newvpn.app.subscriptionRefresh
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.newvpn.app

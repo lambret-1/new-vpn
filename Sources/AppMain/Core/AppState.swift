@@ -240,6 +240,10 @@ final class AppState: ObservableObject {
     @Published var 网络连接列表: [网络连接模型] = []
     /// 节点分组列表（按分组名聚合）
     @Published var 节点分组列表: [节点分组模型] = []
+    /// 远程订阅列表
+    @Published var 远程订阅列表: [远程订阅模型] = []
+    /// 本地配置文件列表
+    @Published var 本地配置列表: [本地配置模型] = []
 
     /// Mock 数据刷新定时器
     private var 模拟定时器: Timer?
@@ -247,6 +251,8 @@ final class AppState: ObservableObject {
     /// 私有初始化，加载 Mock 数据
     private init() {
         加载模拟数据()
+        加载订阅列表()
+        加载本地配置列表()
     }
 
     // MARK: - 当前节点便捷属性
@@ -359,6 +365,69 @@ final class AppState: ObservableObject {
                 )
             }
             self.节点分组列表[索引].测速中 = false
+        }
+    }
+
+    // MARK: - 订阅管理
+
+    /// 从本地存储加载订阅列表
+    private func 加载订阅列表() {
+        远程订阅列表 = 订阅存储.共享.读取订阅列表()
+    }
+
+    /// 加载本地配置列表（Mock）
+    private func 加载本地配置列表() {
+        本地配置列表 = [
+            本地配置模型(名称: "默认配置", 来源: "内置", 文件大小: 2048, 是否当前: true),
+            本地配置模型(名称: "高速模式", 来源: "手动导入", 文件大小: 3072, 是否当前: false)
+        ]
+    }
+
+    /// 添加新订阅
+    func 添加订阅(_ 订阅: 远程订阅模型) {
+        远程订阅列表.append(订阅)
+        保存订阅列表()
+    }
+
+    /// 删除订阅
+    func 删除订阅(_ 订阅: 远程订阅模型) {
+        远程订阅列表.removeAll { $0.id == 订阅.id }
+        订阅下载服务.共享.删除本地配置(订阅ID: 订阅.id)
+        保存订阅列表()
+    }
+
+    /// 保存订阅列表到本地
+    func 保存订阅列表() {
+        订阅存储.共享.保存订阅列表(远程订阅列表)
+    }
+
+    /// 更新指定订阅
+    func 更新订阅(订阅ID: UUID, 完成: @escaping (Result<订阅下载结果, 订阅下载错误>) -> Void) {
+        guard let 索引 = 远程订阅列表.firstIndex(where: { $0.id == 订阅ID }) else { return }
+        let 订阅 = 远程订阅列表[索引]
+
+        远程订阅列表[索引].上次状态 = .更新中
+
+        订阅下载服务.共享.下载订阅(订阅) { [weak self] 结果 in
+            guard let self = self else { return }
+
+            switch 结果 {
+            case .success(let 下载结果):
+                self.远程订阅列表[索引].上次状态 = .成功
+                self.远程订阅列表[索引].上次更新时间 = 下载结果.下载时间
+            case .failure(let 错误):
+                self.远程订阅列表[索引].上次状态 = .失败(错误.localizedDescription)
+            }
+
+            self.保存订阅列表()
+            完成(结果)
+        }
+    }
+
+    /// 批量更新所有启用自动更新的订阅
+    func 批量更新自动更新订阅() {
+        for 订阅 in 远程订阅列表 where 订阅.自动更新启用 {
+            更新订阅(订阅ID: 订阅.id) { _ in }
         }
     }
 }

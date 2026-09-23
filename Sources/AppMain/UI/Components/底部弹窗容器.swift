@@ -84,7 +84,7 @@ private struct 弹窗内容视图: View {
     var body: some View {
         switch 类型 {
         case .编辑配置文件:
-            配置文件编辑视图()
+            编辑配置文件页面()
         case .DNS记录:
             DNS记录视图()
         case .JS脚本记录:
@@ -94,25 +94,6 @@ private struct 弹窗内容视图: View {
         case .设置:
             设置视图()
         }
-    }
-}
-
-// MARK: - 配置文件编辑
-
-private struct 配置文件编辑视图: View {
-    var body: some View {
-        List {
-            Section("当前配置") {
-                Label("config.json", systemImage: "doc")
-                Label("默认配置", systemImage: "star")
-            }
-            Section("操作") {
-                Label("导入配置", systemImage: "square.and.arrow.down")
-                Label("导出配置", systemImage: "square.and.arrow.up")
-                Label("编辑原始配置", systemImage: "pencil")
-            }
-        }
-        .listStyle(.insetGrouped)
     }
 }
 

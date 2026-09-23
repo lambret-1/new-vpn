@@ -54,14 +54,7 @@ struct DashboardView: View {
             if 新阶段 == .active {
                 // 回到前台时间隔>6小时则检测
                 更新管理器.前台检测()
-                // 每次回到前台都重新检测描述文件状态
-                隧道管理.检测描述文件状态()
             }
-        }
-        // 需要安装描述文件时显示安装提示页面
-        .fullScreenCover(isPresented: $隧道管理.需要安装描述文件) {
-            安装描述文件提示页面()
-                .environmentObject(隧道管理)
         }
     }
 }
@@ -146,91 +139,6 @@ private struct 主内容区: View {
             }
         }
         .animation(.easeInOut(duration: 0.2), value: 状态.当前顶部卡片)
-    }
-}
-
-// MARK: - 安装描述文件提示页面
-
-/// 安装描述文件提示页面
-private struct 安装描述文件提示页面: View {
-    @EnvironmentObject private var 隧道管理: 隧道管理器
-    @Environment(\.dismiss) private var 关闭
-
-    var body: some View {
-        NavigationView {
-            VStack(spacing: 30) {
-                Spacer()
-
-                // 图标
-                ZStack {
-                    Circle()
-                        .stroke(Color.主题色.opacity(0.3), lineWidth: 4)
-                        .frame(width: 100, height: 100)
-
-                    Image(systemName: "gearshape.2")
-                        .font(.system(size: 50))
-                        .foregroundColor(.主题色)
-                }
-
-                // 标题和说明
-                VStack(spacing: 8) {
-                    Text("需要安装 VPN 描述文件")
-                        .font(.system(size: 22, weight: .bold))
-
-                    Text("检测到您尚未安装 VPN 描述文件，需要安装后才能使用隧道连接功能。")
-                        .font(.system(size: 14))
-                        .foregroundColor(.secondary)
-                        .multilineTextAlignment(.center)
-                }
-                .padding(.horizontal, 40)
-
-                Spacer()
-
-                // 按钮
-                VStack(spacing: 12) {
-                    // 安装按钮
-                    Button {
-                        安装描述文件()
-                    } label: {
-                        HStack {
-                            Spacer()
-                            Text("安装")
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundColor(.white)
-                            Spacer()
-                        }
-                        .padding(.vertical, 14)
-                        .background(Color.主题色)
-                        .cornerRadius(12)
-                    }
-
-                    // 稍后再说按钮
-                    Button {
-                        关闭()
-                    } label: {
-                        Text("稍后再说")
-                            .font(.system(size: 14))
-                            .foregroundColor(.secondary)
-                    }
-                }
-                .padding(.horizontal, 40)
-                .padding(.bottom, 40)
-            }
-            .background(Color.页面背景.ignoresSafeArea())
-            .navigationBarHidden(true)
-        }
-        .navigationViewStyle(.stack)
-    }
-
-    /// 安装描述文件：生成文件后跳转 iOS 设置
-    private func 安装描述文件() {
-        // 生成 VPN 配置文件
-        _ = 隧道管理.生成默认描述文件URL()
-        // 关闭页面后跳转 iOS 设置
-        关闭()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            隧道管理.跳转到设置页面()
-        }
     }
 }
 

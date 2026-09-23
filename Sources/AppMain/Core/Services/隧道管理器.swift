@@ -210,13 +210,7 @@ final class 隧道管理器: NSObject, ObservableObject {
     /// 生成默认 VPN 描述文件并保存为 .mobileconfig 文件
     /// - Returns: 描述文件 URL，失败返回 nil
     func 生成默认描述文件URL() -> URL? {
-        let 默认描述文件 = VPN描述文件模型(
-            名称: 配置.隧道名称,
-            类型: .自定义,
-            状态: .未安装,
-            扩展BundleID: "com.newvpn.app.tunnel",
-            服务器地址: "127.0.0.1"
-        )
+        let 默认描述文件 = VPN描述文件模型.默认描述文件()
         return VPN描述文件服务.共享.保存描述文件到临时目录(默认描述文件)
     }
 

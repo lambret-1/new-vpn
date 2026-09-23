@@ -242,8 +242,6 @@ final class AppState: ObservableObject {
     @Published var 节点分组列表: [节点分组模型] = []
     /// 远程订阅列表
     @Published var 远程订阅列表: [远程订阅模型] = []
-    /// 本地配置文件列表
-    @Published var 本地配置列表: [本地配置模型] = []
 
     /// Mock 数据刷新定时器
     private var 模拟定时器: Timer?
@@ -252,7 +250,6 @@ final class AppState: ObservableObject {
     private init() {
         加载模拟数据()
         加载订阅列表()
-        加载本地配置列表()
     }
 
     // MARK: - 当前节点便捷属性
@@ -373,14 +370,6 @@ final class AppState: ObservableObject {
     /// 从本地存储加载订阅列表
     private func 加载订阅列表() {
         远程订阅列表 = 订阅存储.共享.读取订阅列表()
-    }
-
-    /// 加载本地配置列表（Mock）
-    private func 加载本地配置列表() {
-        本地配置列表 = [
-            本地配置模型(名称: "默认配置", 来源: "内置", 文件大小: 2048, 是否当前: true),
-            本地配置模型(名称: "高速模式", 来源: "手动导入", 文件大小: 3072, 是否当前: false)
-        ]
     }
 
     /// 添加新订阅

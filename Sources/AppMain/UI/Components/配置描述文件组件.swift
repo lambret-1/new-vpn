@@ -131,7 +131,7 @@ private struct 配置行: View {
             // 配置图标
             ZStack {
                 RoundedRectangle(cornerRadius: 10)
-                    .fill(配置.是否激活 ? Color.主题色.opacity(0.15) : Color.次要背景)
+                    .fill(配置.是否激活 ? Color.主题色.opacity(0.15) : Color.gray.opacity(0.15))
                     .frame(width: 44, height: 44)
                 Image(systemName: 配置图标)
                     .font(.system(size: 20))
@@ -619,8 +619,8 @@ struct 配置导入页面: View {
                                     .foregroundColor(.成功色)
                                 Spacer()
                             }
-                            if !结果.警告.isEmpty {
-                                ForEach(结果.警告, id: \.self) { 警告 in
+                            if !结果.警告信息.isEmpty {
+                                ForEach(结果.警告信息, id: \.self) { 警告 in
                                     HStack {
                                         Image(systemName: "exclamationmark.triangle")
                                             .foregroundColor(.警告色)

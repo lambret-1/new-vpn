@@ -7,6 +7,7 @@
 
 import Foundation
 import NetworkExtension
+import os
 
 // MARK: - 隧道连接状态
 

@@ -143,7 +143,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
                 case "getLogs":
                     let 日志列表 = 读取扩展日志()
-                    if let 数据 = try? JSONEncoder().encode(日志列表) {
+                    if let 数据 = try? JSONSerialization.data(withJSONObject: 日志列表) {
                         completionHandler?(数据)
                     } else {
                         completionHandler?(nil)

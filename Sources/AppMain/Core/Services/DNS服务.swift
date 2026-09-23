@@ -86,8 +86,7 @@ final class DNS服务 {
 
         // 使用 CFHost 进行 DNS 解析
         let 主机 = CFHostCreateWithName(kCFAllocatorDefault, 域名 as CFString).takeRetainedValue()
-        var 解析错误 = CFHostError()
-        let 成功 = CFHostStartInfoResolution(主机, .addresses, &解析错误)
+        let 成功 = CFHostStartInfoResolution(主机, .addresses, nil)
 
         if 成功 {
             var 解析结果: DarwinBoolean = false
@@ -148,8 +147,7 @@ final class DNS服务 {
 
         let 主机 = CFHostCreateWithAddress(kCFAllocatorDefault,
                                              Data(bytes: &addr, count: MemoryLayout<sockaddr_in>.size) as CFData).takeRetainedValue()
-        var 解析错误 = CFHostError()
-        let 成功 = CFHostStartInfoResolution(主机, .names, &解析错误)
+        let 成功 = CFHostStartInfoResolution(主机, .names, nil)
 
         if 成功 {
             var 解析结果: DarwinBoolean = false

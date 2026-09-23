@@ -27,7 +27,7 @@ struct DNS记录页面: View {
                 .padding(.top, 10)
 
             // 搜索栏
-            AppSearchBar(搜索关键词: $搜索关键词, 占位文字: "搜索域名或IP")
+            AppSearchBar(搜索文字: $搜索关键词, 占位文字: "搜索域名或IP")
                 .padding(.horizontal, 15)
                 .padding(.vertical, 8)
 
@@ -170,7 +170,7 @@ struct DNS记录行: View {
                     .foregroundColor(.white)
                     .padding(.horizontal, 5)
                     .padding(.vertical, 2)
-                    .background(记录.记录类型 == .A ? Color.主题色 : Color.次要色)
+                    .background(记录.记录类型 == .A ? Color.主题色 : Color.警告色)
                     .cornerRadius(4)
 
                 Spacer()
@@ -233,7 +233,7 @@ struct DNS记录行: View {
         case .远程: (文字, 颜色) = ("远程", .主题色)
         case .拦截: (文字, 颜色) = ("拦截", .危险色)
         case .直连: (文字, 颜色) = ("直连", .成功色)
-        case .代理: (文字, 颜色) = ("代理", .次要色)
+        case .代理: (文字, 颜色) = ("代理", .警告色)
         }
 
         return Text(文字)
@@ -401,7 +401,7 @@ struct DNS服务器行: View {
     private func 类型颜色(_ 类型: DNS服务器类型) -> Color {
         switch 类型 {
         case .udp: return .主题色
-        case .tcp: return .次要色
+        case .tcp: return .警告色
         case .doh: return .成功色
         case .dot: return .警告色
         }
@@ -434,17 +434,17 @@ struct 添加DNS服务器弹窗: View {
         NavigationView {
             Form {
                 Section("基本信息") {
-                    AppFormRow(标题: "名称") {
+                    AppFormRow(标签: "名称") {
                         TextField("例如：我的 DNS", text: $名称)
                             .multilineTextAlignment(.trailing)
                     }
-                    AppFormRow(标题: "地址") {
+                    AppFormRow(标签: "地址") {
                         TextField("IP 或域名", text: $地址)
                             .multilineTextAlignment(.trailing)
                             .keyboardType(.URL)
                             .autocapitalization(.none)
                     }
-                    AppFormRow(标题: "端口") {
+                    AppFormRow(标签: "端口") {
                         TextField("53", text: $端口)
                             .multilineTextAlignment(.trailing)
                             .keyboardType(.numberPad)
@@ -527,7 +527,7 @@ struct DNS设置页面: View {
                         DNS管理.保存配置()
                     }
 
-                AppFormRow(标题: "缓存 TTL 覆盖") {
+                AppFormRow(标签: "缓存 TTL 覆盖") {
                     TextField("0 = 使用服务器 TTL", value: $DNS管理.配置.缓存TTL覆盖, format: .number)
                         .multilineTextAlignment(.trailing)
                         .keyboardType(.numberPad)
@@ -600,7 +600,7 @@ struct DNS设置页面: View {
                         DNS管理.保存配置()
                     }
 
-                AppFormRow(标题: "最大日志条数") {
+                AppFormRow(标签: "最大日志条数") {
                     Picker("", selection: $DNS管理.配置.最大日志条数) {
                         Text("100").tag(100)
                         Text("500").tag(500)

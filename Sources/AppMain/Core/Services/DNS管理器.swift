@@ -95,7 +95,7 @@ final class DNS管理器: ObservableObject {
 
     /// 移动服务器顺序
     func 移动服务器(从源索引: IndexSet, 到目标索引: Int) {
-        配置.服务器列表.move(fromOffsets: 从源索引, toOffset: 目标索引)
+        配置.服务器列表.move(fromOffsets: 从源索引, toOffset: 到目标索引)
         保存配置()
     }
 

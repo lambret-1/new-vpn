@@ -137,30 +137,44 @@ final class AppDownloadManager: NSObject, ObservableObject {
             .copyToPasteboard
         ]
 
-        // 获取根视图控制器并弹出
-        guard let 窗口 = UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene })
-            .flatMap({ $0.windows })
-            .first(where: { $0.isKeyWindow }),
-              let 根视图 = 窗口.rootViewController else {
+        // 获取最顶层的视图控制器（处理 sheet 等场景）
+        guard let 顶层控制器 = 获取最顶层视图控制器() else {
             return
         }
 
         // iPad 适配：设置 popover 来源
         if let 弹出控制器 = 分享控制器.popoverPresentationController {
-            弹出控制器.sourceView = 根视图.view
-            弹出控制器.sourceRect = CGRect(x: 根视图.view.bounds.midX,
-                                           y: 根视图.view.bounds.midY,
+            弹出控制器.sourceView = 顶层控制器.view
+            弹出控制器.sourceRect = CGRect(x: 顶层控制器.view.bounds.midX,
+                                           y: 顶层控制器.view.bounds.midY,
                                            width: 0, height: 0)
             弹出控制器.permittedArrowDirections = []
         }
 
-        根视图.present(分享控制器, animated: true) { [weak self] in
+        顶层控制器.present(分享控制器, animated: true) { [weak self] in
             // 分享面板弹出后，延迟60秒清理临时文件
             DispatchQueue.main.asyncAfter(deadline: .now() + 60) {
                 self?.清理临时文件()
             }
         }
+    }
+
+    /// 获取最顶层的视图控制器（递归查找 presentedViewController）
+    private func 获取最顶层视图控制器() -> UIViewController? {
+        guard let 窗口 = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .flatMap({ $0.windows })
+            .first(where: { $0.isKeyWindow }),
+              var 顶层控制器 = 窗口.rootViewController else {
+            return nil
+        }
+
+        // 递归查找最顶层 presented 控制器
+        while let  presented = 顶层控制器.presentedViewController {
+            顶层控制器 = presented
+        }
+
+        return 顶层控制器
     }
 
     // MARK: - 字节格式化

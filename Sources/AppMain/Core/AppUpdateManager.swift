@@ -72,13 +72,17 @@ final class AppUpdateManager: ObservableObject {
     /// 开始检测更新
     /// - Parameter 静默模式: true=后台静默检测（有新版本才弹窗），false=手动检测（始终弹窗）
     func 开始检测(静默模式: Bool = false) {
-        guard 检测状态 == .空闲 else { return }
+        // 允许从非检测中状态重新开始（检测失败/已是最新/发现新版本都可重试）
+        if case .检测中 = 检测状态 { return }
 
         // 检查是否在稍后提醒冷却期内
         if 静默模式, let 提醒时间 = UserDefaults.standard.object(forKey: 稍后提醒时间键) as? Date,
            Date().timeIntervalSince(提醒时间) < 24 * 3600 {
             return
         }
+
+        // 重置状态为空闲，再开始新检测
+        检测状态 = .空闲
 
         // 记录当前模式
         当前静默模式 = 静默模式
@@ -93,7 +97,8 @@ final class AppUpdateManager: ObservableObject {
 
     /// 前台检测（App从后台回到前台时调用，间隔>6小时才检测）
     func 前台检测() {
-        guard 检测状态 == .空闲 else { return }
+        // 检测中不重复触发
+        if case .检测中 = 检测状态 { return }
 
         // 检查距离上次检测是否超过6小时
         if let 上次检测 = UserDefaults.standard.object(forKey: 上次检测时间键) as? Date,

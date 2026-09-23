@@ -140,40 +140,37 @@ jobs:
             PROVISIONING_PROFILE_SPECIFIER="" \
             DEVELOPMENT_TEAM=""
 
-      # ── 10. 导出未签名 IPA ──
-      - name: 导出未签名 IPA
+      # ── 10. 手动打包未签名 IPA（不使用 exportArchive，避免 Team 要求）──
+      - name: 打包未签名 IPA
         run: |
-          cat > ${{ env.BUILD_DIR }}/ExportOptions.plist <<'PLIST'
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-            <key>method</key>
-            <string>development</string>
-            <key>stripSwiftSymbols</key>
-            <true/>
-            <key>compileBitcode</key>
-            <false/>
-            <key>uploadSymbols</key>
-            <false/>
-          </dict>
-          </plist>
-          PLIST
+          # 从归档中提取 .app
+          APP_PATH=$(find ${{ env.BUILD_DIR }}/${{ env.PROJECT_NAME }}.xcarchive/Products/Applications -name "*.app" | head -1)
+          if [ -z "$APP_PATH" ]; then
+            echo "错误：未找到 .app 文件"
+            exit 1
+          fi
+          echo "找到应用: $APP_PATH"
 
-          xcodebuild -exportArchive \
-            -archivePath ${{ env.BUILD_DIR }}/${{ env.PROJECT_NAME }}.xcarchive \
-            -exportPath ${{ env.BUILD_DIR }}/ipa \
-            -exportOptionsPlist ${{ env.BUILD_DIR }}/ExportOptions.plist \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY="" \
-            PROVISIONING_PROFILE_SPECIFIER=""
+          # 创建 IPA 目录结构
+          mkdir -p ${{ env.BUILD_DIR }}/ipa/Payload
+          cp -R "$APP_PATH" ${{ env.BUILD_DIR }}/ipa/Payload/
+
+          # 移除代码签名相关文件（未签名 IPA）
+          find ${{ env.BUILD_DIR }}/ipa/Payload -name "_CodeSignature" -type d -exec rm -rf {} + 2>/dev/null || true
+          find ${{ env.BUILD_DIR }}/ipa/Payload -name "embedded.mobileprovision" -delete 2>/dev/null || true
+
+          # 打包为 IPA
+          cd ${{ env.BUILD_DIR }}/ipa
+          zip -qr ../NewVPN-unsigned.ipa Payload
+          cd -
+          echo "IPA 打包完成"
+          ls -lh ${{ env.BUILD_DIR }}/NewVPN-unsigned.ipa
 
       # ── 11. 验证 IPA 产物 ──
       - name: 验证 IPA 产物
         run: |
-          IPA_PATH=$(find ${{ env.BUILD_DIR }}/ipa -name "*.ipa" | head -1)
-          if [ -z "$IPA_PATH" ]; then
+          IPA_PATH="${{ env.BUILD_DIR }}/NewVPN-unsigned.ipa"
+          if [ ! -f "$IPA_PATH" ]; then
             echo "错误：未找到 IPA 文件"
             exit 1
           fi
@@ -183,14 +180,12 @@ jobs:
             exit 1
           fi
           echo "IPA 验证通过: ${IPA_PATH} (${SIZE} 字节)"
-          echo "ipa_path=$IPA_PATH" >> $GITHUB_OUTPUT
 
       # ── 12. 重命名 IPA（命名规范：newVPN-vX.Y.Z.ipa）──
       - name: 重命名 IPA
         run: |
           VERSION="v${{ steps.version.outputs.version }}"
-          IPA_PATH=$(find ${{ env.BUILD_DIR }}/ipa -name "*.ipa" | head -1)
-          cp "$IPA_PATH" "${{ env.BUILD_DIR }}/newVPN-${VERSION}.ipa"
+          cp "${{ env.BUILD_DIR }}/NewVPN-unsigned.ipa" "${{ env.BUILD_DIR }}/newVPN-${VERSION}.ipa"
           ls -lh "${{ env.BUILD_DIR }}/newVPN-${VERSION}.ipa"
 
       # ── 13. 上传构建产物 ──

@@ -13,8 +13,6 @@ struct AppCard<内容: View>: View {
     let 标题: String?
     /// 是否可折叠
     let 可折叠: Bool
-    /// 右上角附加视图
-    private let 附加视图: AnyView?
     /// 卡片内容
     private let 内容: () -> 内容
 
@@ -25,15 +23,12 @@ struct AppCard<内容: View>: View {
     /// - Parameters:
     ///   - 标题: 卡片标题，传 nil 不显示标题栏
     ///   - 可折叠: 是否允许点击标题栏折叠内容
-    ///   - 附加视图: 标题栏右侧自定义视图
     ///   - 内容: 卡片主体内容
     init(标题: String? = nil,
          可折叠: Bool = false,
-         @ViewBuilder 附加视图: () -> AnyView? = { nil },
          @ViewBuilder 内容: @escaping () -> 内容) {
         self.标题 = 标题
         self.可折叠 = 可折叠
-        self.附加视图 = 附加视图()
         self.内容 = 内容
     }
 
@@ -65,10 +60,6 @@ struct AppCard<内容: View>: View {
                 .foregroundColor(.primary)
 
             Spacer()
-
-            if let 附加 = 附加视图 {
-                附加
-            }
 
             if 可折叠 {
                 Image(systemName: 已折叠 ? "chevron.down" : "chevron.up")

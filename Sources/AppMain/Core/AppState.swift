@@ -401,27 +401,57 @@ final class AppState: ObservableObject {
         订阅存储.共享.保存订阅列表(远程订阅列表)
     }
 
-    /// 更新指定订阅
+    /// 更新指定订阅（下载并自动解析节点）
     func 更新订阅(订阅ID: UUID, 完成: @escaping (Result<订阅下载结果, 订阅下载错误>) -> Void) {
         guard let 索引 = 远程订阅列表.firstIndex(where: { $0.id == 订阅ID }) else { return }
         let 订阅 = 远程订阅列表[索引]
 
         远程订阅列表[索引].上次状态 = .更新中
 
-        订阅下载服务.共享.下载订阅(订阅) { [weak self] 结果 in
+        订阅下载服务.共享.下载并解析(订阅) { [weak self] 结果 in
             guard let self = self else { return }
 
             switch 结果 {
-            case .success(let 下载结果):
+            case .success(let 解析结果):
                 self.远程订阅列表[索引].上次状态 = .成功
-                self.远程订阅列表[索引].上次更新时间 = 下载结果.下载时间
+                self.远程订阅列表[索引].上次更新时间 = Date()
+                // 将解析出的节点添加到节点列表
+                self.合并解析节点(解析结果.节点列表, 订阅名称: 订阅.名称)
             case .failure(let 错误):
                 self.远程订阅列表[索引].上次状态 = .失败(错误.localizedDescription)
             }
 
             self.保存订阅列表()
-            完成(结果)
+            // 转换为下载结果回调
+            if case .success = 结果 {
+                完成(.success(订阅下载结果(配置内容: "", 下载时间: Date(), 文件大小: 0)))
+            } else if case .failure(let 错误) = 结果 {
+                完成(.failure(错误))
+            }
         }
+    }
+
+    /// 合并解析出的节点到节点列表
+    private func 合并解析节点(_ 解析节点: [解析节点模型], 订阅名称: String) {
+        let 新节点 = 解析节点.map { 解析节点 -> 节点模型 in
+            var 节点 = 解析节点.转换为节点模型()
+            节点.分组 = 订阅名称
+            节点.来源类型 = "订阅导入"
+            return 节点
+        }
+
+        // 移除该订阅旧的节点，添加新节点
+        节点列表.removeAll { $0.来源类型 == "订阅导入" && $0.分组 == 订阅名称 }
+        节点列表.append(contentsOf: 新节点)
+
+        // 重新生成分组
+        节点分组列表 = Mock数据.生成节点分组(节点列表: 节点列表)
+    }
+
+    /// 获取指定订阅解析出的节点
+    func 获取订阅节点(订阅ID: UUID) -> [节点模型] {
+        guard let 订阅 = 远程订阅列表.first(where: { $0.id == 订阅ID }) else { return [] }
+        return 节点列表.filter { $0.分组 == 订阅.名称 && $0.来源类型 == "订阅导入" }
     }
 
     /// 批量更新所有启用自动更新的订阅

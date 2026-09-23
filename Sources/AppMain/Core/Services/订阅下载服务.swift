@@ -137,38 +137,7 @@ final class 订阅下载服务 {
                 return
             }
 
-            // 验证是否为有效的 JSON（sing-box 配置格式）
-            if let json数据 = 文本.data(using: .utf8) {
-                do {
-                    _ = try JSONSerialization.jsonObject(with: json数据, options: [])
-                } catch {
-                    // 可能是 base64 编码的订阅，尝试解码
-                    if let 解码数据 = Data(base64Encoded: 文本, options: .ignoreUnknownCharacters),
-                       let 解码文本 = String(data: 解码数据, encoding: .utf8) {
-                        // base64 解码成功，继续验证
-                        do {
-                            _ = try JSONSerialization.jsonObject(with: 解码数据, options: [])
-                        } catch {
-                            DispatchQueue.main.async {
-                                完成(.failure(.解析失败("内容不是有效的JSON配置")))
-                            }
-                            return
-                        }
-                        let 结果 = 订阅下载结果(配置内容: 解码文本, 下载时间: Date(), 文件大小: 解码数据.count)
-                        self.保存配置(订阅: 订阅, 内容: 解码文本)
-                        DispatchQueue.main.async {
-                            完成(.success(结果))
-                        }
-                        return
-                    }
-                    DispatchQueue.main.async {
-                        完成(.failure(.解析失败("内容不是有效的JSON配置")))
-                    }
-                    return
-                }
-            }
-
-            // JSON 验证通过，保存配置
+            // 保存原始配置内容（不做格式验证，由解释器负责解析）
             let 结果 = 订阅下载结果(配置内容: 文本, 下载时间: Date(), 文件大小: 数据.count)
             self.保存配置(订阅: 订阅, 内容: 文本)
             DispatchQueue.main.async {
@@ -177,6 +146,25 @@ final class 订阅下载服务 {
         }
 
         任务.resume()
+    }
+
+    // MARK: - 下载并解析
+
+    /// 下载订阅并解析为节点列表
+    /// - Parameters:
+    ///   - 订阅: 远程订阅模型
+    ///   - 完成: 完成回调，返回解析结果
+    func 下载并解析(_ 订阅: 远程订阅模型, 完成: @escaping (Result<订阅解析结果, 订阅下载错误>) -> Void) {
+        下载订阅(订阅) { 结果 in
+            switch 结果 {
+            case .success(let 下载结果):
+                // 使用解释器解析
+                let 解析结果 = 订阅解释器.共享.解析(下载结果.配置内容)
+                完成(.success(解析结果))
+            case .failure(let 错误):
+                完成(.failure(错误))
+            }
+        }
     }
 
     // MARK: - 本地持久化

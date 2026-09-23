@@ -2,31 +2,378 @@
 //  PacketTunnelProvider.swift
 //  NewVPN-Tunnel
 //
-//  PacketTunnel 扩展入口：管理隧道生命周期
-//  一期为占位骨架，后续接入 sing-box 内核
+//  PacketTunnel 扩展入口：管理隧道生命周期、网络配置、流量统计
+//  预留 sing-box 内核集成接口
 //
 
 import NetworkExtension
 import os
 
-/// VPN 隧道提供者：负责启动、停止隧道，运行 sing-box 内核
+// MARK: - 隧道提供者
+
+/// VPN 隧道提供者：负责启动、停止隧道，管理网络配置和流量
 class PacketTunnelProvider: NEPacketTunnelProvider {
+    // MARK: - 属性
+
     /// 日志记录器
     private let 日志 = Logger(subsystem: "com.newvpn.app.tunnel", category: "隧道")
+
+    /// 隧道版本
+    private let 隧道版本 = "1.0.0"
+
+    /// 上行字节数
+    private var 上行字节: UInt64 = 0
+    /// 下行字节数
+    private var 下行字节: UInt64 = 0
+
+    /// 统计更新定时器
+    private var 统计定时器: Timer?
+
+    /// 隧道配置
+    private var 隧道配置: [String: Any] = [:]
+
+    /// 节点 ID
+    private var 节点ID: String?
+
+    /// 节点名称
+    private var 节点名称: String?
+
+    /// 是否正在运行
+    private var 是否运行中 = false
+
+    /// 共享 UserDefaults
+    private var 共享默认: UserDefaults? {
+        UserDefaults(suiteName: "group.com.newvpn.app")
+    }
+
+    // MARK: - 隧道生命周期
 
     /// 隧道启动完成回调
     override func startTunnel(options: [String: NSObject]?,
                               completionHandler: @escaping (Error?) -> Void) {
-        // 一期占位：直接回调成功，后续在此启动 sing-box 内核
-        日志.info("隧道启动（占位实现）")
-        completionHandler(nil)
+        日志.info("隧道开始启动")
+
+        // 解析启动选项
+        if let 选项 = options {
+            节点ID = 选项["nodeId"] as? String
+            节点名称 = 选项["nodeName"] as? String
+            日志.info("节点：\(self.节点名称 ?? "未知")")
+        }
+
+        // 加载配置
+        加载隧道配置()
+
+        // 设置网络配置
+        设置网络配置 { [weak self] 错误 in
+            guard let self = self else { return }
+
+            if let 错误 = 错误 {
+                self.日志.error("网络配置设置失败：\(错误.localizedDescription)")
+                completionHandler(错误)
+                return
+            }
+
+            // 启动数据包处理
+            self.启动数据包处理()
+
+            // 启动统计定时器
+            self.启动统计定时器()
+
+            // 标记运行中
+            self.是否运行中 = true
+
+            // 记录启动日志
+            self.记录扩展日志(级别: "信息", 模块: "隧道", 内容: "隧道启动成功，节点：\(self.节点名称 ?? "未知")")
+
+            self.日志.info("隧道启动成功")
+            completionHandler(nil)
+        }
     }
 
     /// 隧道停止完成回调
     override func stopTunnel(with reason: NEProviderStopReason,
                              completionHandler: @escaping () -> Void) {
-        // 一期占位：直接回调完成，后续在此停止 sing-box 内核
-        日志.info("隧道停止（占位实现），原因：\(reason.rawValue)")
+        日志.info("隧道开始停止，原因：\(reason.rawValue)")
+
+        // 停止数据包处理
+        停止数据包处理()
+
+        // 停止统计定时器
+        停止统计定时器()
+
+        // 保存最终统计
+        保存统计数据()
+
+        // 记录停止日志
+        记录扩展日志(级别: "信息", 模块: "隧道", 内容: "隧道已停止，原因：\(停止原因描述(reason))")
+
+        // 标记停止
+        是否运行中 = false
+
+        日志.info("隧道停止完成")
         completionHandler()
+    }
+
+    /// 处理来自主 App 的消息
+    override func handleAppMessage(_ messageData: Data, completionHandler: ((Data?) -> Void)? = nil) {
+        do {
+            if let 消息 = try JSONSerialization.jsonObject(with: messageData) as? [String: Any],
+               let 动作 = 消息["action"] as? String {
+
+                日志.debug("收到主 App 消息：\(动作)")
+
+                switch 动作 {
+                case "getVersion":
+                    let 响应 = ["version": 隧道版本]
+                    completionHandler?(try JSONSerialization.data(withJSONObject: 响应))
+
+                case "getStats":
+                    let 响应: [String: Any] = [
+                        "uploadBytes": 上行字节,
+                        "downloadBytes": 下行字节,
+                        "running": 是否运行中
+                    ]
+                    completionHandler?(try JSONSerialization.data(withJSONObject: 响应))
+
+                case "reloadConfig":
+                    加载隧道配置()
+                    设置网络配置 { _ in }
+                    let 响应 = ["success": true]
+                    completionHandler?(try JSONSerialization.data(withJSONObject: 响应))
+
+                case "getLogs":
+                    let 日志列表 = 读取扩展日志()
+                    if let 数据 = try? JSONEncoder().encode(日志列表) {
+                        completionHandler?(数据)
+                    } else {
+                        completionHandler?(nil)
+                    }
+
+                default:
+                    let 响应 = ["error": "未知动作"]
+                    completionHandler?(try JSONSerialization.data(withJSONObject: 响应))
+                }
+            }
+        } catch {
+            日志.error("处理消息失败：\(error.localizedDescription)")
+            completionHandler?(nil)
+        }
+    }
+
+    // MARK: - 网络配置
+
+    /// 设置网络配置
+    private func 设置网络配置(完成: @escaping (Error?) -> Void) {
+        let 设置 = NEPacketTunnelNetworkSettings(tunnelRemoteAddress: "10.0.0.1")
+
+        // IPv4 设置
+        let IPv4设置 = NEIPv4Settings(addresses: ["10.0.0.2"], subnetMasks: ["255.255.255.0"])
+        IPv4设置.includedRoutes = [NEIPv4Route.default()]
+        IPv4设置.excludedRoutes = [
+            NEIPv4Route(destinationAddress: "10.0.0.0", subnetMask: "255.0.0.0"),
+            NEIPv4Route(destinationAddress: "172.16.0.0", subnetMask: "255.240.0.0"),
+            NEIPv4Route(destinationAddress: "192.168.0.0", subnetMask: "255.255.0.0"),
+            NEIPv4Route(destinationAddress: "127.0.0.0", subnetMask: "255.0.0.0")
+        ]
+        设置.ipv4Settings = IPv4设置
+
+        // DNS 设置
+        let DNS设置 = NEDNSSettings(servers: ["8.8.8.8", "1.1.1.1"])
+        DNS设置.matchDomains = [""]
+        设置.dnsSettings = DNS设置
+
+        // MTU
+        设置.mtu = 1500
+
+        // 代理设置（可选）
+        if let 代理配置 = 隧道配置["proxy"] as? [String: Any],
+           let 代理类型 = 代理配置["type"] as? String,
+           代理类型 != "direct" {
+            let 代理设置 = NEProxySettings()
+            if let 服务器 = 代理配置["server"] as? String,
+               let 端口 = 代理配置["port"] as? Int {
+                代理设置.httpsEnabled = true
+                代理设置.httpsServer = NEProxyServer(address: 服务器, port: 端口)
+            }
+            设置.proxySettings = 代理设置
+        }
+
+        setTunnelNetworkSettings(设置) { 错误 in
+            if let 错误 = 错误 {
+                self.日志.error("设置网络配置失败：\(错误.localizedDescription)")
+            } else {
+                self.日志.info("网络配置设置成功")
+            }
+            完成(错误)
+        }
+    }
+
+    // MARK: - 数据包处理
+
+    /// 启动数据包处理
+    private func 启动数据包处理() {
+        日志.debug("启动数据包读取循环")
+
+        // 持续读取数据包
+        packetFlow.readPackets { [weak self] 数据包列表, 协议列表 in
+            guard let self = self else { return }
+
+            for (索引, 数据包) in 数据包列表.enumerated() {
+                let 协议 = 协议列表[索引]
+
+                // 统计上行流量
+                self.上行字节 += UInt64(数据包.count)
+
+                // 处理数据包（此处为占位，实际应转发到代理内核）
+                self.处理数据包(数据包, 协议: 协议)
+            }
+
+            // 继续读取
+            if self.是否运行中 {
+                self.启动数据包处理()
+            }
+        }
+    }
+
+    /// 停止数据包处理
+    private func 停止数据包处理() {
+        日志.debug("停止数据包处理")
+    }
+
+    /// 处理单个数据包
+    private func 处理数据包(_ 数据包: Data, 协议: NSNumber) {
+        // 占位实现：实际应将数据包发送到 sing-box 内核处理
+        // 此处仅统计流量，不做实际转发
+
+        // 模拟下行响应（实际应从代理内核接收）
+        // let 响应数据 = Data()
+        // packetFlow.writePackets([响应数据], withProtocols: [协议])
+        // 下行字节 += UInt64(响应数据.count)
+    }
+
+    // MARK: - 流量统计
+
+    /// 启动统计定时器
+    private func 启动统计定时器() {
+        停止统计定时器()
+
+        统计定时器 = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+            self?.保存统计数据()
+        }
+        RunLoop.main.add(统计定时器!, forMode: .common)
+    }
+
+    /// 停止统计定时器
+    private func 停止统计定时器() {
+        统计定时器?.invalidate()
+        统计定时器 = nil
+    }
+
+    /// 保存统计数据到共享 UserDefaults
+    private func 保存统计数据() {
+        guard let 共享默认 = 共享默认 else { return }
+
+        共享默认.set(上行字节, forKey: "uploadBytes")
+        共享默认.set(下行字节, forKey: "downloadBytes")
+        共享默认.set(是否运行中, forKey: "tunnelRunning")
+        共享默认.set(Date(), forKey: "lastStatsUpdate")
+    }
+
+    // MARK: - 配置管理
+
+    /// 加载隧道配置
+    private func 加载隧道配置() {
+        // 从协议配置读取
+        if let 协议配置 = protocolConfiguration as? NETunnelProviderProtocol,
+           let 提供者配置 = 协议配置.providerConfiguration {
+            隧道配置 = 提供者配置
+        }
+
+        // 从共享 UserDefaults 读取额外配置
+        if let 共享默认 = 共享默认,
+           let 配置数据 = 共享默认.data(forKey: "tunnelConfig"),
+           let 配置 = try? JSONSerialization.jsonObject(with: 配置数据) as? [String: Any] {
+            隧道配置.merge(配置) { _, 新 in 新 }
+        }
+
+        日志.debug("隧道配置加载完成")
+    }
+
+    // MARK: - 日志管理
+
+    /// 记录扩展日志
+    private func 记录扩展日志(级别: String, 模块: String, 内容: String) {
+        let 日志条目: [String: Any] = [
+            "id": UUID().uuidString,
+            "time": Date().timeIntervalSince1970,
+            "level": 级别,
+            "module": 模块,
+            "content": 内容
+        ]
+
+        // 保存到共享 UserDefaults
+        if let 共享默认 = 共享默认 {
+            var 日志列表 = 共享默认.array(forKey: "tunnelLogList") as? [[String: Any]] ?? []
+            日志列表.insert(日志条目, at: 0)
+            if 日志列表.count > 200 {
+                日志列表.removeLast()
+            }
+            共享默认.set(日志列表, forKey: "tunnelLogList")
+        }
+
+        // 输出到系统日志
+        switch 级别 {
+        case "错误":
+            日志.error("\(模块): \(内容)")
+        case "警告":
+            日志.warning("\(模块): \(内容)")
+        case "调试":
+            日志.debug("\(模块): \(内容)")
+        default:
+            日志.info("\(模块): \(内容)")
+        }
+    }
+
+    /// 读取扩展日志
+    private func 读取扩展日志() -> [[String: Any]] {
+        guard let 共享默认 = 共享默认,
+              let 日志列表 = 共享默认.array(forKey: "tunnelLogList") as? [[String: Any]] else {
+            return []
+        }
+        return 日志列表
+    }
+
+    // MARK: - 工具方法
+
+    /// 停止原因描述
+    private func 停止原因描述(_ 原因: NEProviderStopReason) -> String {
+        switch 原因 {
+        case .none: return "无"
+        case .userInitiated: return "用户主动断开"
+        case .providerFailed: return "提供者失败"
+        case .noNetworkAvailable: return "无可用网络"
+        case .unrecoverableNetworkChange: return "不可恢复的网络变更"
+        case .providerDisabled: return "提供者被禁用"
+        case .authenticationCanceled: return "认证取消"
+        case .configurationFailed: return "配置失败"
+        case .idleTimeout: return "空闲超时"
+        case .configurationDisabled: return "配置被禁用"
+        case .configurationRemoved: return "配置被移除"
+        case .superceded: return "被取代"
+        case .userLogout: return "用户注销"
+        case .userSwitch: return "用户切换"
+        case .connectionFailed: return "连接失败"
+        case .sleep: return "设备睡眠"
+        case .appUpdate: return "应用更新"
+        @unknown default: return "未知原因"
+        }
+    }
+
+    // MARK: - 内存管理
+
+    /// 内存警告处理
+    override func didReceiveMemoryWarning() {
+        日志.warning("收到内存警告")
+        super.didReceiveMemoryWarning()
     }
 }

@@ -61,11 +61,13 @@ struct DashboardView: View {
 private struct 顶部状态区: View {
     /// 全局应用状态
     @EnvironmentObject private var 状态: AppState
+    /// 隧道管理器
+    @EnvironmentObject private var 隧道管理: 隧道管理器
 
     var body: some View {
         HStack {
             // 左侧：隧道状态文字
-            Text(状态.隧道状态.显示文字)
+            Text(隧道管理.当前状态.rawValue)
                 .font(.system(size: 28, weight: .bold))
                 .foregroundColor(状态文字颜色)
 
@@ -73,8 +75,8 @@ private struct 顶部状态区: View {
 
             // 右侧：电源开关
             Toggle("", isOn: Binding(
-                get: { 状态.隧道状态.是否活跃 },
-                set: { _ in 状态.切换隧道() }
+                get: { 隧道管理.当前状态.是否活动 },
+                set: { _ in 隧道管理.切换连接() }
             ))
             .labelsHidden()
             .toggleStyle(SwitchToggleStyle(tint: .成功色))
@@ -84,11 +86,11 @@ private struct 顶部状态区: View {
 
     /// 根据隧道状态返回文字颜色
     private var 状态文字颜色: Color {
-        switch 状态.隧道状态 {
-        case .运行中: return .成功色
-        case .连接中, .准备中, .重连中: return .警告色
-        case .错误: return .危险色
-        case .已断开: return .primary
+        switch 隧道管理.当前状态 {
+        case .已连接: return .成功色
+        case .正在连接, .重新加载中: return .警告色
+        case .连接失败, .配置无效: return .危险色
+        case .已断开, .正在断开: return .primary
         }
     }
 }

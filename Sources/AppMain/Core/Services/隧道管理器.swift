@@ -8,6 +8,7 @@
 import Foundation
 import NetworkExtension
 import Combine
+import UIKit
 
 // MARK: - 隧道管理器
 
@@ -38,6 +39,8 @@ final class 隧道管理器: NSObject, ObservableObject {
     @Published var 需要安装描述文件 = false
     /// 是否正在安装描述文件
     @Published var 正在安装描述文件 = false
+    /// 是否需要用户手动安装描述文件（自动安装失败时）
+    @Published var 需要手动安装描述文件 = false
 
     // MARK: - 内部属性
 
@@ -208,20 +211,34 @@ final class 隧道管理器: NSObject, ObservableObject {
     /// - Parameter 完成: 完成回调（是否成功）
     func 自动安装默认描述文件(完成: @escaping (Bool, String?) -> Void) {
         正在安装描述文件 = true
+        需要手动安装描述文件 = false
         记录日志(级别: .信息, 模块: "描述文件", 内容: "开始自动生成并安装 VPN 描述文件")
 
-        let 管理器 = vpn管理器 ?? NETunnelProviderManager()
-
-        管理器.loadFromPreferences { [weak self] 错误 in
+        // 使用 loadAllFromPreferences 查找现有配置或创建新配置
+        NETunnelProviderManager.loadAllFromPreferences { [weak self] 管理器列表, 错误 in
             guard let self = self else { return }
 
             if let 错误 = 错误 {
                 DispatchQueue.main.async {
                     self.正在安装描述文件 = false
+                    self.需要手动安装描述文件 = true
                     self.记录日志(级别: .错误, 模块: "描述文件", 内容: "加载配置失败：\(错误.localizedDescription)")
                     完成(false, "加载配置失败：\(错误.localizedDescription)")
                 }
                 return
+            }
+
+            // 查找现有配置或创建新配置
+            let 管理器: NETunnelProviderManager
+            if let 现有管理器 = 管理器列表?.first(where: { $0.localizedDescription == self.配置.隧道名称 }) {
+                管理器 = 现有管理器
+                self.记录日志(级别: .信息, 模块: "描述文件", 内容: "找到现有配置，正在更新")
+            } else if let 第一个 = 管理器列表?.first {
+                管理器 = 第一个
+                self.记录日志(级别: .信息, 模块: "描述文件", 内容: "使用第一个现有配置")
+            } else {
+                管理器 = NETunnelProviderManager()
+                self.记录日志(级别: .信息, 模块: "描述文件", 内容: "创建新配置")
             }
 
             // 创建 PacketTunnel 协议配置
@@ -242,26 +259,45 @@ final class 隧道管理器: NSObject, ObservableObject {
             管理器.saveToPreferences { [weak self] 保存错误 in
                 guard let self = self else { return }
 
-                DispatchQueue.main.async {
-                    self.正在安装描述文件 = false
-
-                    if let 保存错误 = 保存错误 {
+                if let 保存错误 = 保存错误 {
+                    DispatchQueue.main.async {
+                        self.正在安装描述文件 = false
+                        self.需要手动安装描述文件 = true
                         self.记录日志(级别: .错误, 模块: "描述文件", 内容: "安装描述文件失败：\(保存错误.localizedDescription)")
-                        完成(false, "安装描述文件失败：\(保存错误.localizedDescription)")
+                        完成(false, "安装描述文件失败：\(保存错误.localizedDescription)\n\n请前往「设置 > 通用 > VPN」手动添加 VPN 配置")
                         return
                     }
+                    return
+                }
 
-                    // 重新加载以确认
-                    管理器.loadFromPreferences { _ in
-                        DispatchQueue.main.async {
-                            self.vpn管理器 = 管理器
-                            self.需要安装描述文件 = false
-                            self.记录日志(级别: .信息, 模块: "描述文件", 内容: "VPN 描述文件安装成功")
-                            完成(true, nil)
-                        }
+                // 重新加载以确认
+                管理器.loadFromPreferences { _ in
+                    DispatchQueue.main.async {
+                        self.vpn管理器 = 管理器
+                        self.需要安装描述文件 = false
+                        self.需要手动安装描述文件 = false
+                        self.记录日志(级别: .信息, 模块: "描述文件", 内容: "VPN 描述文件安装成功")
+                        self.正在安装描述文件 = false
+                        完成(true, nil)
                     }
                 }
             }
+        }
+    }
+
+    /// 跳转到 iOS 设置页面（VPN 设置）
+    func 跳转到设置页面() {
+        // 优先尝试跳转到 VPN 设置页面
+        if let VPN设置URL = URL(string: "App-Prefs:root=General&path=VPN") {
+            if UIApplication.shared.canOpenURL(VPN设置URL) {
+                UIApplication.shared.open(VPN设置URL)
+                return
+            }
+        }
+
+        // 退而求其次，跳转到 App 设置页面
+        if let 设置URL = URL(string: UIApplication.openSettingsURLString) {
+            UIApplication.shared.open(设置URL)
         }
     }
 

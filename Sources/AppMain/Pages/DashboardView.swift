@@ -255,20 +255,70 @@ private struct 安装描述文件进度页面: View {
                 Spacer()
 
                 // 按钮
-                if 安装完成 || 安装失败 {
+                if 安装完成 {
                     Button {
                         关闭()
                     } label: {
                         HStack {
                             Spacer()
-                            Text(安装完成 ? "开始使用" : "关闭")
+                            Text("开始使用")
                                 .font(.system(size: 16, weight: .medium))
                                 .foregroundColor(.white)
                             Spacer()
                         }
                         .padding(.vertical, 14)
-                        .background(安装完成 ? Color.成功色 : Color.危险色)
+                        .background(Color.成功色)
                         .cornerRadius(12)
+                    }
+                    .padding(.horizontal, 40)
+                    .padding(.bottom, 40)
+                } else if 安装失败 {
+                    VStack(spacing: 12) {
+                        // 前往设置按钮
+                        Button {
+                            隧道管理.跳转到设置页面()
+                        } label: {
+                            HStack {
+                                Image(systemName: "gearshape")
+                                    .font(.system(size: 16))
+                                Spacer()
+                                Text("前往 iOS 设置手动安装")
+                                    .font(.system(size: 16, weight: .medium))
+                                Spacer()
+                                Image(systemName: "arrow.up.right.square")
+                                    .font(.system(size: 16))
+                            }
+                            .foregroundColor(.white)
+                            .padding(.vertical, 14)
+                            .background(Color.主题色)
+                            .cornerRadius(12)
+                        }
+
+                        // 重试按钮
+                        Button {
+                            重新安装()
+                        } label: {
+                            HStack {
+                                Image(systemName: "arrow.clockwise")
+                                    .font(.system(size: 16))
+                                Text("重试自动安装")
+                                    .font(.system(size: 16, weight: .medium))
+                            }
+                            .foregroundColor(.主题色)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(Color.主题色.opacity(0.1))
+                            .cornerRadius(12)
+                        }
+
+                        // 关闭按钮
+                        Button {
+                            关闭()
+                        } label: {
+                            Text("稍后再说")
+                                .font(.system(size: 14))
+                                .foregroundColor(.secondary)
+                        }
                     }
                     .padding(.horizontal, 40)
                     .padding(.bottom, 40)
@@ -310,6 +360,11 @@ private struct 安装描述文件进度页面: View {
                 }
             }
         }
+    }
+
+    /// 重新安装
+    private func 重新安装() {
+        开始安装流程()
     }
 }
 

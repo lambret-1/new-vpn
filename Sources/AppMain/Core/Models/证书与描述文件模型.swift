@@ -289,7 +289,7 @@ struct VPN描述文件模型: Identifiable, Codable, Hashable {
     /// 包含所有网络流量
     var 包含所有流量: Bool
     /// 代理配置
-    var 代理配置: [String: Any]?
+    var 代理配置: [String: String]?
     /// DNS 服务器
     var DNS服务器: [String]
     /// 搜索域

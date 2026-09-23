@@ -142,7 +142,7 @@ private struct 分分组视图: View {
     @Binding var 分组: 分流规则分组
     @EnvironmentObject private var 分流管理: 分流规则管理器
     @State private var 显示添加规则 = false
-    @State private var 编辑的规则: 分流规则模型?
+    @State private var 编辑的规则: 分流规则项?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -244,7 +244,7 @@ private struct 分分组视图: View {
 
 /// 单条分流规则行
 struct 规则行视图: View {
-    @Binding var 规则: 分流规则模型
+    @Binding var 规则: 分流规则项
     @EnvironmentObject private var 分流管理: 分流规则管理器
 
     var body: some View {
@@ -328,7 +328,7 @@ struct 规则编辑页面: View {
     @Environment(\.dismiss) private var 关闭
 
     /// 编辑的规则（nil表示新增）
-    let 规则: 分流规则模型?
+    let 规则: 分流规则项?
     /// 目标分组
     let 分组: 分流规则分组?
 
@@ -340,7 +340,7 @@ struct 规则编辑页面: View {
     @State private var 优先级 = 100
     @State private var 备注 = ""
 
-    init(规则: 分流规则模型?, 分组: 分流规则分组? = nil) {
+    init(规则: 分流规则项?, 分组: 分流规则分组? = nil) {
         self.规则 = 规则
         self.分组 = 分组
         if let 规则 = 规则 {
@@ -452,7 +452,7 @@ struct 规则编辑页面: View {
 
     /// 保存规则
     private func 保存规则() {
-        let 新规则 = 分流规则模型(
+        let 新规则 = 分流规则项(
             id: 规则?.id ?? UUID(),
             名称: 名称,
             类型: 类型,

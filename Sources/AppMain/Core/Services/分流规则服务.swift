@@ -31,7 +31,7 @@ final class 分流规则服务 {
                  IP地址: String? = nil,
                  端口: Int? = nil,
                  协议: 网络协议? = nil,
-                 规则列表: [分流规则模型]) -> 分流规则模型? {
+                 规则列表: [分流规则项]) -> 分流规则项? {
         for 规则 in 规则列表 {
             guard 规则.启用 else { continue }
 
@@ -58,7 +58,7 @@ final class 分流规则服务 {
     }
 
     /// 匹配单条规则
-    private func 匹配单条规则(_ 规则: 分流规则模型,
+    private func 匹配单条规则(_ 规则: 分流规则项,
                             域名: String?,
                             IP地址: String?,
                             端口: Int?) -> Bool {
@@ -155,10 +155,10 @@ final class 分流规则服务 {
 
     /// 测试规则匹配（返回详细匹配过程）
     func 测试匹配(测试值: String,
-                 规则列表: [分流规则模型],
+                 规则列表: [分流规则项],
                  默认动作: 分流动作) -> 分流测试结果 {
         var 匹配过程: [(规则名称: String, 匹配: Bool)] = []
-        var 匹配规则: 分流规则模型?
+        var 匹配规则: 分流规则项?
 
         // 判断测试值是域名还是 IP
         let 是IP = 测试值.转换为IPv4整数 != nil
@@ -196,8 +196,8 @@ final class 分流规则服务 {
     /// 从 Clash 配置导入规则
     /// - Parameter 配置文本: Clash YAML 配置文本
     /// - Returns: 导入的规则列表
-    func 从Clash导入规则(_ 配置文本: String) -> [分流规则模型] {
-        var 规则列表: [分流规则模型] = []
+    func 从Clash导入规则(_ 配置文本: String) -> [分流规则项] {
+        var 规则列表: [分流规则项] = []
 
         // 简单解析 Clash rules 部分
         let 行 = 配置文本.components(separatedBy: .newlines)
@@ -255,7 +255,7 @@ final class 分流规则服务 {
                     default: 动作 = .代理
                     }
 
-                    let 规则 = 分流规则模型(
+                    let 规则 = 分流规则项(
                         名称: "\(类型.rawValue) - \(匹配值)",
                         类型: 类型,
                         匹配值: 匹配值,
@@ -274,8 +274,8 @@ final class 分流规则服务 {
     /// 从 sing-box 配置导入规则
     /// - Parameter 配置文本: sing-box JSON 配置文本
     /// - Returns: 导入的规则列表
-    func 从SingBox导入规则(_ 配置文本: String) -> [分流规则模型] {
-        var 规则列表: [分流规则模型] = []
+    func 从SingBox导入规则(_ 配置文本: String) -> [分流规则项] {
+        var 规则列表: [分流规则项] = []
 
         guard let 数据 = 配置文本.data(using: .utf8),
               let JSON = try? JSONSerialization.jsonObject(with: 数据) as? [String: Any],
@@ -288,7 +288,7 @@ final class 分流规则服务 {
             // 解析域名规则
             if let 域名列表 = 规则JSON["domain"] as? [String] {
                 for 域名 in 域名列表 {
-                    let 规则 = 分流规则模型(
+                    let 规则 = 分流规则项(
                         名称: "域名 - \(域名)",
                         类型: .域名精确,
                         匹配值: 域名,
@@ -303,7 +303,7 @@ final class 分流规则服务 {
             // 解析域名后缀
             if let 后缀列表 = 规则JSON["domain_suffix"] as? [String] {
                 for 后缀 in 后缀列表 {
-                    let 规则 = 分流规则模型(
+                    let 规则 = 分流规则项(
                         名称: "域名后缀 - \(后缀)",
                         类型: .域名后缀,
                         匹配值: 后缀,
@@ -318,7 +318,7 @@ final class 分流规则服务 {
             // 解析 IP 段
             if let IP列表 = 规则JSON["ip_cidr"] as? [String] {
                 for IP in IP列表 {
-                    let 规则 = 分流规则模型(
+                    let 规则 = 分流规则项(
                         名称: "IP段 - \(IP)",
                         类型: .IP段,
                         匹配值: IP,
@@ -339,7 +339,7 @@ final class 分流规则服务 {
     /// 导出为 Clash 格式
     /// - Parameter 规则列表: 规则列表
     /// - Returns: Clash YAML 规则文本
-    func 导出为Clash格式(_ 规则列表: [分流规则模型]) -> String {
+    func 导出为Clash格式(_ 规则列表: [分流规则项]) -> String {
         var 行: [String] = ["rules:"]
 
         for 规则 in 规则列表 where 规则.启用 {

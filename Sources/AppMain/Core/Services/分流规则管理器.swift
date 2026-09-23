@@ -91,7 +91,7 @@ final class 分流规则管理器: ObservableObject {
     // MARK: - 规则管理
 
     /// 添加规则到指定分组
-    func 添加规则(_ 规则: 分流规则模型, 到分组: 分流规则分组) {
+    func 添加规则(_ 规则: 分流规则项, 到分组: 分流规则分组) {
         if let 分组索引 = 配置.分组列表.firstIndex(where: { $0.id == 到分组.id }) {
             配置.分组列表[分组索引].规则列表.append(规则)
             保存配置()
@@ -99,7 +99,7 @@ final class 分流规则管理器: ObservableObject {
     }
 
     /// 更新规则
-    func 更新规则(_ 规则: 分流规则模型) {
+    func 更新规则(_ 规则: 分流规则项) {
         for (分组索引, 分组) in 配置.分组列表.enumerated() {
             if let 规则索引 = 分组.规则列表.firstIndex(where: { $0.id == 规则.id }) {
                 配置.分组列表[分组索引].规则列表[规则索引] = 规则
@@ -110,7 +110,7 @@ final class 分流规则管理器: ObservableObject {
     }
 
     /// 删除规则
-    func 删除规则(_ 规则: 分流规则模型) {
+    func 删除规则(_ 规则: 分流规则项) {
         for (分组索引, 分组) in 配置.分组列表.enumerated() {
             if let 规则索引 = 分组.规则列表.firstIndex(where: { $0.id == 规则.id }) {
                 配置.分组列表[分组索引].规则列表.remove(at: 规则索引)
@@ -121,7 +121,7 @@ final class 分流规则管理器: ObservableObject {
     }
 
     /// 切换规则启用状态
-    func 切换规则启用(_ 规则: 分流规则模型) {
+    func 切换规则启用(_ 规则: 分流规则项) {
         for (分组索引, 分组) in 配置.分组列表.enumerated() {
             if let 规则索引 = 分组.规则列表.firstIndex(where: { $0.id == 规则.id }) {
                 配置.分组列表[分组索引].规则列表[规则索引].启用.toggle()
@@ -145,7 +145,7 @@ final class 分流规则管理器: ObservableObject {
     func 匹配规则(域名: String? = nil,
                  IP地址: String? = nil,
                  端口: Int? = nil,
-                 协议: 网络协议? = nil) -> 分流规则模型? {
+                 协议: 网络协议? = nil) -> 分流规则项? {
         guard 配置.启用分流 else { return nil }
 
         let 匹配规则 = 分流规则服务.共享.匹配规则(
@@ -176,7 +176,7 @@ final class 分流规则管理器: ObservableObject {
     }
 
     /// 记录规则命中
-    private func 记录命中(_ 规则: 分流规则模型) {
+    private func 记录命中(_ 规则: 分流规则项) {
         for (分组索引, 分组) in 配置.分组列表.enumerated() {
             if let 规则索引 = 分组.规则列表.firstIndex(where: { $0.id == 规则.id }) {
                 配置.分组列表[分组索引].规则列表[规则索引].命中次数 += 1
@@ -301,7 +301,7 @@ final class 分流规则管理器: ObservableObject {
     }
 
     /// 按命中次数排序的规则
-    var 热门规则: [分流规则模型] {
+    var 热门规则: [分流规则项] {
         配置.所有规则
             .filter { $0.命中次数 > 0 }
             .sorted { $0.命中次数 > $1.命中次数 }

@@ -8,23 +8,23 @@
 import SwiftUI
 
 /// 表单行：左侧标签 + 右侧控件，所有设置/编辑表单统一使用
-struct AppFormRow<控件: View>: View {
+struct AppFormRow<控件类型: View>: View {
     /// 左侧标签文字
     let 标签: String
     /// 辅助说明文字（标签下方小字）
     let 说明: String?
     /// 右侧控件
-    private let 控件: () -> 控件
+    private let 控件闭包: () -> 控件类型
 
     /// 初始化表单行
     /// - Parameters:
     ///   - 标签: 左侧标签
     ///   - 说明: 标签下方辅助说明，传 nil 不显示
     ///   - 控件: 右侧控件（输入框、开关、选择器等）
-    init(标签: String, 说明: String? = nil, @ViewBuilder 控件: @escaping () -> 控件) {
+    init(标签: String, 说明: String? = nil, @ViewBuilder 控件: @escaping () -> 控件类型) {
         self.标签 = 标签
         self.说明 = 说明
-        self.控件 = 控件
+        self.控件闭包 = 控件
     }
 
     var body: some View {
@@ -43,7 +43,7 @@ struct AppFormRow<控件: View>: View {
 
             Spacer(minLength: 间距常量.紧凑)
 
-            控件()
+            控件闭包()
         }
         .frame(minHeight: 间距常量.表单行高)
         .padding(.vertical, 间距常量.紧凑 / 2)

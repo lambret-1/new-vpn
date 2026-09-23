@@ -8,13 +8,13 @@
 import SwiftUI
 
 /// 卡片容器：所有页面内容区块统一使用本组件
-struct AppCard<内容: View>: View {
+struct AppCard<内容类型: View>: View {
     /// 卡片标题
     let 标题: String?
     /// 是否可折叠
     let 可折叠: Bool
     /// 卡片内容
-    private let 内容: () -> 内容
+    private let 内容闭包: () -> 内容类型
 
     /// 折叠状态
     @State private var 已折叠: Bool = false
@@ -26,10 +26,10 @@ struct AppCard<内容: View>: View {
     ///   - 内容: 卡片主体内容
     init(标题: String? = nil,
          可折叠: Bool = false,
-         @ViewBuilder 内容: @escaping () -> 内容) {
+         @ViewBuilder 内容: @escaping () -> 内容类型) {
         self.标题 = 标题
         self.可折叠 = 可折叠
-        self.内容 = 内容
+        self.内容闭包 = 内容
     }
 
     var body: some View {
@@ -39,7 +39,7 @@ struct AppCard<内容: View>: View {
             }
 
             if !可折叠 || !已折叠 {
-                内容()
+                内容闭包()
                     .padding(间距常量.标准)
             }
         }

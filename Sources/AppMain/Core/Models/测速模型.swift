@@ -84,7 +84,7 @@ struct 测速结果模型: Equatable {
     /// 节点ID
     let 节点ID: UUID
     /// 测速时间
-    let 测速时间: Date
+    var 测速时间: Date
     /// 延迟（毫秒）
     var 延迟毫秒: Int?
     /// 抖动（毫秒）

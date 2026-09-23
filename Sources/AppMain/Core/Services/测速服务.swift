@@ -116,8 +116,8 @@ final class 测速服务 {
             fd_set(socket文件描述符, &等待集合)
 
             var 超时时间 = timeval()
-            超时时间.tv_sec = Int(超时)
-            超时时间.tv_usec = Int((超时.truncatingRemainder(dividingBy: 1)) * 1_000_000)
+            超时时间.tv_sec = __darwin_time_t(超时)
+            超时时间.tv_usec = __darwin_suseconds_t((超时.truncatingRemainder(dividingBy: 1)) * 1_000_000)
 
             let 选择结果 = select(socket文件描述符 + 1, nil, &等待集合, nil, &超时时间)
 
@@ -156,8 +156,8 @@ final class 测速服务 {
         var 延迟: Int?
         let 开始时间 = Date()
 
-        let 任务 = 会话.dataTask(with: 请求) { _, 响应, 错误 in
-            if error == nil, (响应 as? HTTPURLResponse)?.statusCode != nil {
+        let 任务 = 会话.dataTask(with: 请求) { _, 响应, 请求错误 in
+            if 请求错误 == nil, (响应 as? HTTPURLResponse)?.statusCode != nil {
                 延迟 = Int(Date().timeIntervalSince(开始时间) * 1000)
             }
             信号.signal()

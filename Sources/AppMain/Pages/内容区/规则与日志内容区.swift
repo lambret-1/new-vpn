@@ -135,10 +135,12 @@ private struct 日志行: View {
 
     private func 级别颜色(_ 级别: 日志级别) -> Color {
         switch 级别 {
-        case .信息: return .主题色
-        case .警告: return .警告色
+        case .致命: return .紫色
         case .错误: return .危险色
+        case .警告: return .警告色
+        case .信息: return .主题色
         case .调试: return .secondary
+        case .追踪: return .secondary
         }
     }
 }

@@ -231,18 +231,34 @@ struct 脚本模型: Identifiable, Codable, Hashable {
 
 /// 日志级别
 enum 日志级别: String, Codable, CaseIterable {
-    case 调试 = "调试"
-    case 信息 = "信息"
-    case 警告 = "警告"
+    case 致命 = "致命"
     case 错误 = "错误"
+    case 警告 = "警告"
+    case 信息 = "信息"
+    case 调试 = "调试"
+    case 追踪 = "追踪"
 
-    /// 级别对应序号（用于过滤）
+    /// 级别对应序号（用于过滤和比较）
     var 级别序号: Int {
         switch self {
-        case .调试: return 0
-        case .信息: return 1
-        case .警告: return 2
-        case .错误: return 3
+        case .致命: return 5
+        case .错误: return 4
+        case .警告: return 3
+        case .信息: return 2
+        case .调试: return 1
+        case .追踪: return 0
+        }
+    }
+
+    /// 级别对应颜色
+    var 级别颜色: String {
+        switch self {
+        case .致命: return "danger"
+        case .错误: return "danger"
+        case .警告: return "warning"
+        case .信息: return "success"
+        case .调试: return "secondary"
+        case .追踪: return "secondary"
         }
     }
 }

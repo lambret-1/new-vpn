@@ -3,7 +3,7 @@
 //  NewVPN
 //
 //  调试日志管理器：收集、过滤、搜索、导出调试日志
-//  支持日志级别过滤、模块过滤、关键词搜索、持久化存储
+//  支持日志级别过滤、模块过滤、关键词搜索、持久化存储、敏感信息脱敏
 //
 
 import Foundation
@@ -34,6 +34,10 @@ final class 调试日志管理器: ObservableObject {
     @Published var 自动滚动: Bool = true
     /// 最大日志条数（超过后自动清理旧日志）
     var 最大日志条数: Int = 2000
+    /// 最低输出级别（低于此级别的日志不记录）
+    var 最低输出级别: 日志级别 = .调试
+    /// 是否启用敏感信息脱敏
+    var 启用脱敏: Bool = true
 
     // MARK: - 私有属性
 
@@ -47,6 +51,24 @@ final class 调试日志管理器: ObservableObject {
 
     /// 串行队列（保证线程安全）
     private let 队列 = DispatchQueue(label: "com.newvpn.debuglog", qos: .utility)
+
+    /// 脱敏正则表达式列表
+    private let 脱敏规则: [(模式: String, 替换: String)] = [
+        // UUID 格式
+        ("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}", "********"),
+        // 订阅 URL（包含 /sub）
+        ("https?://[^\\s]*?/sub[^\\s]*", "********"),
+        // Reality 公钥（base64 长字符串）
+        ("(?i)reality[\\s:]*[A-Za-z0-9+/]{40,}={0,2}", "reality: ********"),
+        // Cookie 头
+        ("(?i)cookie:\\s*[^\\n\\r]+", "Cookie: ********"),
+        // Authorization 头
+        ("(?i)authorization:\\s*[^\\n\\r]+", "Authorization: ********"),
+        // 密码字段
+        ("(?i)password[=:\\s]+[^\\s&\"']+", "password=********"),
+        // 令牌字段
+        ("(?i)token[=:\\s]+[^\\s&\"']+", "token=********")
+    ]
 
     // MARK: - 初始化
 
@@ -62,12 +84,18 @@ final class 调试日志管理器: ObservableObject {
     ///   - 模块: 模块名称
     ///   - 内容: 日志内容
     func 添加日志(级别: 日志级别, 模块: String, 内容: String) {
+        // 级别过滤：低于最低输出级别的日志不记录
+        guard 级别.级别序号 >= 最低输出级别.级别序号 else { return }
+
+        // 敏感信息脱敏
+        let 处理后内容 = 启用脱敏 ? 脱敏处理(内容) : 内容
+
         let 日志 = 日志模型(
             id: UUID(),
             时间: Date(),
             级别: 级别,
             模块: 模块,
-            内容: 内容
+            内容: 处理后内容
         )
 
         队列.async { [weak self] in
@@ -88,14 +116,14 @@ final class 调试日志管理器: ObservableObject {
         }
     }
 
-    /// 便捷方法：添加调试级别日志
-    func 调试(_ 模块: String, _ 内容: String) {
-        添加日志(级别: .调试, 模块: 模块, 内容: 内容)
+    /// 便捷方法：添加致命级别日志
+    func 致命(_ 模块: String, _ 内容: String) {
+        添加日志(级别: .致命, 模块: 模块, 内容: 内容)
     }
 
-    /// 便捷方法：添加信息级别日志
-    func 信息(_ 模块: String, _ 内容: String) {
-        添加日志(级别: .信息, 模块: 模块, 内容: 内容)
+    /// 便捷方法：添加错误级别日志
+    func 错误(_ 模块: String, _ 内容: String) {
+        添加日志(级别: .错误, 模块: 模块, 内容: 内容)
     }
 
     /// 便捷方法：添加警告级别日志
@@ -103,9 +131,36 @@ final class 调试日志管理器: ObservableObject {
         添加日志(级别: .警告, 模块: 模块, 内容: 内容)
     }
 
-    /// 便捷方法：添加错误级别日志
-    func 错误(_ 模块: String, _ 内容: String) {
-        添加日志(级别: .错误, 模块: 模块, 内容: 内容)
+    /// 便捷方法：添加信息级别日志
+    func 信息(_ 模块: String, _ 内容: String) {
+        添加日志(级别: .信息, 模块: 模块, 内容: 内容)
+    }
+
+    /// 便捷方法：添加调试级别日志
+    func 调试(_ 模块: String, _ 内容: String) {
+        添加日志(级别: .调试, 模块: 模块, 内容: 内容)
+    }
+
+    /// 便捷方法：添加追踪级别日志
+    func 追踪(_ 模块: String, _ 内容: String) {
+        添加日志(级别: .追踪, 模块: 模块, 内容: 内容)
+    }
+
+    // MARK: - 敏感信息脱敏
+
+    /// 对日志内容进行敏感信息脱敏
+    /// - Parameter 内容: 原始日志内容
+    /// - Returns: 脱敏后的内容
+    private func 脱敏处理(_ 内容: String) -> String {
+        var 处理后内容 = 内容
+        for 规则 in 脱敏规则 {
+            处理后内容 = 处理后内容.replacingOccurrences(
+                of: 规则.模式,
+                with: 规则.替换,
+                options: .regularExpression
+            )
+        }
+        return 处理后内容
     }
 
     // MARK: - 日志过滤
@@ -142,7 +197,10 @@ final class 调试日志管理器: ObservableObject {
 
     /// 各级别日志数量
     var 级别统计: [日志级别: Int] {
-        var 统计: [日志级别: Int] = [.调试: 0, .信息: 0, .警告: 0, .错误: 0]
+        var 统计: [日志级别: Int] = [:]
+        for 级别 in 日志级别.allCases {
+            统计[级别] = 0
+        }
         for 日志 in 日志列表 {
             统计[日志.级别, default: 0] += 1
         }

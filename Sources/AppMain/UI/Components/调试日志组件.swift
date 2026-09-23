@@ -34,8 +34,9 @@ struct 调试日志内容区: View {
                 .padding(.horizontal, 15)
                 .padding(.bottom, 8)
 
-            // 日志输出窗口
+            // 日志输出窗口（使用 frame 确保占据剩余空间）
             日志输出窗口
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             // 复制成功提示
             if 显示复制成功 {
@@ -61,33 +62,36 @@ struct 调试日志内容区: View {
     // MARK: - 统计栏（可点击过滤）
 
     private var 统计栏: some View {
-        HStack(spacing: 6) {
-            统计项(
-                标题: "全部",
-                值: "\(日志管理.日志列表.count)",
-                颜色: .主题色,
-                选中: 选中级别 == nil
-            ) {
-                选中级别 = nil
-                日志管理.过滤级别 = nil
-            }
-
-            ForEach(日志级别.allCases, id: \.self) { 级别 in
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
                 统计项(
-                    标题: 级别.rawValue,
-                    值: "\(日志管理.级别统计[级别] ?? 0)",
-                    颜色: 级别颜色(级别),
-                    选中: 选中级别 == 级别
+                    标题: "全部",
+                    值: "\(日志管理.日志列表.count)",
+                    颜色: .主题色,
+                    选中: 选中级别 == nil
                 ) {
-                    if 选中级别 == 级别 {
-                        选中级别 = nil
-                        日志管理.过滤级别 = nil
-                    } else {
-                        选中级别 = 级别
-                        日志管理.过滤级别 = 级别
+                    选中级别 = nil
+                    日志管理.过滤级别 = nil
+                }
+
+                ForEach(日志级别.allCases, id: \.self) { 级别 in
+                    统计项(
+                        标题: 级别.rawValue,
+                        值: "\(日志管理.级别统计[级别] ?? 0)",
+                        颜色: 级别颜色(级别),
+                        选中: 选中级别 == 级别
+                    ) {
+                        if 选中级别 == 级别 {
+                            选中级别 = nil
+                            日志管理.过滤级别 = nil
+                        } else {
+                            选中级别 = 级别
+                            日志管理.过滤级别 = 级别
+                        }
                     }
                 }
             }
+            .padding(.horizontal, 1)
         }
     }
 
@@ -109,7 +113,7 @@ struct 调试日志内容区: View {
                         .font(.system(size: 10))
                         .foregroundColor(选中 ? .white.opacity(0.8) : .secondary)
                 }
-                .frame(maxWidth: .infinity)
+                .frame(width: 52)
                 .padding(.vertical, 8)
                 .background(选中 ? 颜色 : Color.卡片背景)
                 .cornerRadius(8)
@@ -175,15 +179,21 @@ struct 调试日志内容区: View {
     private var 日志输出窗口: some View {
         Group {
             if 日志管理.是否加载中 {
-                Spacer()
-                ProgressView("加载中...")
-                Spacer()
+                VStack {
+                    Spacer()
+                    ProgressView("加载中...")
+                    Spacer()
+                }
             } else if 日志管理.筛选后的日志列表.isEmpty {
-                EmptyStateView(
-                    图标: "ant.fill",
-                    标题: "暂无调试日志",
-                    说明: "应用运行时产生的调试日志会显示在这里"
-                )
+                VStack {
+                    Spacer()
+                    EmptyStateView(
+                        图标: "ant.fill",
+                        标题: "暂无调试日志",
+                        说明: "应用运行时产生的调试日志会显示在这里"
+                    )
+                    Spacer()
+                }
             } else {
                 日志列表
             }
@@ -279,10 +289,12 @@ struct 调试日志内容区: View {
         /// 级别颜色
         private var 级别颜色: Color {
             switch 日志.级别 {
-            case .调试: return .secondary
-            case .信息: return .成功色
-            case .警告: return .警告色
+            case .致命: return .紫色
             case .错误: return .危险色
+            case .警告: return .警告色
+            case .信息: return .成功色
+            case .调试: return .secondary
+            case .追踪: return .secondary
             }
         }
 
@@ -347,10 +359,12 @@ struct 调试日志内容区: View {
     /// 级别对应颜色
     private func 级别颜色(_ 级别: 日志级别) -> Color {
         switch 级别 {
-        case .调试: return .secondary
-        case .信息: return .成功色
-        case .警告: return .警告色
+        case .致命: return .紫色
         case .错误: return .危险色
+        case .警告: return .警告色
+        case .信息: return .成功色
+        case .调试: return .secondary
+        case .追踪: return .secondary
         }
     }
 }

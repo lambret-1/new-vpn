@@ -223,7 +223,14 @@ final class 隧道管理器: NSObject, ObservableObject {
                     self.正在安装描述文件 = false
                     self.需要手动安装描述文件 = true
                     self.记录日志(级别: .错误, 模块: "描述文件", 内容: "加载配置失败：\(错误.localizedDescription)")
-                    完成(false, "加载配置失败：\(错误.localizedDescription)")
+
+                    // 检测是否是权限错误
+                    let 错误描述 = 错误.localizedDescription.lowercased()
+                    if 错误描述.contains("permission") || 错误描述.contains("denied") {
+                        完成(false, "VPN 权限被拒绝\n\n请前往「设置 > 通用 > VPN 与设备管理」检查 VPN 权限，或尝试卸载后重新安装应用")
+                    } else {
+                        完成(false, "加载配置失败：\(错误.localizedDescription)\n\n请前往「设置 > 通用 > VPN」手动添加 VPN 配置")
+                    }
                 }
                 return
             }
@@ -264,7 +271,14 @@ final class 隧道管理器: NSObject, ObservableObject {
                         self.正在安装描述文件 = false
                         self.需要手动安装描述文件 = true
                         self.记录日志(级别: .错误, 模块: "描述文件", 内容: "安装描述文件失败：\(保存错误.localizedDescription)")
-                        完成(false, "安装描述文件失败：\(保存错误.localizedDescription)\n\n请前往「设置 > 通用 > VPN」手动添加 VPN 配置")
+
+                        // 检测是否是权限错误
+                        let 错误描述 = 保存错误.localizedDescription.lowercased()
+                        if 错误描述.contains("permission") || 错误描述.contains("denied") {
+                            完成(false, "VPN 权限被拒绝\n\n请前往「设置 > 通用 > VPN 与设备管理」检查 VPN 权限，或尝试卸载后重新安装应用")
+                        } else {
+                            完成(false, "安装描述文件失败：\(保存错误.localizedDescription)\n\n请前往「设置 > 通用 > VPN」手动添加 VPN 配置")
+                        }
                         return
                     }
                     return

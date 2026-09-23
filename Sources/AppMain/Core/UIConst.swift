@@ -134,7 +134,7 @@ enum 动画常量 {
 
 enum 全局常量 {
     /// App Group 共享目录标识
-    static let App组标识 = "group.com.newvpn.shared"
+    static let App组标识 = "group.com.newvpn.app"
     /// 隧道扩展 Bundle 标识
     static let 隧道扩展标识 = "com.newvpn.app.tunnel"
     /// GitHub 仓库地址

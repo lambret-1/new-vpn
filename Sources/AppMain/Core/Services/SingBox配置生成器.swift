@@ -192,138 +192,76 @@ final class SingBox配置生成器 {
     /// 将节点模型转换为 sing-box 出站配置
     func 节点转换为出站(_ 节点: 节点模型, 标签: String) -> SingBox出站配置? {
         switch 节点.协议 {
-        case .VLESS:
+        case .vless:
             return 生成VLESS出站(节点, 标签: 标签)
-        case .VMess:
+        case .vmess:
             return 生成VMess出站(节点, 标签: 标签)
-        case .Trojan:
+        case .trojan:
             return 生成Trojan出站(节点, 标签: 标签)
-        case .Shadowsocks:
+        case .shadowsocks:
             return 生成Shadowsocks出站(节点, 标签: 标签)
+        }
+    }
+
+    /// 生成 TLS 配置
+    private func 生成TLS配置(_ 节点: 节点模型) -> SingBoxTLS配置? {
+        guard 节点.启用TLS else { return nil }
+        return SingBoxTLS配置.标准TLS(
+            SNI: 节点.服务器名称 ?? 节点.地址,
+            跳过验证: false
+        )
+    }
+
+    /// 生成传输配置
+    private func 生成传输配置(_ 节点: 节点模型) -> SingBox传输配置? {
+        switch 节点.传输类型 {
+        case .ws:
+            return SingBox传输配置.ws传输(路径: "/", 主机: 节点.服务器名称)
+        case .grpc:
+            return SingBox传输配置.grpc传输(服务名: "GunService")
+        case .quic:
+            return nil
+        case .tcp:
+            return nil
         }
     }
 
     /// 生成 VLESS 出站
     private func 生成VLESS出站(_ 节点: 节点模型, 标签: String) -> SingBox出站配置 {
-        var TLS配置: SingBoxTLS配置?
-        if 节点.启用TLS {
-            TLS配置 = SingBoxTLS配置.标准TLS(
-                SNI: 节点.SNI ?? 节点.地址,
-                跳过验证: 节点.跳过证书验证
-            )
-        }
-
-        var 传输配置: SingBox传输配置?
-        if let 传输 = 节点.传输方式 {
-            switch 传输 {
-            case "ws":
-                传输配置 = SingBox传输配置.ws传输(
-                    路径: 节点.路径 ?? "/",
-                    主机: 节点.Host
-                )
-            case "grpc":
-                传输配置 = SingBox传输配置.grpc传输(
-                    服务名: 节点.服务名 ?? "GunService"
-                )
-            case "httpupgrade":
-                传输配置 = SingBox传输配置.httpUpgrade传输(
-                    路径: 节点.路径 ?? "/",
-                    主机: 节点.Host
-                )
-            default:
-                break
-            }
-        }
-
-        return SingBox出站配置.vless出站(
+        SingBox出站配置.vless出站(
             标签: 标签,
             服务器: 节点.地址,
             端口: 节点.端口,
-            UUID: 节点.UUID ?? "",
-            流控: 节点.流控,
+            UUID: 节点.用户标识 ?? "",
+            流控: nil,
             加密: "none",
-            TLS: TLS配置,
-            传输: 传输配置
+            TLS: 生成TLS配置(节点),
+            传输: 生成传输配置(节点)
         )
     }
 
     /// 生成 VMess 出站
     private func 生成VMess出站(_ 节点: 节点模型, 标签: String) -> SingBox出站配置 {
-        var TLS配置: SingBoxTLS配置?
-        if 节点.启用TLS {
-            TLS配置 = SingBoxTLS配置.标准TLS(
-                SNI: 节点.SNI ?? 节点.地址,
-                跳过验证: 节点.跳过证书验证
-            )
-        }
-
-        var 传输配置: SingBox传输配置?
-        if let 传输 = 节点.传输方式 {
-            switch 传输 {
-            case "ws":
-                传输配置 = SingBox传输配置.ws传输(
-                    路径: 节点.路径 ?? "/",
-                    主机: 节点.Host
-                )
-            case "grpc":
-                传输配置 = SingBox传输配置.grpc传输(
-                    服务名: 节点.服务名 ?? "GunService"
-                )
-            case "httpupgrade":
-                传输配置 = SingBox传输配置.httpUpgrade传输(
-                    路径: 节点.路径 ?? "/",
-                    主机: 节点.Host
-                )
-            default:
-                break
-            }
-        }
-
-        return SingBox出站配置.vmess出站(
+        SingBox出站配置.vmess出站(
             标签: 标签,
             服务器: 节点.地址,
             端口: 节点.端口,
-            UUID: 节点.UUID ?? "",
-            加密: 节点.加密方式 ?? "auto",
-            TLS: TLS配置,
-            传输: 传输配置
+            UUID: 节点.用户标识 ?? "",
+            加密: "auto",
+            TLS: 生成TLS配置(节点),
+            传输: 生成传输配置(节点)
         )
     }
 
     /// 生成 Trojan 出站
     private func 生成Trojan出站(_ 节点: 节点模型, 标签: String) -> SingBox出站配置 {
-        var TLS配置: SingBoxTLS配置?
-        if 节点.启用TLS {
-            TLS配置 = SingBoxTLS配置.标准TLS(
-                SNI: 节点.SNI ?? 节点.地址,
-                跳过验证: 节点.跳过证书验证
-            )
-        }
-
-        var 传输配置: SingBox传输配置?
-        if let 传输 = 节点.传输方式 {
-            switch 传输 {
-            case "ws":
-                传输配置 = SingBox传输配置.ws传输(
-                    路径: 节点.路径 ?? "/",
-                    主机: 节点.Host
-                )
-            case "grpc":
-                传输配置 = SingBox传输配置.grpc传输(
-                    服务名: 节点.服务名 ?? "GunService"
-                )
-            default:
-                break
-            }
-        }
-
-        return SingBox出站配置.trojan出站(
+        SingBox出站配置.trojan出站(
             标签: 标签,
             服务器: 节点.地址,
             端口: 节点.端口,
-            密码: 节点.密码 ?? "",
-            TLS: TLS配置,
-            传输: 传输配置
+            密码: 节点.用户标识 ?? "",
+            TLS: 生成TLS配置(节点),
+            传输: 生成传输配置(节点)
         )
     }
 
@@ -333,8 +271,8 @@ final class SingBox配置生成器 {
             标签: 标签,
             服务器: 节点.地址,
             端口: 节点.端口,
-            方法: 节点.加密方式 ?? "aes-256-gcm",
-            密码: 节点.密码 ?? ""
+            方法: "aes-256-gcm",
+            密码: 节点.用户标识 ?? ""
         )
     }
 

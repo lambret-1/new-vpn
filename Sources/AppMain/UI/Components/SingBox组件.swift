@@ -488,7 +488,7 @@ struct SingBox内核设置页面: View {
         // 获取当前选中的节点
         let 当前节点 = 状态.节点分组列表
             .flatMap { $0.节点列表 }
-            .first(where: { $0.id == 状态.当前选中节点ID })
+            .first(where: { $0.id == 状态.当前节点ID })
 
         // 获取所有节点
         let 所有节点 = 状态.节点分组列表.flatMap { $0.节点列表 }

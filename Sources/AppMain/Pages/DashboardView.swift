@@ -19,8 +19,6 @@ struct DashboardView: View {
     @EnvironmentObject private var 隧道管理: 隧道管理器
     /// 场景阶段
     @Environment(\.scenePhase) private var 场景阶段
-    /// 是否显示安装描述文件弹窗
-    @State private var 显示安装弹窗 = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -49,46 +47,21 @@ struct DashboardView: View {
         .onAppear {
             // 启动时每日检测更新
             更新管理器.每日启动检测()
-            // 检测描述文件状态
+            // 每次打开都检测描述文件状态
             隧道管理.检测描述文件状态()
         }
         .onChange(of: 场景阶段) { 新阶段 in
             if 新阶段 == .active {
                 // 回到前台时间隔>6小时则检测
                 更新管理器.前台检测()
-                // 回到前台时重新检测描述文件状态
+                // 每次回到前台都重新检测描述文件状态
                 隧道管理.检测描述文件状态()
             }
         }
         .onChange(of: 隧道管理.需要安装描述文件) { 需要安装 in
             if 需要安装 {
-                显示安装弹窗 = true
-            }
-        }
-        .alert("需要安装 VPN 描述文件", isPresented: $显示安装弹窗) {
-            Button("立即安装") {
-                安装描述文件()
-            }
-            Button("稍后再说", role: .cancel) {
-                显示安装弹窗 = false
-            }
-        } message: {
-            Text("检测到您尚未安装 VPN 描述文件，需要安装后才能使用隧道连接功能。是否立即安装？")
-        }
-        .fullScreenCover(isPresented: $隧道管理.正在安装描述文件) {
-            安装描述文件进度页面()
-                .environmentObject(隧道管理)
-        }
-    }
-
-    /// 安装描述文件
-    private func 安装描述文件() {
-        隧道管理.自动安装默认描述文件 { 成功, 错误 in
-            if !成功 {
-                // 安装失败，显示错误提示
-                DispatchQueue.main.async {
-                    显示安装弹窗 = true
-                }
+                // 需要安装描述文件时直接跳转到 iOS 设置页面
+                隧道管理.跳转到设置页面()
             }
         }
     }
@@ -172,203 +145,6 @@ private struct 主内容区: View {
             }
         }
         .animation(.easeInOut(duration: 0.2), value: 状态.当前顶部卡片)
-    }
-}
-
-// MARK: - 安装描述文件进度页面
-
-/// 安装描述文件进度页面
-private struct 安装描述文件进度页面: View {
-    @EnvironmentObject private var 隧道管理: 隧道管理器
-    @Environment(\.dismiss) private var 关闭
-    @State private var 安装步骤 = 0
-    @State private var 安装完成 = false
-    @State private var 安装失败 = false
-    @State private var 错误信息 = ""
-
-    private let 步骤列表 = [
-        "正在生成 VPN 配置...",
-        "正在保存配置到系统...",
-        "正在验证配置...",
-        "安装完成"
-    ]
-
-    var body: some View {
-        NavigationView {
-            VStack(spacing: 30) {
-                Spacer()
-
-                // 图标
-                ZStack {
-                    Circle()
-                        .stroke(安装失败 ? Color.危险色.opacity(0.3) : Color.主题色.opacity(0.3), lineWidth: 4)
-                        .frame(width: 100, height: 100)
-
-                    if 安装完成 {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 60))
-                            .foregroundColor(.成功色)
-                    } else if 安装失败 {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 60))
-                            .foregroundColor(.危险色)
-                    } else {
-                        ProgressView()
-                            .scaleEffect(1.5)
-                    }
-                }
-
-                // 标题
-                VStack(spacing: 8) {
-                    Text(安装完成 ? "安装成功" : (安装失败 ? "安装失败" : "正在安装 VPN 描述文件"))
-                        .font(.system(size: 22, weight: .bold))
-
-                    if 安装完成 {
-                        Text("VPN 描述文件已成功安装，现在可以使用隧道连接功能了")
-                            .font(.system(size: 14))
-                            .foregroundColor(.secondary)
-                            .multilineTextAlignment(.center)
-                    } else if 安装失败 {
-                        Text(错误信息)
-                            .font(.system(size: 14))
-                            .foregroundColor(.危险色)
-                            .multilineTextAlignment(.center)
-                    } else {
-                        Text(步骤列表[min(安装步骤, 步骤列表.count - 1)])
-                            .font(.system(size: 14))
-                            .foregroundColor(.secondary)
-                    }
-                }
-                .padding(.horizontal, 40)
-
-                // 步骤指示器
-                if !安装完成 && !安装失败 {
-                    HStack(spacing: 8) {
-                        ForEach(0..<步骤列表.count, id: \.self) { 索引 in
-                            Circle()
-                                .fill(索引 <= 安装步骤 ? Color.主题色 : Color.gray.opacity(0.3))
-                                .frame(width: 8, height: 8)
-                        }
-                    }
-                }
-
-                Spacer()
-
-                // 按钮
-                if 安装完成 {
-                    Button {
-                        关闭()
-                    } label: {
-                        HStack {
-                            Spacer()
-                            Text("开始使用")
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundColor(.white)
-                            Spacer()
-                        }
-                        .padding(.vertical, 14)
-                        .background(Color.成功色)
-                        .cornerRadius(12)
-                    }
-                    .padding(.horizontal, 40)
-                    .padding(.bottom, 40)
-                } else if 安装失败 {
-                    VStack(spacing: 12) {
-                        // 前往设置按钮
-                        Button {
-                            // 先关闭弹窗，延迟后再跳转，避免弹窗显示时跳转失败
-                            关闭()
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                                隧道管理.跳转到设置页面()
-                            }
-                        } label: {
-                            HStack {
-                                Image(systemName: "gearshape")
-                                    .font(.system(size: 16))
-                                Spacer()
-                                Text("前往 iOS 设置手动安装")
-                                    .font(.system(size: 16, weight: .medium))
-                                Spacer()
-                                Image(systemName: "arrow.up.right.square")
-                                    .font(.system(size: 16))
-                            }
-                            .foregroundColor(.white)
-                            .padding(.vertical, 14)
-                            .background(Color.主题色)
-                            .cornerRadius(12)
-                        }
-
-                        // 重试按钮
-                        Button {
-                            重新安装()
-                        } label: {
-                            HStack {
-                                Image(systemName: "arrow.clockwise")
-                                    .font(.system(size: 16))
-                                Text("重试自动安装")
-                                    .font(.system(size: 16, weight: .medium))
-                            }
-                            .foregroundColor(.主题色)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 14)
-                            .background(Color.主题色.opacity(0.1))
-                            .cornerRadius(12)
-                        }
-
-                        // 关闭按钮
-                        Button {
-                            关闭()
-                        } label: {
-                            Text("稍后再说")
-                                .font(.system(size: 14))
-                                .foregroundColor(.secondary)
-                        }
-                    }
-                    .padding(.horizontal, 40)
-                    .padding(.bottom, 40)
-                }
-            }
-            .background(Color.页面背景.ignoresSafeArea())
-            .navigationBarHidden(true)
-            .onAppear {
-                开始安装流程()
-            }
-        }
-        .navigationViewStyle(.stack)
-    }
-
-    /// 开始安装流程
-    private func 开始安装流程() {
-        安装步骤 = 0
-        安装完成 = false
-        安装失败 = false
-
-        // 模拟步骤进度
-        Timer.scheduledTimer(withTimeInterval: 0.8, repeats: true) { 定时器 in
-            if 安装步骤 < 步骤列表.count - 2 {
-                安装步骤 += 1
-            } else {
-                定时器.invalidate()
-            }
-        }
-
-        // 执行实际安装
-        隧道管理.自动安装默认描述文件 { 成功, 错误 in
-            DispatchQueue.main.async {
-                if 成功 {
-                    安装步骤 = 步骤列表.count - 1
-                    安装完成 = true
-                } else {
-                    安装失败 = true
-                    错误信息 = 错误 ?? "未知错误"
-                }
-            }
-        }
-    }
-
-    /// 重新安装
-    private func 重新安装() {
-        开始安装流程()
     }
 }
 

@@ -250,45 +250,6 @@ final class 隧道管理器: NSObject, ObservableObject {
         }
     }
 
-    /// 请求 VPN 权限（通过创建临时配置触发系统权限对话框）
-    /// - Parameter 完成: 完成回调（是否授权成功）
-    private func 请求VPN权限(完成: @escaping (Bool) -> Void) {
-        let 临时管理器 = NETunnelProviderManager()
-        let 临时协议 = NETunnelProviderProtocol()
-        临时协议.providerBundleIdentifier = 隧道常量.扩展BundleID
-        临时协议.serverAddress = "127.0.0.1"
-        临时管理器.protocolConfiguration = 临时协议
-        临时管理器.localizedDescription = "NewVPN 临时配置"
-        临时管理器.isEnabled = false
-
-        临时管理器.saveToPreferences { [weak self] 保存错误 in
-            guard let self = self else { return }
-
-            if let 保存错误 = 保存错误 {
-                let 错误描述 = 保存错误.localizedDescription.lowercased()
-                调试日志管理器.共享.错误("隧道", "请求VPN权限失败：\(保存错误.localizedDescription)")
-
-                // 如果仍然是权限错误，说明用户拒绝了
-                if 错误描述.contains("permission") || 错误描述.contains("denied") {
-                    DispatchQueue.main.async {
-                        self.需要手动安装描述文件 = true
-                    }
-                    完成(false)
-                } else {
-                    // 其他错误，可能是配置已存在，视为成功
-                    调试日志管理器.共享.信息("隧道", "保存临时配置返回非权限错误，视为已授权")
-                    完成(true)
-                }
-            } else {
-                调试日志管理器.共享.信息("隧道", "VPN权限请求成功")
-                // 删除临时配置
-                临时管理器.removeFromPreferences { _ in
-                    完成(true)
-                }
-            }
-        }
-    }
-
     /// 生成默认 VPN 描述文件并保存为 .mobileconfig 文件
     /// - Returns: 描述文件 URL，失败返回 nil
     func 生成默认描述文件URL() -> URL? {
@@ -739,13 +700,41 @@ final class 隧道管理器: NSObject, ObservableObject {
 
     // MARK: - 权限
 
-    /// 请求 VPN 权限
+    /// 请求 VPN 权限（通过创建临时配置触发系统权限对话框）
+    /// - Parameter 完成: 完成回调（是否授权成功）
     func 请求VPN权限(完成: @escaping (Bool) -> Void) {
-        保存配置 { 成功, 错误 in
-            if 成功 {
-                完成(true)
+        let 临时管理器 = NETunnelProviderManager()
+        let 临时协议 = NETunnelProviderProtocol()
+        临时协议.providerBundleIdentifier = 隧道常量.扩展BundleID
+        临时协议.serverAddress = "127.0.0.1"
+        临时管理器.protocolConfiguration = 临时协议
+        临时管理器.localizedDescription = "NewVPN 临时配置"
+        临时管理器.isEnabled = false
+
+        临时管理器.saveToPreferences { [weak self] 保存错误 in
+            guard let self = self else { return }
+
+            if let 保存错误 = 保存错误 {
+                let 错误描述 = 保存错误.localizedDescription.lowercased()
+                调试日志管理器.共享.错误("隧道", "请求VPN权限失败：\(保存错误.localizedDescription)")
+
+                // 如果仍然是权限错误，说明用户拒绝了
+                if 错误描述.contains("permission") || 错误描述.contains("denied") {
+                    DispatchQueue.main.async {
+                        self.需要手动安装描述文件 = true
+                    }
+                    完成(false)
+                } else {
+                    // 其他错误，可能是配置已存在，视为成功
+                    调试日志管理器.共享.信息("隧道", "保存临时配置返回非权限错误，视为已授权")
+                    完成(true)
+                }
             } else {
-                完成(false)
+                调试日志管理器.共享.信息("隧道", "VPN权限请求成功")
+                // 删除临时配置
+                临时管理器.removeFromPreferences { _ in
+                    完成(true)
+                }
             }
         }
     }

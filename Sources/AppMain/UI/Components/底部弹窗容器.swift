@@ -19,7 +19,7 @@ struct 底部弹窗容器: ViewModifier {
                 底部弹窗内容(弹窗类型: 类型) {
                     弹窗类型 = nil
                 }
-                .presentationDetents([.height(UIScreen.main.bounds.height * 0.9)])
+                .presentationDetents([.height(UIScreen.main.bounds.height * 0.95)])
                 .presentationDragIndicator(.visible)
             }
     }

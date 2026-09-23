@@ -86,7 +86,7 @@ private struct 弹窗内容视图: View {
         case .编辑配置文件:
             编辑配置文件页面()
         case .DNS记录:
-            DNS记录视图()
+            DNS记录页面()
         case .JS脚本记录:
             JS脚本记录视图()
         case .TCPUDP流量:
@@ -94,31 +94,6 @@ private struct 弹窗内容视图: View {
         case .设置:
             设置视图()
         }
-    }
-}
-
-// MARK: - DNS 记录
-
-private struct DNS记录视图: View {
-    var body: some View {
-        List {
-            ForEach(0..<10) { 索引 in
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("www.example\(索引).com")
-                            .font(.system(size: 14))
-                        Text("A → 93.184.216.\(34 + 索引)")
-                            .font(.system(size: 12))
-                            .foregroundColor(.secondary)
-                    }
-                    Spacer()
-                    Text("\(10 + 索引)ms")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(.成功色)
-                }
-            }
-        }
-        .listStyle(.insetGrouped)
     }
 }
 

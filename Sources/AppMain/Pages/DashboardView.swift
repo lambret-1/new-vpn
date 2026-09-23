@@ -13,6 +13,10 @@ import SwiftUI
 struct DashboardView: View {
     /// 全局应用状态
     @EnvironmentObject private var 状态: AppState
+    /// 更新管理器
+    @StateObject private var 更新管理器 = AppUpdateManager.共享
+    /// 下载管理器
+    @StateObject private var 下载管理器 = AppDownloadManager.共享
 
     var body: some View {
         VStack(spacing: 0) {
@@ -38,7 +42,42 @@ struct DashboardView: View {
         }
         .background(Color.页面背景.ignoresSafeArea())
         .底部弹窗(弹窗类型: $状态.当前底部弹窗)
+        .onAppear {
+            // 启动时静默检测更新
+            更新管理器.开始检测(静默模式: true)
+        }
+        // 更新弹窗
+        .fullScreenCover(isPresented: Binding(
+            get: { 更新管理器.检测状态.是否显示弹窗 || 下载管理器.下载状态 == .下载中 },
+            set: { 显示 in
+                if !显示 {
+                    更新管理器.关闭弹窗()
+                }
+            }
+        )) {
+            AppUpdateAlert(
+                更新管理器: 更新管理器,
+                下载管理器: 下载管理器
+            ) {
+                更新管理器.关闭弹窗()
+            }
+            .background(背景清除器())
+        }
     }
+}
+
+// MARK: - 背景清除器（使 fullScreenCover 透明）
+
+/// 用于清除 fullScreenCover 默认背景的辅助视图
+struct 背景清除器: UIViewRepresentable {
+    func makeUIView(context: Context) -> UIView {
+        let 视图 = UIView()
+        DispatchQueue.main.async {
+            视图.superview?.superview?.backgroundColor = .clear
+        }
+        return 视图
+    }
+    func updateUIView(_ uiView: UIView, context: Context) {}
 }
 
 // MARK: - 顶部状态区

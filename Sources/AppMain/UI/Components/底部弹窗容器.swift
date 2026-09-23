@@ -200,6 +200,9 @@ private struct TCPUDP流量视图: View {
 // MARK: - 设置
 
 private struct 设置视图: View {
+    /// 更新管理器
+    @ObservedObject private var 更新管理器 = AppUpdateManager.共享
+
     var body: some View {
         List {
             Section("通用") {
@@ -213,8 +216,24 @@ private struct 设置视图: View {
                 Label("分流规则", systemImage: "arrow.triangle.branch")
             }
             Section("关于") {
-                Label("版本信息", systemImage: "info.circle")
-                Label("检查更新", systemImage: "arrow.down.circle")
+                HStack {
+                    Label("版本信息", systemImage: "info.circle")
+                    Spacer()
+                    Text("v\(更新管理器.当前版本号)")
+                        .foregroundColor(.secondary)
+                }
+                Button {
+                    更新管理器.开始检测(静默模式: false)
+                } label: {
+                    HStack {
+                        Label("检查更新", systemImage: "arrow.down.circle")
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 13))
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .buttonStyle(PlainButtonStyle())
                 Label("开源许可", systemImage: "scroll")
             }
         }

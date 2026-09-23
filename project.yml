@@ -23,7 +23,7 @@ settings:
     GCC_WARN_UNDECLARED_SELECTOR: YES
     GCC_TREAT_WARNINGS_AS_ERRORS: NO
 
-# 主 App  targets
+# 主 App target
 targets:
   NewVPN:
     type: application
@@ -31,33 +31,50 @@ targets:
     deploymentTarget: "16.0"
     sources:
       - path: Sources/AppMain
+    # Info.plist 配置（XcodeGen 自动生成）
+    info:
+      path: Sources/AppMain/Info.plist
+      properties:
+        CFBundleDisplayName: NewVPN
+        UILaunchScreen: {}
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        "UISupportedInterfaceOrientations~ipad":
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
+        NSLocalNetworkUsageDescription: 用于局域网连接检测
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.newvpn.app
         PRODUCT_NAME: NewVPN
-        INFOPLIST_KEY_UILaunchScreen_Generation: YES
-        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
-        INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
-        INFOPLIST_KEY_UISupportedInterfaceOrientations~ipad: UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight
-        INFOPLIST_KEY_NSAppTransportSecurity:
-          NSAllowsArbitraryLoads: YES
-        INFOPLIST_KEY_NSLocalNetworkUsageDescription: 用于局域网连接检测
     dependencies:
       - target: NewVPN-Tunnel
 
-  # PacketTunnel 扩展
+  # PacketTunnel 扩展 target
   NewVPN-Tunnel:
     type: app-extension
     platform: iOS
     deploymentTarget: "16.0"
     sources:
       - path: Sources/TunnelExtension
+    # 扩展 Info.plist 配置
+    info:
+      path: Sources/TunnelExtension/Info.plist
+      properties:
+        CFBundleDisplayName: NewVPN-Tunnel
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.networkextension.packet-tunnel
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).PacketTunnelProvider
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.newvpn.tunnel
         PRODUCT_NAME: NewVPN-Tunnel
-        INFOPLIST_KEY_NSExtension:
-          NSExtensionPointIdentifier: com.apple.networkextension.packet-tunnel
     dependencies:
       - sdk: NetworkExtension.framework
 

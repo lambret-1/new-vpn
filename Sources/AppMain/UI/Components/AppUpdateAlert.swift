@@ -261,7 +261,7 @@ struct AppUpdateAlert: View {
                     .foregroundColor(.成功色)
             }
 
-            Text("已是最新版本")
+            Text("0")
                 .font(.system(size: 18, weight: .semibold))
 
             Text("当前 v\(更新管理器.当前版本号) 已是最新稳定版本")
@@ -284,7 +284,7 @@ struct AppUpdateAlert: View {
 
             Spacer(minLength: 0)
         }
-        .frame(height: 220)
+        .frame(height: 70)
         .padding(.horizontal, 24)
     }
 
@@ -344,7 +344,7 @@ struct AppUpdateAlert: View {
 
             Spacer(minLength: 0)
         }
-        .frame(height: 240)
+        .frame(height: 70)
         .padding(.horizontal, 24)
     }
 
@@ -363,7 +363,7 @@ struct AppUpdateAlert: View {
 
             Spacer(minLength: 0)
         }
-        .frame(height: 260)
+        .frame(height: 70)
         .padding(.horizontal, 24)
     }
 

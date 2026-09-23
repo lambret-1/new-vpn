@@ -2,13 +2,14 @@
 //  AppUpdateAlert.swift
 //  NewVPN
 //
-//  应用更新多状态弹窗
-//  状态：检测中(半高) / 发现新版本(完整) / 已是最新(半高) / 检测失败(半高) / 下载中
+//  应用更新多状态居中弹窗
+//  状态：检测中 / 发现新版本 / 已是最新 / 检测失败 / 下载中
+//  样式：居中显示，缩放淡入动画，四角统一圆角
 //
 
 import SwiftUI
 
-/// 应用更新弹窗视图
+/// 应用更新弹窗视图（居中显示）
 struct AppUpdateAlert: View {
     /// 更新管理器
     @ObservedObject var 更新管理器: AppUpdateManager
@@ -17,8 +18,15 @@ struct AppUpdateAlert: View {
     /// 关闭回调
     let 关闭回调: () -> Void
 
-    /// 屏幕高度
+    /// 屏幕尺寸
+    private let 屏幕宽度 = UIScreen.main.bounds.width
     private let 屏幕高度 = UIScreen.main.bounds.height
+
+    /// 弹窗宽度
+    private var 弹窗宽度: CGFloat { 屏幕宽度 - 64 }
+
+    /// 弹窗最大高度
+    private var 最大高度: CGFloat { 屏幕高度 * 0.75 }
 
     var body: some View {
         ZStack {
@@ -26,39 +34,29 @@ struct AppUpdateAlert: View {
             Color.black.opacity(0.4)
                 .ignoresSafeArea()
                 .onTapGesture {
-                    // 检测中不允许点击外部关闭
-                    if case .检测中 = 更新管理器.检测状态 {
-                        // 不关闭
-                    } else if case .下载中 = 下载管理器.下载状态 {
-                        // 下载中不关闭
-                    } else {
-                        关闭回调()
-                    }
+                    处理外部点击()
                 }
 
-            // 弹窗主体
-            VStack {
-                Spacer()
-                弹窗内容
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 弹窗高度)
-                    .background(Color.卡片背景)
-                    .cornerRadius(24, corners: [.topLeft, .topRight])
-                    .transition(.move(edge: .bottom))
-            }
-            .ignoresSafeArea(edges: .bottom)
+            // 居中弹窗主体
+            弹窗内容
+                .frame(width: 弹窗宽度)
+                .frame(maxHeight: 最大高度)
+                .background(Color.卡片背景)
+                .cornerRadius(20)
+                .shadow(color: Color.black.opacity(0.2), radius: 20, y: 4)
+                .transition(.scale(scale: 0.85).combined(with: .opacity))
         }
+        .animation(.easeOut(duration: 0.25), value: 更新管理器.检测状态)
+        .animation(.easeOut(duration: 0.25), value: 下载管理器.下载状态)
     }
 
-    // MARK: - 弹窗高度
+    // MARK: - 外部点击处理
 
-    /// 根据状态计算弹窗高度
-    private var 弹窗高度: CGFloat {
-        // 下载中使用完整高度
-        if 下载管理器.下载状态 == .下载中 {
-            return 屏幕高度 * 0.6
-        }
-        return 屏幕高度 * 更新管理器.检测状态.弹窗高度比例
+    private func 处理外部点击() {
+        // 检测中和下载中不允许点击外部关闭
+        if case .检测中 = 更新管理器.检测状态 { return }
+        if 下载管理器.下载状态 == .下载中 { return }
+        关闭回调()
     }
 
     // MARK: - 弹窗内容
@@ -67,10 +65,8 @@ struct AppUpdateAlert: View {
     private var 弹窗内容: some View {
         switch 下载管理器.下载状态 {
         case .下载中:
-            // 下载中状态
             下载中视图
         default:
-            // 根据检测状态显示
             switch 更新管理器.检测状态 {
             case .检测中(let 步骤):
                 检测中视图(步骤: 步骤)
@@ -86,11 +82,11 @@ struct AppUpdateAlert: View {
         }
     }
 
-    // MARK: - 检测中视图
+    // MARK: - 检测中视图（固定高度220pt）
 
     private func 检测中视图(步骤: 检测步骤文本) -> some View {
-        VStack(spacing: 20) {
-            Spacer()
+        VStack(spacing: 16) {
+            Spacer(minLength: 0)
 
             // 蓝色圆形加载动画
             ZStack {
@@ -110,24 +106,18 @@ struct AppUpdateAlert: View {
                 .font(.system(size: 14))
                 .foregroundColor(.secondary)
 
-            Spacer()
+            Spacer(minLength: 0)
         }
+        .frame(height: 220)
         .padding(.horizontal, 24)
     }
 
-    // MARK: - 发现新版本视图
+    // MARK: - 发现新版本视图（自适应高度，可滚动）
 
     private func 发现新版本视图(版本: 版本信息模型) -> some View {
         VStack(spacing: 0) {
-            // 顶部拖动指示器
-            Capsule()
-                .fill(Color.secondary.opacity(0.3))
-                .frame(width: 40, height: 5)
-                .padding(.top, 12)
-                .padding(.bottom, 16)
-
             ScrollView {
-                VStack(spacing: 16) {
+                VStack(spacing: 14) {
                     // 顶部下载图标
                     ZStack {
                         Circle()
@@ -138,6 +128,7 @@ struct AppUpdateAlert: View {
                             .font(.system(size: 36))
                             .foregroundColor(.主题色)
                     }
+                    .padding(.top, 24)
 
                     // 标题
                     Text("发现新版本")
@@ -192,7 +183,7 @@ struct AppUpdateAlert: View {
                 .padding(.bottom, 16)
             }
 
-            // 底部按钮区
+            // 底部按钮区（固定不滚动）
             VStack(spacing: 12) {
                 // 下载更新按钮
                 Button {
@@ -253,11 +244,11 @@ struct AppUpdateAlert: View {
         }
     }
 
-    // MARK: - 已是最新视图
+    // MARK: - 已是最新视图（固定高度220pt）
 
     private var 已是最新视图: some View {
-        VStack(spacing: 20) {
-            Spacer()
+        VStack(spacing: 16) {
+            Spacer(minLength: 0)
 
             // 成功图标
             ZStack {
@@ -291,16 +282,17 @@ struct AppUpdateAlert: View {
             .buttonStyle(PlainButtonStyle())
             .padding(.horizontal, 40)
 
-            Spacer()
+            Spacer(minLength: 0)
         }
+        .frame(height: 220)
         .padding(.horizontal, 24)
     }
 
-    // MARK: - 检测失败视图
+    // MARK: - 检测失败视图（固定高度240pt）
 
     private func 检测失败视图(错误: String) -> some View {
-        VStack(spacing: 20) {
-            Spacer()
+        VStack(spacing: 16) {
+            Spacer(minLength: 0)
 
             // 错误图标
             ZStack {
@@ -350,32 +342,29 @@ struct AppUpdateAlert: View {
             }
             .padding(.horizontal, 40)
 
-            Spacer()
+            Spacer(minLength: 0)
         }
+        .frame(height: 240)
         .padding(.horizontal, 24)
     }
 
-    // MARK: - 下载中视图
+    // MARK: - 下载中视图（固定高度260pt）
 
     private var 下载中视图: some View {
         VStack(spacing: 0) {
-            // 顶部拖动指示器
-            Capsule()
-                .fill(Color.secondary.opacity(0.3))
-                .frame(width: 40, height: 5)
-                .padding(.top, 12)
-                .padding(.bottom, 8)
-
             Text("正在下载更新")
                 .font(.system(size: 17, weight: .semibold))
+                .padding(.top, 24)
                 .padding(.bottom, 16)
 
             下载进度视图(下载管理器: 下载管理器) {
                 下载管理器.取消下载()
             }
 
-            Spacer()
+            Spacer(minLength: 0)
         }
+        .frame(height: 260)
+        .padding(.horizontal, 24)
     }
 
     // MARK: - 信息行组件
@@ -404,28 +393,6 @@ struct AppUpdateAlert: View {
                 下载管理器.弹出分享面板(文件URL: url)
             }
         }
-    }
-}
-
-// MARK: - 圆角扩展
-
-extension View {
-    /// 指定圆角
-    func cornerRadius(_ radius: CGFloat, corners: UIRectCorner) -> some View {
-        clipShape(RoundedCorner(radius: radius, corners: corners))
-    }
-}
-
-/// 自定义圆角形状
-private struct RoundedCorner: Shape {
-    var radius: CGFloat = .infinity
-    var corners: UIRectCorner = .allCorners
-
-    func path(in rect: CGRect) -> Path {
-        let path = UIBezierPath(roundedRect: rect,
-                                byRoundingCorners: corners,
-                                cornerRadii: CGSize(width: radius, height: radius))
-        return Path(path.cgPath)
     }
 }
 

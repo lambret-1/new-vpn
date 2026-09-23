@@ -38,6 +38,8 @@ final class AppUpdateManager: ObservableObject {
 
     private let 忽略版本键 = "AppUpdate_忽略版本"
     private let 稍后提醒时间键 = "AppUpdate_稍后提醒时间"
+    private let 上次检测时间键 = "AppUpdate_上次检测时间"
+    private let 每日检测日期键 = "AppUpdate_每日检测日期"
 
     // MARK: - URLSession
 
@@ -65,9 +67,41 @@ final class AppUpdateManager: ObservableObject {
             return
         }
 
+        // 记录检测时间
+        UserDefaults.standard.set(Date(), forKey: 上次检测时间键)
+
         Task {
             await 执行检测流程(静默模式: 静默模式)
         }
+    }
+
+    /// 前台检测（App从后台回到前台时调用，间隔>6小时才检测）
+    func 前台检测() {
+        guard 检测状态 == .空闲 else { return }
+
+        // 检查距离上次检测是否超过6小时
+        if let 上次检测 = UserDefaults.standard.object(forKey: 上次检测时间键) as? Date,
+           Date().timeIntervalSince(上次检测) < 6 * 3600 {
+            return
+        }
+
+        开始检测(静默模式: true)
+    }
+
+    /// 每日首次启动检测（每天最多自动检测1次）
+    func 每日启动检测() {
+        let 日期格式 = DateFormatter()
+        日期格式.dateFormat = "yyyy-MM-dd"
+        let 今天 = 日期格式.string(from: Date())
+
+        // 检查今天是否已检测过
+        if let 上次检测日期 = UserDefaults.standard.string(forKey: 每日检测日期键),
+           上次检测日期 == 今天 {
+            return
+        }
+
+        UserDefaults.standard.set(今天, forKey: 每日检测日期键)
+        开始检测(静默模式: true)
     }
 
     // MARK: - 检测流程

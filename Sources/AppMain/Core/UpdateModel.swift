@@ -11,9 +11,9 @@ import Foundation
 
 /// 应用版本信息数据模型
 struct 版本信息模型: Codable, Equatable {
-    /// 最新版本号（语义化版本，如 "1.8.4"）
+    /// 最新版本号（语义化版本，如 "0.1.3"）
     let 最新版本: String
-    /// 发布日期（如 "2026-09-21"）
+    /// 发布日期（如 "2026-09-23"）
     let 发布日期: String
     /// 构建环境描述
     let 构建环境: String
@@ -29,45 +29,13 @@ struct 版本信息模型: Codable, Equatable {
     let 详情地址: String
     /// 更新内容说明
     let 更新说明: String
-
-    /// 成员初始化器
-    init(最新版本: String, 发布日期: String, 构建环境: String, 最低iOS版本: String,
-         产物文件名: String, 产物描述: String, 下载地址: String, 详情地址: String, 更新说明: String) {
-        self.最新版本 = 最新版本
-        self.发布日期 = 发布日期
-        self.构建环境 = 构建环境
-        self.最低iOS版本 = 最低iOS版本
-        self.产物文件名 = 产物文件名
-        self.产物描述 = 产物描述
-        self.下载地址 = 下载地址
-        self.详情地址 = 详情地址
-        self.更新说明 = 更新说明
-    }
-
-    /// 从 JSON 字典初始化
-    init?(字典: [String: Any]) {
-        guard let 版本 = 字典["latest_version"] as? String,
-              let 日期 = 字典["release_date"] as? String,
-              let 下载 = 字典["download_url"] as? String else {
-            return nil
-        }
-        self.最新版本 = 版本
-        self.发布日期 = 日期
-        self.构建环境 = 字典["build_env"] as? String ?? "Xcode 15.4 / macOS 14"
-        self.最低iOS版本 = 字典["min_ios"] as? String ?? "iOS 16.0"
-        self.产物文件名 = 字典["artifact_name"] as? String ?? "newVPN-\(版本).ipa"
-        self.产物描述 = 字典["artifact_desc"] as? String ?? "未签名IPA（需自签名或侧载安装）"
-        self.下载地址 = 下载
-        self.详情地址 = 字典["detail_url"] as? String ?? ""
-        self.更新说明 = 字典["release_notes"] as? String ?? ""
-    }
 }
 
 // MARK: - 更新检测状态
 
 /// 更新检测状态枚举
 enum 更新检测状态: Equatable {
-    /// 空闲（未开始）
+    /// 空闲（未开始，不显示弹窗）
     case 空闲
     /// 正在检测（半高弹窗）
     case 检测中(检测步骤文本)
@@ -81,22 +49,8 @@ enum 更新检测状态: Equatable {
     /// 是否需要显示弹窗
     var 是否显示弹窗: Bool {
         switch self {
-        case .空闲:
-            return false
-        default:
-            return true
-        }
-    }
-
-    /// 弹窗高度比例（相对于屏幕高度）
-    var 弹窗高度比例: CGFloat {
-        switch self {
-        case .检测中, .已是最新, .检测失败:
-            return 0.45  // 半高
-        case .发现新版本:
-            return 0.82  // 完整高度
-        case .空闲:
-            return 0
+        case .空闲: return false
+        default: return true
         }
     }
 }

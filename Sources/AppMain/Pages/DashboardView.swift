@@ -17,67 +17,59 @@ struct DashboardView: View {
     @StateObject private var 更新管理器 = AppUpdateManager.共享
     /// 下载管理器
     @StateObject private var 下载管理器 = AppDownloadManager.共享
+    /// 场景阶段
+    @Environment(\.scenePhase) private var 场景阶段
 
     var body: some View {
-        VStack(spacing: 0) {
-            // 可滚动内容区
-            ScrollView {
-                VStack(spacing: 16) {
-                    // 顶部状态区
-                    顶部状态区()
-                        .padding(.horizontal, 16)
-                        .padding(.top, 8)
+        ZStack {
+            VStack(spacing: 0) {
+                // 可滚动内容区
+                ScrollView {
+                    VStack(spacing: 16) {
+                        // 顶部状态区
+                        顶部状态区()
+                            .padding(.horizontal, 16)
+                            .padding(.top, 8)
 
-                    // 横向功能卡片栏
-                    顶部功能卡片栏()
+                        // 横向功能卡片栏
+                        顶部功能卡片栏()
 
-                    // 主内容区（根据选中卡片切换）
-                    主内容区()
-                        .padding(.bottom, 16)
+                        // 主内容区（根据选中卡片切换）
+                        主内容区()
+                            .padding(.bottom, 16)
+                    }
+                }
+
+                // 底部固定工具栏
+                底部工具栏()
+            }
+            .background(Color.页面背景.ignoresSafeArea())
+            .底部弹窗(弹窗类型: $状态.当前底部弹窗)
+            .onAppear {
+                // 启动时每日检测更新
+                更新管理器.每日启动检测()
+            }
+            .onChange(of: 场景阶段) { 新阶段 in
+                if 新阶段 == .active {
+                    // 回到前台时间隔>6小时则检测
+                    更新管理器.前台检测()
                 }
             }
 
-            // 底部固定工具栏
-            底部工具栏()
-        }
-        .background(Color.页面背景.ignoresSafeArea())
-        .底部弹窗(弹窗类型: $状态.当前底部弹窗)
-        .onAppear {
-            // 启动时静默检测更新
-            更新管理器.开始检测(静默模式: true)
-        }
-        // 更新弹窗
-        .fullScreenCover(isPresented: Binding(
-            get: { 更新管理器.检测状态.是否显示弹窗 || 下载管理器.下载状态 == .下载中 },
-            set: { 显示 in
-                if !显示 {
+            // 更新弹窗（居中显示）
+            if 更新管理器.检测状态.是否显示弹窗 || 下载管理器.下载状态 == .下载中 {
+                AppUpdateAlert(
+                    更新管理器: 更新管理器,
+                    下载管理器: 下载管理器
+                ) {
                     更新管理器.关闭弹窗()
                 }
+                .transition(.opacity)
+                .zIndex(100)
             }
-        )) {
-            AppUpdateAlert(
-                更新管理器: 更新管理器,
-                下载管理器: 下载管理器
-            ) {
-                更新管理器.关闭弹窗()
-            }
-            .background(背景清除器())
         }
+        .animation(.easeInOut(duration: 0.25), value: 更新管理器.检测状态.是否显示弹窗)
     }
-}
-
-// MARK: - 背景清除器（使 fullScreenCover 透明）
-
-/// 用于清除 fullScreenCover 默认背景的辅助视图
-struct 背景清除器: UIViewRepresentable {
-    func makeUIView(context: Context) -> UIView {
-        let 视图 = UIView()
-        DispatchQueue.main.async {
-            视图.superview?.superview?.backgroundColor = .clear
-        }
-        return 视图
-    }
-    func updateUIView(_ uiView: UIView, context: Context) {}
 }
 
 // MARK: - 顶部状态区

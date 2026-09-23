@@ -15,6 +15,8 @@ import os
 enum 隧道状态: String, Codable, CaseIterable {
     /// 已断开
     case 已断开 = "已断开"
+    /// 准备中（生成 sing-box 配置）
+    case 准备中 = "准备中"
     /// 正在连接
     case 正在连接 = "正在连接"
     /// 已连接
@@ -23,6 +25,8 @@ enum 隧道状态: String, Codable, CaseIterable {
     case 正在断开 = "正在断开"
     /// 重新加载中
     case 重新加载中 = "重新加载中"
+    /// 自动重连中
+    case 重连中 = "重连中"
     /// 连接失败
     case 连接失败 = "连接失败"
     /// 配置无效
@@ -32,7 +36,7 @@ enum 隧道状态: String, Codable, CaseIterable {
     var 状态颜色: String {
         switch self {
         case .已连接: return "success"
-        case .正在连接, .重新加载中: return "warning"
+        case .正在连接, .重新加载中, .准备中, .重连中: return "warning"
         case .已断开: return "secondary"
         case .正在断开: return "warning"
         case .连接失败, .配置无效: return "danger"
@@ -44,6 +48,8 @@ enum 隧道状态: String, Codable, CaseIterable {
         switch self {
         case .已连接: return "bolt.fill"
         case .正在连接: return "bolt"
+        case .准备中: return "gearshape.2"
+        case .重连中: return "arrow.clockwise.circle"
         case .已断开: return "bolt.slash"
         case .正在断开: return "bolt.slash"
         case .重新加载中: return "arrow.clockwise"
@@ -55,7 +61,7 @@ enum 隧道状态: String, Codable, CaseIterable {
     /// 是否活动状态（连接中或已连接）
     var 是否活动: Bool {
         switch self {
-        case .已连接, .正在连接, .重新加载中: return true
+        case .已连接, .正在连接, .重新加载中, .准备中, .重连中: return true
         default: return false
         }
     }

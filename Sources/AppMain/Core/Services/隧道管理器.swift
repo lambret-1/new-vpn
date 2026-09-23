@@ -59,8 +59,19 @@ final class 隧道管理器: NSObject, ObservableObject {
         super.init()
         加载配置()
         注册通知监听()
-        // 首次初始化时检测描述文件状态
-        检测描述文件状态()
+        // 首次初始化时先请求 VPN 权限，再检测描述文件状态
+        初始化VPN权限()
+    }
+
+    /// 初始化 VPN 权限（先触发系统授权对话框，再检测描述文件）
+    private func 初始化VPN权限() {
+        调试日志管理器.共享.信息("隧道", "开始初始化 VPN 权限...")
+        请求VPN权限 { [weak self] 授权成功 in
+            guard let self = self else { return }
+            调试日志管理器.共享.信息("隧道", "VPN 权限初始化结果：\(授权成功 ? "成功" : "失败")")
+            // 权限请求完成后检测描述文件状态
+            self.检测描述文件状态()
+        }
     }
 
     // MARK: - 配置管理
@@ -193,22 +204,15 @@ final class 隧道管理器: NSObject, ObservableObject {
                 self.记录日志(级别: .错误, 模块: "描述文件", 内容: "检测描述文件状态失败：\(错误.localizedDescription)")
                 调试日志管理器.共享.错误("隧道", "检测描述文件状态失败：\(错误.localizedDescription)")
 
-                // 如果是权限错误，尝试通过创建临时配置触发权限请求
+                // 如果是权限错误，设置需要手动安装标志（初始化时已请求过权限）
                 if 错误描述.contains("permission") || 错误描述.contains("denied") {
-                    调试日志管理器.共享.警告("隧道", "检测到VPN权限被拒绝，尝试触发权限请求...")
-                    self.请求VPN权限 { 授权成功 in
-                        if 授权成功 {
-                            调试日志管理器.共享.信息("隧道", "VPN权限授权成功，重新检测描述文件状态")
-                            // 授权成功后重新检测
-                            self.检测描述文件状态(完成: 完成)
-                        } else {
-                            调试日志管理器.共享.错误("隧道", "VPN权限授权失败")
-                            完成?(false)
-                        }
+                    调试日志管理器.共享.错误("隧道", "VPN 权限被拒绝，请在系统设置中开启 VPN 权限")
+                    DispatchQueue.main.async {
+                        self.需要安装描述文件 = true
+                        self.需要手动安装描述文件 = true
                     }
-                } else {
-                    完成?(false)
                 }
+                完成?(false)
                 return
             }
 
@@ -395,42 +399,77 @@ final class 隧道管理器: NSObject, ObservableObject {
             return
         }
 
-        // 先保存配置
-        保存配置 { [weak self] 成功, 错误 in
+        // 状态切换为准备中（生成 sing-box 配置）
+        当前状态 = .准备中
+        记录日志(级别: .信息, 模块: "连接", 内容: "正在准备隧道配置...")
+        调试日志管理器.共享.信息("隧道", "状态切换为准备中，开始生成 sing-box 配置")
+
+        // 生成 sing-box 配置并写入 App Group 共享目录
+        生成并写入SingBox配置(节点ID: 节点ID, 节点名称: 节点名称) { [weak self] 配置生成成功 in
             guard let self = self else { return }
 
-            guard 成功 else {
-                self.最近错误 = .配置无效(错误?.localizedDescription ?? "未知错误")
-                return
+            if !配置生成成功 {
+                调试日志管理器.共享.警告("隧道", "sing-box 配置生成失败，继续使用默认配置连接")
             }
 
-            do {
-                // 建立连接
-                let 会话 = 管理器.connection as? NETunnelProviderSession
-                try 会话?.startTunnel(options: [
-                    "nodeId": 节点ID?.uuidString ?? "",
-                    "nodeName": 节点名称 ?? ""
-                ])
+            // 保存配置
+            self.保存配置 { 成功, 错误 in
+                guard 成功 else {
+                    self.最近错误 = .配置无效(错误?.localizedDescription ?? "未知错误")
+                    self.当前状态 = .配置无效
+                    return
+                }
 
-                self.连接开始时间 = Date()
-                self.当前连接 = 隧道连接信息(
-                    开始时间: Date(),
-                    状态: .正在连接,
-                    节点ID: 节点ID,
-                    节点名称: 节点名称
-                )
-                self.当前状态 = .正在连接
-                self.记录日志(级别: .信息, 模块: "连接", 内容: "开始连接隧道\(节点名称.map { "：\($0)" } ?? "")")
+                do {
+                    // 建立连接
+                    let 会话 = 管理器.connection as? NETunnelProviderSession
+                    try 会话?.startTunnel(options: [
+                        "nodeId": 节点ID?.uuidString ?? "",
+                        "nodeName": 节点名称 ?? ""
+                    ])
 
-                // 启动统计定时器
-                self.启动统计定时器()
+                    self.连接开始时间 = Date()
+                    self.当前连接 = 隧道连接信息(
+                        开始时间: Date(),
+                        状态: .正在连接,
+                        节点ID: 节点ID,
+                        节点名称: 节点名称
+                    )
+                    self.当前状态 = .正在连接
+                    self.记录日志(级别: .信息, 模块: "连接", 内容: "开始连接隧道\(节点名称.map { "：\($0)" } ?? "")")
+                    调试日志管理器.共享.信息("隧道", "状态切换为正在连接")
 
-            } catch {
-                self.最近错误 = .未知错误(error.localizedDescription)
-                self.当前状态 = .连接失败
-                self.记录日志(级别: .错误, 模块: "连接", 内容: "启动隧道失败：\(error.localizedDescription)")
+                    // 启动统计定时器
+                    self.启动统计定时器()
+
+                } catch {
+                    self.最近错误 = .未知错误(error.localizedDescription)
+                    self.当前状态 = .连接失败
+                    self.记录日志(级别: .错误, 模块: "连接", 内容: "启动隧道失败：\(error.localizedDescription)")
+                    调试日志管理器.共享.错误("隧道", "启动隧道失败：\(error.localizedDescription)")
+                }
             }
         }
+    }
+
+    /// 生成并写入 sing-box 配置到 App Group 共享目录
+    private func 生成并写入SingBox配置(节点ID: UUID?, 节点名称: String?, 完成: @escaping (Bool) -> Void) {
+        // 从 AppState 获取节点信息
+        let 状态 = AppState.共享
+        let 所有节点 = 状态.节点分组列表.flatMap { $0.节点列表 }
+        let 当前节点 = 节点ID.flatMap { id in 所有节点.first(where: { $0.id == id }) }
+
+        // 生成 sing-box 配置
+        let 配置生成器 = SingBox配置生成器()
+        let 成功 = 配置生成器.生成并保存配置(
+            节点: 当前节点,
+            节点列表: 所有节点,
+            分流规则: [],
+            DNS配置: nil
+        )
+
+        调试日志管理器.共享.信息("隧道", "sing-box 配置生成\(成功 ? "成功" : "失败")")
+        完成(成功)
     }
 
     /// 停止隧道连接

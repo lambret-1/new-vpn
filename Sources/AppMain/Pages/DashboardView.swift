@@ -246,7 +246,7 @@ private struct 安装描述文件进度页面: View {
                     HStack(spacing: 8) {
                         ForEach(0..<步骤列表.count, id: \.self) { 索引 in
                             Circle()
-                                .fill(索引 <= 安装步骤 ? Color.主题色 : Color.灰色.opacity(0.3))
+                                .fill(索引 <= 安装步骤 ? Color.主题色 : Color.gray.opacity(0.3))
                                 .frame(width: 8, height: 8)
                         }
                     }

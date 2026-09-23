@@ -178,16 +178,36 @@ final class AppUpdateManager: ObservableObject {
 
     // MARK: - 真实 API 请求
 
-    /// 请求 GitHub 最新 Release 信息
+    /// 请求 GitHub 最新 Release 信息（优先 API，403 时降级到重定向方案）
     private func 请求最新Release() async throws -> 版本信息模型 {
+        do {
+            return try await 通过API请求()
+        } catch let 错误 as 更新错误 {
+            // API 403/429 速率限制时，降级到重定向方案
+            if case .请求失败(let 信息) = 错误,
+               信息.contains("403") || 信息.contains("429") {
+                return try await 通过重定向请求()
+            }
+            throw 错误
+        } catch {
+            // 其他错误也尝试降级
+            return try await 通过重定向请求()
+        }
+    }
+
+    /// 通过 GitHub API 请求最新 Release
+    private func 通过API请求() async throws -> 版本信息模型 {
         guard let url = 最新Release地址 else {
             throw 更新错误.无效地址
         }
 
         var 请求 = URLRequest(url: url)
-        // GitHub API 要求 User-Agent
+        // 优化请求头，降低 403 概率
         请求.setValue("newVPN-iOS-Client", forHTTPHeaderField: "User-Agent")
-        请求.setValue("application/vnd.github.v3+json", forHTTPHeaderField: "Accept")
+        请求.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+        请求.setValue("2022-11-28", forHTTPHeaderField: "X-GitHub-Api-Version")
+        请求.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
+        请求.timeoutInterval = 15
 
         let (数据, 响应) = try await 会话.data(for: 请求)
 
@@ -199,6 +219,12 @@ final class AppUpdateManager: ObservableObject {
         guard http响应.statusCode == 200 else {
             if http响应.statusCode == 404 {
                 throw 更新错误.无Release
+            }
+            // 403/429 时检查速率限制头
+            if http响应.statusCode == 403 || http响应.statusCode == 429 {
+                let 剩余 = http响应.value(forHTTPHeaderField: "X-RateLimit-Remaining") ?? "0"
+                let 重置时间 = http响应.value(forHTTPHeaderField: "X-RateLimit-Reset") ?? ""
+                throw 更新错误.请求失败("HTTP \(http响应.statusCode)：API速率限制（剩余\(剩余)次）")
             }
             throw 更新错误.请求失败("HTTP \(http响应.statusCode)")
         }
@@ -257,6 +283,58 @@ final class AppUpdateManager: ObservableObject {
             下载地址: 下载地址,
             详情地址: 详情地址,
             更新说明: 更新说明.isEmpty ? release名称 : 更新说明
+        )
+    }
+
+    /// 通过重定向方案获取最新版本（API 被限流时的降级方案）
+    /// 请求 https://github.com/owner/repo/releases/latest，从最终重定向 URL 提取 tag
+    private func 通过重定向请求() async throws -> 版本信息模型 {
+        guard let url = URL(string: "https://github.com/\(仓库所有者)/\(仓库名)/releases/latest") else {
+            throw 更新错误.无效地址
+        }
+
+        var 请求 = URLRequest(url: url)
+        请求.setValue("newVPN-iOS-Client", forHTTPHeaderField: "User-Agent")
+        请求.timeoutInterval = 15
+
+        // 使用自定义会话，禁止自动重定向，手动获取重定向 URL
+        let 配置 = URLSessionConfiguration.default
+        配置.timeoutIntervalForRequest = 15
+        let 重定向会话 = URLSession(configuration: 配置)
+
+        let (_, 响应) = try await 重定向会话.data(for: 请求)
+
+        guard let http响应 = 响应 as? HTTPURLResponse else {
+            throw 更新错误.无效响应
+        }
+
+        // 从重定向 URL 或 Location 头提取 tag
+        var tag名称 = ""
+        if let 最终URL = http响应.url?.lastPathComponent, !最终URL.isEmpty {
+            tag名称 = 最终URL
+        } else if let location = http响应.value(forHTTPHeaderField: "Location") {
+            tag名称 = (location as NSString).lastPathComponent
+        }
+
+        guard !tag名称.isEmpty else {
+            throw 更新错误.解析失败
+        }
+
+        let 版本号 = tag名称.hasPrefix("v") ? String(tag名称.dropFirst()) : tag名称
+        let 产物文件名 = "newVPN-v\(版本号).ipa"
+        let 下载地址 = "https://github.com/\(仓库所有者)/\(仓库名)/releases/download/\(tag名称)/\(产物文件名)"
+        let 详情地址 = "https://github.com/\(仓库所有者)/\(仓库名)/releases/tag/\(tag名称)"
+
+        return 版本信息模型(
+            最新版本: 版本号,
+            发布日期: "未知",
+            构建环境: "Xcode 15.4 / macOS 14",
+            最低iOS版本: "iOS 16.0",
+            产物文件名: 产物文件名,
+            产物描述: "未签名IPA（需自签名或侧载安装）",
+            下载地址: 下载地址,
+            详情地址: 详情地址,
+            更新说明: "新版本 v\(版本号) 已发布"
         )
     }
 

@@ -31,7 +31,7 @@ enum 传输类型: String, Codable, CaseIterable {
 // MARK: - 节点测速结果
 
 /// 节点测速结果数据
-struct 测速结果: Codable {
+struct 测速结果: Codable, Hashable {
     /// 延迟（毫秒）
     var 延迟毫秒: Int?
     /// 抖动（毫秒）
@@ -96,7 +96,7 @@ struct 节点模型: Identifiable, Codable, Hashable {
 // MARK: - 订阅流量信息
 
 /// 订阅流量与到期信息
-struct 订阅流量信息: Codable {
+struct 订阅流量信息: Codable, Hashable {
     /// 总流量（字节）
     var 总流量: Int64?
     /// 已用流量（字节）

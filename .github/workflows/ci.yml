@@ -110,7 +110,6 @@ jobs:
       # ── 7. 编译归档 ──
       - name: 编译归档
         run: |
-          set -o pipefail
           rm -rf ${{ env.BUILD_DIR }}
           mkdir -p ${{ env.BUILD_DIR }}
           
@@ -124,13 +123,11 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
             PROVISIONING_PROFILE_SPECIFIER="" \
-            DEVELOPMENT_TEAM="" \
-            2>&1 | xcpretty
+            DEVELOPMENT_TEAM=""
 
       # ── 8. 导出未签名 IPA ──
       - name: 导出未签名 IPA
         run: |
-          set -o pipefail
           # 创建导出配置（不签名）
           cat > ${{ env.BUILD_DIR }}/ExportOptions.plist <<EOF
           <?xml version="1.0" encoding="UTF-8"?>
@@ -150,7 +147,7 @@ jobs:
           </dict>
           </plist>
           EOF
-          
+
           xcodebuild -exportArchive \
             -archivePath ${{ env.BUILD_DIR }}/${{ env.PROJECT_NAME }}.xcarchive \
             -exportPath ${{ env.BUILD_DIR }}/ipa \
@@ -158,8 +155,7 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
-            PROVISIONING_PROFILE_SPECIFIER="" \
-            2>&1 | xcpretty
+            PROVISIONING_PROFILE_SPECIFIER=""
 
       # ── 9. 重命名 IPA（命名规范：newVPN-vX.Y.Z.ipa）──
       - name: 重命名 IPA

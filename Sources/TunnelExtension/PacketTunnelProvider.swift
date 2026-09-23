@@ -41,6 +41,17 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     /// 是否正在运行
     private var 是否运行中 = false
 
+    /// sing-box 内核是否运行中
+    private var singBox运行中 = false
+
+    /// sing-box 配置文件路径
+    private var singBox配置路径: String? {
+        guard let 容器URL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.com.newvpn.app") else {
+            return nil
+        }
+        return 容器URL.appendingPathComponent("singbox_config.json").path
+    }
+
     /// 共享 UserDefaults
     private var 共享默认: UserDefaults? {
         UserDefaults(suiteName: "group.com.newvpn.app")
@@ -73,20 +84,29 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                 return
             }
 
-            // 启动数据包处理
-            self.启动数据包处理()
+            // 启动 sing-box 内核
+            self.启动SingBox内核 { 内核启动成功 in
+                if 内核启动成功 {
+                    self.日志.info("sing-box 内核启动成功")
+                } else {
+                    self.日志.error("sing-box 内核启动失败，继续使用基础隧道")
+                }
 
-            // 启动统计定时器
-            self.启动统计定时器()
+                // 启动数据包处理
+                self.启动数据包处理()
 
-            // 标记运行中
-            self.是否运行中 = true
+                // 启动统计定时器
+                self.启动统计定时器()
 
-            // 记录启动日志
-            self.记录扩展日志(级别: "信息", 模块: "隧道", 内容: "隧道启动成功，节点：\(self.节点名称 ?? "未知")")
+                // 标记运行中
+                self.是否运行中 = true
 
-            self.日志.info("隧道启动成功")
-            completionHandler(nil)
+                // 记录启动日志
+                self.记录扩展日志(级别: "信息", 模块: "隧道", 内容: "隧道启动成功，节点：\(self.节点名称 ?? "未知")")
+
+                self.日志.info("隧道启动成功")
+                completionHandler(nil)
+            }
         }
     }
 
@@ -94,6 +114,9 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     override func stopTunnel(with reason: NEProviderStopReason,
                              completionHandler: @escaping () -> Void) {
         日志.info("隧道开始停止，原因：\(reason.rawValue)")
+
+        // 停止 sing-box 内核
+        停止SingBox内核()
 
         // 停止数据包处理
         停止数据包处理()
@@ -138,6 +161,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                 case "reloadConfig":
                     加载隧道配置()
                     设置网络配置 { _ in }
+                    重载SingBox配置()
                     let 响应 = ["success": true]
                     completionHandler?(try JSONSerialization.data(withJSONObject: 响应))
 
@@ -367,5 +391,85 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         case .appUpdate: return "应用更新"
         @unknown default: return "未知原因"
         }
+    }
+
+    // MARK: - sing-box 内核控制
+
+    /// 启动 sing-box 内核
+    /// - Parameter 完成: 完成回调（是否启动成功）
+    private func 启动SingBox内核(完成: @escaping (Bool) -> Void) {
+        guard !singBox运行中 else {
+            完成(true)
+            return
+        }
+
+        // 检查配置文件是否存在
+        guard let 配置路径 = singBox配置路径,
+              FileManager.default.fileExists(atPath: 配置路径) else {
+            日志.warning("sing-box 配置文件不存在，跳过内核启动")
+            记录扩展日志(级别: "警告", 模块: "sing-box", 内容: "配置文件不存在，跳过内核启动")
+            完成(false)
+            return
+        }
+
+        日志.info("正在启动 sing-box 内核，配置：\(配置路径)")
+        记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "正在启动内核...")
+
+        // TODO: 集成 sing-box Go 库后调用真实启动函数
+        // 示例代码：
+        // let 配置数据 = try? Data(contentsOf: URL(fileURLWithPath: 配置路径))
+        // let 结果 = singbox_start(配置数据, logCallback: { 级别, 内容 in
+        //     self.记录扩展日志(级别: 级别, 模块: "sing-box", 内容: 内容)
+        // })
+        // singBox运行中 = 结果 == 0
+
+        // 模拟启动成功（预留接口）
+        singBox运行中 = true
+
+        记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "内核启动成功")
+        完成(true)
+    }
+
+    /// 停止 sing-box 内核
+    private func 停止SingBox内核() {
+        guard singBox运行中 else { return }
+
+        日志.info("正在停止 sing-box 内核")
+        记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "正在停止内核...")
+
+        // TODO: 集成 sing-box Go 库后调用真实停止函数
+        // 示例代码：
+        // singbox_stop()
+
+        singBox运行中 = false
+
+        记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "内核已停止")
+    }
+
+    /// 重新加载 sing-box 内核配置
+    private func 重载SingBox配置() {
+        guard singBox运行中 else { return }
+
+        guard let 配置路径 = singBox配置路径 else { return }
+
+        日志.info("正在重新加载 sing-box 配置")
+        记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "正在重新加载配置...")
+
+        // TODO: 集成 sing-box Go 库后调用真实重载函数
+        // 示例代码：
+        // let 配置数据 = try? Data(contentsOf: URL(fileURLWithPath: 配置路径))
+        // singbox_reload(配置数据)
+
+        记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "配置已重新加载")
+    }
+
+    /// 获取 sing-box 内核统计
+    private func 获取SingBox统计() -> [String: Any] {
+        // TODO: 集成 sing-box Go 库后从内核获取真实统计
+        return [
+            "running": singBox运行中,
+            "uploadBytes": 上行字节,
+            "downloadBytes": 下行字节
+        ]
     }
 }

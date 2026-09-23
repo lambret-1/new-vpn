@@ -79,3 +79,4 @@ disabled_rules:
   - vertical_whitespace_closing_braces
   - vertical_whitespace_opening_braces
   - void_return
+  - redundant_string_enum_value

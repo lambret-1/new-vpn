@@ -1,7 +1,7 @@
 # New VPN
 
 > 自用 iOS 代理工具，SwiftUI 原生开发，基于 sing-box 内核，最低支持 iOS 16，**不上架 App Store**。
-> 版本规则：三段式语义版本 `vX.Y.Z`，补丁号自动进位；CI 产物为**未签名 IPA**。
+> 版本规则：三段式语义版本 `vX.Y.Z`，补丁号自动进位；CI 产物为**未签名 IPA**，命名规范：`newVPN-vX.Y.Z.ipa`。
 
 ## 项目简介
 
@@ -115,7 +115,7 @@
 
 1. 依赖 XcodeGen，通过 `project.yml` 生成 `.xcworkspace`
 2. 提交代码触发 GitHub Actions CI 流水线
-3. CI 输出产物：`GitHub.ipa`，**未签名**
+3. CI 输出产物：`newVPN-vX.Y.Z.ipa`，**未签名**
 4. 版本号遵循 `vX.Y.Z`，补丁版本自动递增
 
 > CI 仅编译打包，**不执行代码签名**，安装需自备开发者证书。

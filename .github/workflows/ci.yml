@@ -155,19 +155,20 @@ jobs:
             PROVISIONING_PROFILE_SPECIFIER="" \
             | xcpretty
 
-      # ── 9. 重命名 IPA ──
+      # ── 9. 重命名 IPA（命名规范：newVPN-vX.Y.Z.ipa）──
       - name: 重命名 IPA
         run: |
+          VERSION="v${{ steps.version.outputs.version }}"
           IPA_PATH=$(find ${{ env.BUILD_DIR }}/ipa -name "*.ipa" | head -1)
-          cp "$IPA_PATH" "${{ env.BUILD_DIR }}/GitHub.ipa"
-          ls -lh "${{ env.BUILD_DIR }}/GitHub.ipa"
+          cp "$IPA_PATH" "${{ env.BUILD_DIR }}/newVPN-${VERSION}.ipa"
+          ls -lh "${{ env.BUILD_DIR }}/newVPN-${VERSION}.ipa"
 
-      # ── 10. 上传构建产物 ──
+      # ── 10. 上传构建产物（命名规范：newVPN-vX.Y.Z）──
       - name: 上传 IPA 产物
         uses: actions/upload-artifact@v4
         with:
-          name: GitHub-unsigned-v${{ steps.version.outputs.version }}
-          path: ${{ env.BUILD_DIR }}/GitHub.ipa
+          name: newVPN-v${{ steps.version.outputs.version }}
+          path: ${{ env.BUILD_DIR }}/newVPN-v${{ steps.version.outputs.version }}.ipa
           retention-days: 90
 
       # ── 11. 如果是 tag，创建 Release ──
@@ -175,7 +176,7 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: ${{ env.BUILD_DIR }}/GitHub.ipa
+          files: ${{ env.BUILD_DIR }}/newVPN-v${{ steps.version.outputs.version }}.ipa
           generate_release_notes: true
           draft: false
           prerelease: false

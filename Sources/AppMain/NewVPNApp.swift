@@ -23,7 +23,7 @@ struct NewVPNApp: App {
     /// 下载管理器
     @StateObject private var 下载管理器 = AppDownloadManager.共享
     /// 测速管理器
-    @StateObject private var 测速管理器 = 测速管理器.共享
+    @StateObject private var 测速管理 = 测速管理器.共享
     /// App 代理
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
@@ -33,7 +33,7 @@ struct NewVPNApp: App {
                 .environmentObject(状态)
                 .environmentObject(更新管理器)
                 .environmentObject(下载管理器)
-                .environmentObject(测速管理器)
+                .environmentObject(测速管理)
                 .preferredColorScheme(颜色方案)
         }
     }

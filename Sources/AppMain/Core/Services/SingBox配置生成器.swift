@@ -346,19 +346,18 @@ final class SingBox配置生成器 {
 
         // DNS 流量走 dns-out
         规则列表.append(SingBox路由规则(
-            outbound: "dns-out",
-            protocol_: ["dns"]
+            protocol_: ["dns"],
+            outbound: "dns-out"
         ))
 
         // 私有 IP 直连
         规则列表.append(SingBox路由规则(
-            outbound: "direct",
-            ipIsPrivate: true
+            ipIsPrivate: true,
+            outbound: "direct"
         ))
 
         // 局域网地址直连
         规则列表.append(SingBox路由规则(
-            outbound: "direct",
             ipCidr: [
                 "10.0.0.0/8",
                 "172.16.0.0/12",

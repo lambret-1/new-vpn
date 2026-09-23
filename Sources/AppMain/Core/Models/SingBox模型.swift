@@ -631,12 +631,12 @@ struct SingBox路由配置: Codable, Equatable {
         domainStrategy: "ipv4_only",
         rules: [
             SingBox路由规则(
-                outbound: "dns-out",
-                protocol: ["dns"]
+                protocol_: ["dns"],
+                outbound: "dns-out"
             ),
             SingBox路由规则(
-                outbound: "direct",
-                ipIsPrivate: true
+                ipIsPrivate: true,
+                outbound: "direct"
             )
         ]
     )

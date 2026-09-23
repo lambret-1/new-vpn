@@ -3,7 +3,7 @@
 //  NewVPN
 //
 //  节点卡片对应的内容区：分组列表 + 展开节点详情
-//  分组左侧图标点击测速，分组行点击展开/折叠
+//  集成真实测速功能：单节点测速、分组批量测速
 //
 
 import SwiftUI
@@ -12,14 +12,24 @@ import SwiftUI
 struct 节点内容区: View {
     /// 全局应用状态
     @EnvironmentObject private var 状态: AppState
+    /// 测速管理器
+    @EnvironmentObject private var 测速管理器: 测速管理器
 
     var body: some View {
-        LazyVStack(spacing: 10) {
-            ForEach($状态.节点分组列表) { $分组 in
-                分组行视图(分组: $分组)
+        VStack(spacing: 10) {
+            // 批量测速进度条
+            批量测速进度条 {
+                测速管理器.取消测速()
             }
+
+            // 分组列表
+            LazyVStack(spacing: 10) {
+                ForEach($状态.节点分组列表) { $分组 in
+                    分组行视图(分组: $分组)
+                }
+            }
+            .padding(.horizontal, 15)
         }
-        .padding(.horizontal, 15)
     }
 }
 
@@ -31,6 +41,8 @@ private struct 分组行视图: View {
     @Binding var 分组: 节点分组模型
     /// 全局状态
     @EnvironmentObject private var 状态: AppState
+    /// 测速管理器
+    @EnvironmentObject private var 测速管理器: 测速管理器
 
     var body: some View {
         VStack(spacing: 0) {
@@ -38,10 +50,10 @@ private struct 分组行视图: View {
             HStack(spacing: 12) {
                 // 左侧测速图标按钮
                 Button {
-                    状态.执行分组测速(分组ID: 分组.id)
+                    执行分组测速()
                 } label: {
                     ZStack {
-                        if 分组.测速中 {
+                        if 测速管理器.是否测速中 {
                             ProgressView()
                                 .progressViewStyle(CircularProgressViewStyle(tint: .主题色))
                         } else {
@@ -53,7 +65,7 @@ private struct 分组行视图: View {
                     .frame(width: 32, height: 32)
                 }
                 .buttonStyle(PlainButtonStyle())
-                .disabled(分组.测速中)
+                .disabled(测速管理器.是否测速中)
 
                 // 分组名称
                 Text(分组.名称)
@@ -94,6 +106,26 @@ private struct 分组行视图: View {
             }
         }
     }
+
+    /// 执行分组批量测速
+    private func 执行分组测速() {
+        guard !分组.节点列表.isEmpty else { return }
+
+        测速管理器.批量测速(分组.节点列表, 类型: .仅延迟) { 节点, 结果 in
+            // 更新节点测速数据
+            if let 索引 = 分组.节点列表.firstIndex(where: { $0.id == 节点.id }) {
+                分组.节点列表[索引].测速数据 = 测速结果(
+                    延迟毫秒: 结果.延迟毫秒,
+                    抖动毫秒: 结果.抖动毫秒,
+                    丢包率: 结果.丢包率,
+                    下载速率: 结果.下载速率Mbps,
+                    上传速率: 结果.上传速率Mbps,
+                    测速时间: 结果.测速时间,
+                    成功: 结果.成功
+                )
+            }
+        }
+    }
 }
 
 // MARK: - 节点行视图
@@ -102,6 +134,8 @@ private struct 分组行视图: View {
 private struct 节点行视图: View {
     /// 节点数据
     let 节点: 节点模型
+    /// 测速管理器
+    @EnvironmentObject private var 测速管理器: 测速管理器
 
     var body: some View {
         HStack(spacing: 10) {
@@ -126,44 +160,23 @@ private struct 节点行视图: View {
 
             Spacer()
 
-            // 右侧：测速信息
-            if let 测速 = 节点.测速数据, 测速.成功 {
-                HStack(spacing: 16) {
-                    VStack(alignment: .trailing, spacing: 2) {
-                        Text(String(format: "%.0f", 测速.下载速率 ?? 0))
-                            .font(.system(size: 14, weight: .medium))
-                        Text("Mbps")
-                            .font(.system(size: 10))
-                            .foregroundColor(.secondary)
-                    }
-                    VStack(alignment: .trailing, spacing: 2) {
-                        Text("\(测速.延迟毫秒 ?? 0)")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(延迟颜色(测速.延迟毫秒 ?? 0))
-                        Text("ms")
-                            .font(.system(size: 10))
-                            .foregroundColor(.secondary)
+            // 右侧：测速按钮 + 测速结果
+            HStack(spacing: 8) {
+                // 测速结果展示
+                测速结果展示(节点ID: 节点.id)
+
+                // 测速按钮
+                测速按钮(节点ID: 节点.id) {
+                    测速管理器.测速节点(节点) { 结果 in
+                        // 测速完成后更新节点数据
                     }
                 }
-            } else {
-                Text("未测速")
-                    .font(.system(size: 12))
-                    .foregroundColor(.secondary)
             }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .background(Color.卡片背景)
         .cornerRadius(12)
-    }
-
-    /// 根据延迟返回颜色
-    private func 延迟颜色(_ 延迟: Int) -> Color {
-        switch 延迟 {
-        case 0..<100: return .成功色
-        case 100..<200: return .警告色
-        default: return .危险色
-        }
     }
 }
 
@@ -172,5 +185,6 @@ private struct 节点行视图: View {
 #Preview {
     节点内容区()
         .environmentObject(AppState.共享)
+        .environmentObject(测速管理器.共享)
         .background(Color.页面背景)
 }

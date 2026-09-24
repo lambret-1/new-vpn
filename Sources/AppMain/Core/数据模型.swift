@@ -275,6 +275,21 @@ struct 日志模型: Identifiable, Codable, Hashable {
     var 模块: String
     /// 日志内容
     var 内容: String
+    /// 附加字段（可选）
+    var 附加字段: [String: String]?
+    /// 异常堆栈（仅 error/fatal，可选）
+    var 堆栈: String?
+
+    /// 完整初始化
+    init(id: UUID = UUID(), 时间: Date = Date(), 级别: 日志级别, 模块: String, 内容: String, 附加字段: [String: String]? = nil, 堆栈: String? = nil) {
+        self.id = id
+        self.时间 = 时间
+        self.级别 = 级别
+        self.模块 = 模块
+        self.内容 = 内容
+        self.附加字段 = 附加字段
+        self.堆栈 = 堆栈
+    }
 }
 
 // MARK: - 抓包会话模型

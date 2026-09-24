@@ -3,7 +3,7 @@
 //  NewVPN
 //
 //  调试日志相关 UI 组件
-//  日志列表、搜索、过滤、复制、导出
+//  日志列表、搜索、过滤、复制、导出、设置
 //
 
 import SwiftUI
@@ -21,6 +21,10 @@ struct 调试日志内容区: View {
     @State private var 显示复制成功 = false
     /// 当前选中的级别过滤（nil表示全部）
     @State private var 选中级别: 日志级别?
+    /// 是否显示设置面板
+    @State private var 显示设置 = false
+    /// 日志输出窗口的 ScrollView 代理
+    @State private var 滚动代理: ScrollViewProxy?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -56,6 +60,10 @@ struct 调试日志内容区: View {
             if let url = 导出文件URL {
                 分享视图(分享内容: [url])
             }
+        }
+        .sheet(isPresented: $显示设置) {
+            日志设置面板()
+                .environmentObject(日志管理)
         }
     }
 
@@ -163,6 +171,15 @@ struct 调试日志内容区: View {
                     .foregroundColor(.主题色)
             }
 
+            // 设置按钮
+            Button {
+                显示设置 = true
+            } label: {
+                Image(systemName: "gearshape")
+                    .font(.system(size: 20))
+                    .foregroundColor(.secondary)
+            }
+
             // 清除按钮
             Button {
                 日志管理.清除日志()
@@ -216,8 +233,11 @@ struct 调试日志内容区: View {
                 .padding(.horizontal, 15)
                 .padding(.vertical, 8)
             }
+            .onAppear {
+                滚动代理 = 代理
+            }
             .onChange(of: 日志管理.日志列表.count) { _ in
-                if 日志管理.自动滚动, let 最后一条 = 日志管理.筛选后的日志列表.last {
+                if 日志管理.配置.自动滚动, let 最后一条 = 日志管理.筛选后的日志列表.last {
                     withAnimation {
                         代理.scrollTo(最后一条.id, anchor: .bottom)
                     }
@@ -231,54 +251,108 @@ struct 调试日志内容区: View {
     private struct 日志行: View {
         let 日志: 日志模型
         let 复制回调: () -> Void
+        @State private var 显示详情 = false
 
         var body: some View {
-            HStack(alignment: .top, spacing: 10) {
-                // 级别标识
-                Text(日志.级别.rawValue.prefix(1))
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundColor(.white)
-                    .frame(width: 18, height: 18)
-                    .background(级别颜色)
-                    .cornerRadius(4)
-                    .padding(.top, 2)
+            VStack(spacing: 0) {
+                HStack(alignment: .top, spacing: 10) {
+                    // 级别标识
+                    Text(日志.级别.rawValue.prefix(1))
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(.white)
+                        .frame(width: 18, height: 18)
+                        .background(级别颜色)
+                        .cornerRadius(4)
+                        .padding(.top, 2)
 
-                VStack(alignment: .leading, spacing: 3) {
-                    // 时间和模块
-                    HStack(spacing: 8) {
-                        Text(格式化时间(日志.时间))
-                            .font(.system(size: 10))
-                            .foregroundColor(.secondary)
-                            .monospacedDigit()
-                        Text(日志.模块)
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundColor(.主题色)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Color.主题色.opacity(0.1))
-                            .cornerRadius(4)
+                    VStack(alignment: .leading, spacing: 3) {
+                        // 时间和模块
+                        HStack(spacing: 8) {
+                            Text(格式化时间(日志.时间))
+                                .font(.system(size: 10))
+                                .foregroundColor(.secondary)
+                                .monospacedDigit()
+                            Text(日志.模块)
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundColor(.主题色)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color.主题色.opacity(0.1))
+                                .cornerRadius(4)
+
+                            // 有附加信息时显示展开按钮
+                            if 日志.堆栈 != nil || 日志.附加字段 != nil {
+                                Button {
+                                    withAnimation { 显示详情.toggle() }
+                                } label: {
+                                    Image(systemName: 显示详情 ? "chevron.up" : "chevron.down")
+                                        .font(.system(size: 10))
+                                        .foregroundColor(.secondary)
+                                }
+                                .buttonStyle(PlainButtonStyle())
+                            }
+                        }
+
+                        // 日志内容
+                        Text(日志.内容)
+                            .font(.system(size: 13, design: .monospaced))
+                            .foregroundColor(.primary)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
 
-                    // 日志内容
-                    Text(日志.内容)
-                        .font(.system(size: 13, design: .monospaced))
-                        .foregroundColor(.primary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+                    Spacer()
 
-                Spacer()
-
-                // 复制按钮
-                Button(action: 复制回调) {
-                    Image(systemName: "doc.on.doc")
-                        .font(.system(size: 14))
-                        .foregroundColor(.secondary)
-                        .frame(width: 24, height: 24)
+                    // 复制按钮
+                    Button(action: 复制回调) {
+                        Image(systemName: "doc.on.doc")
+                            .font(.system(size: 14))
+                            .foregroundColor(.secondary)
+                            .frame(width: 24, height: 24)
+                    }
+                    .buttonStyle(PlainButtonStyle())
                 }
-                .buttonStyle(PlainButtonStyle())
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+
+                // 详情展开区域
+                if 显示详情 {
+                    VStack(alignment: .leading, spacing: 6) {
+                        if let 堆栈 = 日志.堆栈 {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("堆栈")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundColor(.危险色)
+                                Text(堆栈)
+                                    .font(.system(size: 11, design: .monospaced))
+                                    .foregroundColor(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                        if let 附加 = 日志.附加字段, !附加.isEmpty {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("附加字段")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundColor(.主题色)
+                                ForEach(Array(附加.keys.sorted()), id: \.self) { 键 in
+                                    HStack(alignment: .top) {
+                                        Text(键)
+                                            .font(.system(size: 11, weight: .medium))
+                                            .foregroundColor(.secondary)
+                                            .frame(width: 80, alignment: .leading)
+                                        Text(附加[键] ?? "")
+                                            .font(.system(size: 11, design: .monospaced))
+                                            .foregroundColor(.primary)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 8)
+                    .background(Color.卡片背景.opacity(0.5))
+                }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
             .background(Color.卡片背景)
             .cornerRadius(8)
             .contentShape(Rectangle())
@@ -319,6 +393,9 @@ struct 调试日志内容区: View {
         for 日志 in 日志管理.筛选后的日志列表 {
             let 时间 = 日期格式化.string(from: 日志.时间)
             文本 += "[\(时间)] [\(日志.级别.rawValue)] [\(日志.模块)] \(日志.内容)\n"
+            if let 堆栈 = 日志.堆栈 {
+                文本 += "堆栈：\(堆栈)\n"
+            }
         }
 
         UIPasteboard.general.string = 文本
@@ -330,7 +407,10 @@ struct 调试日志内容区: View {
         let 日期格式化 = DateFormatter()
         日期格式化.dateFormat = "yyyy-MM-dd HH:mm:ss.SSS"
         let 时间 = 日期格式化.string(from: 日志.时间)
-        let 文本 = "[\(时间)] [\(日志.级别.rawValue)] [\(日志.模块)] \(日志.内容)"
+        var 文本 = "[\(时间)] [\(日志.级别.rawValue)] [\(日志.模块)] \(日志.内容)"
+        if let 堆栈 = 日志.堆栈 {
+            文本 += "\n堆栈：\(堆栈)"
+        }
         UIPasteboard.general.string = 文本
         显示复制成功提示()
     }
@@ -368,6 +448,227 @@ struct 调试日志内容区: View {
         case .调试: return .secondary
         case .追踪: return .secondary
         }
+    }
+}
+
+// MARK: - 日志设置面板
+
+/// 日志设置面板
+private struct 日志设置面板: View {
+    @EnvironmentObject private var 日志管理: 调试日志管理器
+    @Environment(\.dismiss) private var 关闭
+
+    var body: some View {
+        NavigationView {
+            List {
+                Section("输出设置") {
+                    // 最低输出级别
+                    HStack {
+                        Text("最低输出级别")
+                        Spacer()
+                        Picker("", selection: Binding(
+                            get: { 日志管理.配置.最低输出级别 },
+                            set: { 日志管理.配置.最低输出级别 = $0 }
+                        )) {
+                            ForEach(日志级别.allCases, id: \.self) { 级别 in
+                                Text(级别.rawValue).tag(级别)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                    }
+
+                    // 自动滚动
+                    Toggle("自动滚动到最新", isOn: Binding(
+                        get: { 日志管理.配置.自动滚动 },
+                        set: { 日志管理.配置.自动滚动 = $0 }
+                    ))
+
+                    // 敏感信息脱敏
+                    Toggle("敏感信息脱敏", isOn: Binding(
+                        get: { 日志管理.配置.启用脱敏 },
+                        set: { 日志管理.配置.启用脱敏 = $0 }
+                    ))
+                }
+
+                Section("缓冲区设置") {
+                    // 缓冲区大小
+                    HStack {
+                        Text("内存缓冲区")
+                        Spacer()
+                        Picker("", selection: Binding(
+                            get: { 日志管理.配置.最大日志条数 },
+                            set: { 日志管理.配置.最大日志条数 = $0 }
+                        )) {
+                            Text("500 条").tag(500)
+                            Text("1000 条").tag(1000)
+                            Text("2000 条").tag(2000)
+                            Text("5000 条").tag(5000)
+                        }
+                        .pickerStyle(.menu)
+                    }
+
+                    // 单条最大字符数
+                    HStack {
+                        Text("单条最大字符")
+                        Spacer()
+                        Picker("", selection: Binding(
+                            get: { 日志管理.配置.单条最大字符数 },
+                            set: { 日志管理.配置.单条最大字符数 = $0 }
+                        )) {
+                            Text("1024").tag(1024)
+                            Text("2048").tag(2048)
+                            Text("4096").tag(4096)
+                            Text("8192").tag(8192)
+                        }
+                        .pickerStyle(.menu)
+                    }
+                }
+
+                Section("文件日志") {
+                    // 启用文件日志
+                    Toggle("启用文件日志", isOn: Binding(
+                        get: { 日志管理.配置.启用文件日志 },
+                        set: { 日志管理.配置.启用文件日志 = $0 }
+                    ))
+
+                    // 单文件最大大小
+                    HStack {
+                        Text("单文件最大")
+                        Spacer()
+                        Picker("", selection: Binding(
+                            get: { 日志管理.配置.单文件最大MB },
+                            set: { 日志管理.配置.单文件最大MB = $0 }
+                        )) {
+                            Text("1 MB").tag(1)
+                            Text("5 MB").tag(5)
+                            Text("10 MB").tag(10)
+                            Text("20 MB").tag(20)
+                        }
+                        .pickerStyle(.menu)
+                    }
+
+                    // 文件数量上限
+                    HStack {
+                        Text("文件数量上限")
+                        Spacer()
+                        Picker("", selection: Binding(
+                            get: { 日志管理.配置.文件数量上限 },
+                            set: { 日志管理.配置.文件数量上限 = $0 }
+                        )) {
+                            Text("5 个").tag(5)
+                            Text("10 个").tag(10)
+                            Text("20 个").tag(20)
+                        }
+                        .pickerStyle(.menu)
+                    }
+
+                    // 日志文件列表
+                    if !日志管理.获取日志文件列表().isEmpty {
+                        NavigationLink {
+                            日志文件列表()
+                        } label: {
+                            HStack {
+                                Text("日志文件")
+                                Spacer()
+                                Text("\(日志管理.获取日志文件列表().count) 个文件")
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                }
+
+                Section("统计") {
+                    HStack {
+                        Text("总日志数")
+                        Spacer()
+                        Text("\(日志管理.日志列表.count)")
+                            .foregroundColor(.secondary)
+                    }
+                    HStack {
+                        Text("今日日志")
+                        Spacer()
+                        Text("\(日志管理.今日日志数量)")
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+            .navigationTitle("日志设置")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("完成") { 关闭() }
+                }
+            }
+        }
+    }
+}
+
+// MARK: - 日志文件列表
+
+/// 日志文件列表
+private struct 日志文件列表: View {
+    @EnvironmentObject private var 日志管理: 调试日志管理器
+    @State private var 文件列表: [URL] = []
+
+    var body: some View {
+        List {
+            ForEach(文件列表, id: \.self) { 文件 in
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(文件.lastPathComponent)
+                            .font(.system(size: 14))
+                        if let 大小 = 文件大小(文件) {
+                            Text(大小)
+                                .font(.system(size: 11))
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    Spacer()
+                    // 分享按钮
+                    Button {
+                        分享文件(文件)
+                    } label: {
+                        Image(systemName: "square.and.arrow.up")
+                            .foregroundColor(.主题色)
+                    }
+                }
+            }
+            .onDelete(perform: 删除文件)
+        }
+        .navigationTitle("日志文件")
+        .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            文件列表 = 日志管理.获取日志文件列表()
+        }
+    }
+
+    /// 获取文件大小字符串
+    private func 文件大小(_ 文件: URL) -> String? {
+        guard let 属性 = try? 文件.resourceValues(forKeys: [.fileSizeKey]),
+              let 字节数 = 属性.fileSize else { return nil }
+        let 格式化 = ByteCountFormatter()
+        格式化.allowedUnits = [.useKB, .useMB]
+        return 格式化.string(fromByteCount: Int64(字节数))
+    }
+
+    /// 分享文件
+    private func 分享文件(_ 文件: URL) {
+        let 活动控制器 = UIActivityViewController(activityItems: [文件], applicationActivities: nil)
+        if let 窗口 = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .first?.windows
+            .first(where: { $0.isKeyWindow }) {
+            窗口.rootViewController?.present(活动控制器, animated: true)
+        }
+    }
+
+    /// 删除文件
+    private func 删除文件(at 偏移: IndexSet) {
+        for 索引 in 偏移 {
+            let 文件 = 文件列表[索引]
+            try? FileManager.default.removeItem(at: 文件)
+        }
+        文件列表 = 日志管理.获取日志文件列表()
     }
 }
 

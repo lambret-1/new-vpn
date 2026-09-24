@@ -225,13 +225,15 @@ struct SingBox入站配置: Codable, Equatable {
                         MTU: Int = 1500,
                         自动路由: Bool = true,
                         严格路由: Bool = true,
-                        网络栈: String = "system") -> SingBox入站配置 {
+                        网络栈: String = "system",
+                        接口名: String = "utun123") -> SingBox入站配置 {
         var 配置 = SingBox入站配置(type: "tun", tag: 标签)
         配置.address = [地址]
         配置.mtu = MTU
         配置.autoRoute = 自动路由
         配置.strictRoute = 严格路由
         配置.stack = 网络栈
+        配置.interfaceName = 接口名
         return 配置
     }
 

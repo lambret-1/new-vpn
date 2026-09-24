@@ -94,11 +94,11 @@ final class SingBox配置生成器 {
             }
         }
 
-        // 如果没有自定义 DNS，使用默认
+        // 如果没有自定义 DNS，使用默认（普通 UDP，避免 TLS/HTTPS DNS 在网络不通时加剧问题）
         if 服务器列表.isEmpty {
             服务器列表 = [
-                SingBoxDNS服务器(tag: "dns-google", address: "tls://8.8.8.8"),
-                SingBoxDNS服务器(tag: "dns-cloudflare", address: "https://1.1.1.1/dns-query")
+                SingBoxDNS服务器(tag: "dns-google", address: "8.8.8.8"),
+                SingBoxDNS服务器(tag: "dns-cloudflare", address: "1.1.1.1")
             ]
         }
 

@@ -20,94 +20,50 @@ final class Libbox平台接口: LibboxPlatformInterface {
     /// TUN 文件描述符（由 PacketTunnelProvider 设置）
     var tun文件描述符: Int32 = -1
 
-    /// 是否在 Network Extension 中运行
-    func underNetworkExtension() -> Bool {
-        true
-    }
+    override func underNetworkExtension() -> Bool { true }
 
-    /// 写日志
-    func writeLog(_ message: String?) {
+    override func writeLog(_ message: String?) {
         guard let 消息 = message else { return }
         日志回调?(2, 消息)
     }
 
-    /// 打开 TUN 接口，返回文件描述符
-    func openTun(_ options: LibboxTunOptions?, ret0_: UnsafeMutablePointer<Int32>?, error: NSErrorPointer) -> Bool {
-        guard tun文件描述符 >= 0 else {
-            日志回调?(4, "TUN 文件描述符无效")
-            return false
-        }
+    override func openTun(_ options: LibboxTunOptions?, ret0_: UnsafeMutablePointer<Int32>?, error: NSErrorPointer) -> Bool {
+        guard tun文件描述符 >= 0 else { return false }
         ret0_?.pointee = tun文件描述符
-        日志回调?(2, "TUN 接口已打开，文件描述符：\(tun文件描述符)")
         return true
     }
 
-    /// 是否使用平台自动检测接口控制
-    func usePlatformAutoDetectInterfaceControl() -> Bool {
-        false
-    }
+    override func usePlatformAutoDetectControl() -> Bool { false }
 
-    /// 自动检测接口控制
-    func autoDetectInterfaceControl(_ fd: Int32, error: NSErrorPointer) -> Bool {
-        true
-    }
+    override func autoDetectInterfaceControl(_ fd: Int32, error: NSErrorPointer) -> Bool { true }
 
-    /// 清除 DNS 缓存
-    func clearDNSCache() {
-        日志回调?(2, "清除 DNS 缓存")
-    }
+    override func clearDNSCache() {}
 
-    /// 包含所有网络
-    func includeAllNetworks() -> Bool {
-        true
-    }
+    override func includeAllNetworks() -> Bool { true }
 
-    /// 使用 procfs
-    func useProcFS() -> Bool {
-        false
-    }
+    override func useProcFS() -> Bool { false }
 
-    /// 关闭默认接口监控
-    func closeDefaultInterfaceMonitor(_ listener: LibboxInterfaceUpdateListener?, error: NSErrorPointer) -> Bool {
-        true
-    }
+    override func closeDefaultInterfaceMonitor(_ listener: LibboxInterfaceUpdateListener?, error: NSErrorPointer) -> Bool { true }
 
-    /// 启动默认接口监控
-    func startDefaultInterfaceMonitor(_ listener: LibboxInterfaceUpdateListener?, error: NSErrorPointer) -> Bool {
-        true
-    }
+    override func startDefaultInterfaceMonitor(_ listener: LibboxInterfaceUpdateListener?, error: NSErrorPointer) -> Bool { true }
 
-    /// 获取网络接口列表
-    func getInterfaces(_ error: NSErrorPointer) -> LibboxNetworkInterfaceIterator? {
-        nil
-    }
+    override func getInterfaces(_ error: NSErrorPointer) -> LibboxNetworkInterfaceIterator? { nil }
 
-    /// 查找连接所有者
-    func findConnectionOwner(_ ipProtocol: Int32, sourceAddress: String?, sourcePort: Int32, destinationAddress: String?, destinationPort: Int32, ret0_: UnsafeMutablePointer<Int32>?, error: NSErrorPointer) -> Bool {
+    override func findConnectionOwner(_ ipProtocol: Int32, sourceAddress: String?, sourcePort: Int32, destinationAddress: String?, destinationPort: Int32, ret0_: UnsafeMutablePointer<Int32>?, error: NSErrorPointer) -> Bool {
         ret0_?.pointee = -1
         return true
     }
 
-    /// 根据 UID 获取包名
-    func packageName(byUid: Int32, error: NSErrorPointer) -> String {
-        ""
-    }
+    override func packageName(byUid uid: Int32, error: NSErrorPointer) -> String { "" }
 
-    /// 根据包名获取 UID
-    func uid(byPackageName: String?, ret0_: UnsafeMutablePointer<Int32>?, error: NSErrorPointer) -> Bool {
+    override func uid(byPackageName packageName: String?, ret0_: UnsafeMutablePointer<Int32>?, error: NSErrorPointer) -> Bool {
         ret0_?.pointee = -1
         return true
     }
 
-    /// 读取 WiFi 状态
-    func readWIFIState() -> LibboxWIFIState? {
-        nil
-    }
+    override func readWIFIState() -> LibboxWIFIState? { nil }
 
-    /// 发送通知
-    func sendNotification(_ notification: LibboxNotification?, error: NSErrorPointer) -> Bool {
-        true
-    }
+    override func sendNotification(_ notification: LibboxNotification?, error: NSErrorPointer) -> Bool { true }
 }
 
 // MARK: - sing-box 内核桥接

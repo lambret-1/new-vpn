@@ -42,11 +42,11 @@ jobs:
           go version
           echo "export PATH=\$PATH:$(go env GOPATH)/bin" >> $GITHUB_ENV
 
-      - name: 安装 gomobile
+      - name: 安装 gomobile（与Go 1.23兼容版本）
         run: |
           export PATH=$PATH:$(go env GOPATH)/bin
-          go install golang.org/x/mobile/cmd/gomobile@latest
-          go install golang.org/x/mobile/cmd/gobind@latest
+          go install golang.org/x/mobile/cmd/gomobile@v0.0.0-20240417151828-2418644de54a
+          go install golang.org/x/mobile/cmd/gobind@v0.0.0-20240417151828-2418644de54a
           gomobile version
 
       - name: 初始化 gomobile
@@ -66,7 +66,8 @@ jobs:
           export PATH=$PATH:$(go env GOPATH)/bin
           cd /tmp/sing-box
 
-          # 依赖已在前面步骤安装，直接编译
+          # 添加gobind依赖（Go 1.23兼容版本）
+          go get golang.org/x/mobile/cmd/gobind@v0.0.0-20240417151828-2418644de54a
           go mod download
           go mod tidy
 

@@ -168,9 +168,25 @@
 }
 
 - (void)writeLog:(NSString * _Nullable)message {
-    if (message && self.日志回调) {
-        self.日志回调(2, message);
+    if (!message || !self.日志回调) return;
+
+    // 根据 sing-box 日志前缀映射级别：TRACE=0, DEBUG=1, INFO=2, WARN=3, ERROR=4, FATAL=5
+    int 日志级别 = 2; // 默认信息
+    if ([message hasPrefix:@"FATAL"]) {
+        日志级别 = 5;
+    } else if ([message hasPrefix:@"ERROR"]) {
+        日志级别 = 4;
+    } else if ([message hasPrefix:@"WARN"]) {
+        日志级别 = 3;
+    } else if ([message hasPrefix:@"INFO"]) {
+        日志级别 = 2;
+    } else if ([message hasPrefix:@"DEBUG"]) {
+        日志级别 = 1;
+    } else if ([message hasPrefix:@"TRACE"]) {
+        日志级别 = 0;
     }
+
+    self.日志回调(日志级别, message);
 }
 
 /// 重写 openTun，返回 packetFlow 的文件描述符

@@ -27,17 +27,11 @@ final class Libbox平台接口: LibboxPlatformInterface {
         日志回调?(2, 消息)
     }
 
-    override func openTun(_ options: LibboxTunOptions?, ret0_: UnsafeMutablePointer<Int32>?, error: NSErrorPointer) -> Bool {
-        guard tun文件描述符 >= 0 else { return false }
-        ret0_?.pointee = tun文件描述符
-        return true
-    }
-
     override func includeAllNetworks() -> Bool { true }
 
     override func useProcFS() -> Bool { false }
 
-    override func usePlatformAutoDetectInterfaceControl() -> Bool { false }
+    override func usePlatformAutoDetectControl() -> Bool { false }
 
     override func clearDNSCache() {}
 }

@@ -362,6 +362,30 @@ final class 调试日志管理器: ObservableObject {
         }
     }
 
+    /// 日志分组（错误/警告/信息/调试）
+    struct 日志分组: Identifiable {
+        let id = UUID()
+        let 分组名: String
+        let 级别列表: [日志级别]
+        let 日志: [日志模型]
+    }
+
+    /// 按级别分组后的日志列表（错误组优先）
+    var 分组后的日志列表: [日志分组] {
+        let 筛选列表 = 筛选后的日志列表
+        let 分组定义: [(名称: String, 级别: [日志级别])] = [
+            ("错误日志", [.致命, .错误]),
+            ("警告日志", [.警告]),
+            ("信息日志", [.信息]),
+            ("调试日志", [.调试, .追踪])
+        ]
+        return 分组定义.compactMap { 定义 in
+            let 分组日志 = 筛选列表.filter { 定义.级别.contains($0.级别) }
+            guard !分组日志.isEmpty else { return nil }
+            return 日志分组(分组名: 定义.名称, 级别列表: 定义.级别, 日志: 分组日志)
+        }
+    }
+
     /// 所有模块列表（用于过滤选择）
     var 所有模块列表: [String] {
         let 模块集合 = Set(日志列表.map { $0.模块 })

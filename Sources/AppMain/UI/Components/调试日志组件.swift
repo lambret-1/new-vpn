@@ -222,12 +222,12 @@ struct 调试日志内容区: View {
     private var 日志列表: some View {
         ScrollViewReader { 代理 in
             ScrollView {
-                LazyVStack(spacing: 4) {
-                    ForEach(日志管理.筛选后的日志列表) { 日志 in
-                        日志行(日志: 日志) {
-                            复制单条日志(日志)
-                        }
-                        .id(日志.id)
+                LazyVStack(spacing: 8, pinnedViews: []) {
+                    ForEach(日志管理.分组后的日志列表) { 分组 in
+                        日志分组视图(
+                            分组: 分组,
+                            复制回调: { 日志 in 复制单条日志(日志) }
+                        )
                     }
                 }
                 .padding(.horizontal, 15)
@@ -241,6 +241,78 @@ struct 调试日志内容区: View {
                     withAnimation {
                         代理.scrollTo(最后一条.id, anchor: .bottom)
                     }
+                }
+            }
+        }
+    }
+
+    // MARK: - 日志分组视图
+
+    private struct 日志分组视图: View {
+        let 分组: 调试日志管理器.日志分组
+        let 复制回调: (日志模型) -> Void
+        @State private var 展开 = true
+
+        /// 分组对应颜色
+        private var 分组颜色: Color {
+            switch 分组.分组名 {
+            case "错误日志": return .危险色
+            case "警告日志": return .警告色
+            case "信息日志": return .成功色
+            case "调试日志": return .secondary
+            default: return .secondary
+            }
+        }
+
+        var body: some View {
+            VStack(spacing: 4) {
+                // 分组标题栏（可点击折叠）
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        展开.toggle()
+                    }
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: 展开 ? "chevron.down" : "chevron.right")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(.secondary)
+
+                        Circle()
+                            .fill(分组颜色)
+                            .frame(width: 8, height: 8)
+
+                        Text(分组.分组名)
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundColor(.primary)
+
+                        Text("\(分组.日志.count) 条")
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(分组颜色.opacity(0.1))
+                            .cornerRadius(4)
+
+                        Spacer()
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(Color.卡片背景)
+                    .cornerRadius(8)
+                }
+                .buttonStyle(PlainButtonStyle())
+
+                // 分组内容
+                if 展开 {
+                    LazyVStack(spacing: 4) {
+                        ForEach(分组.日志) { 日志 in
+                            日志行(日志: 日志) {
+                                复制回调(日志)
+                            }
+                            .id(日志.id)
+                        }
+                    }
+                    .transition(.opacity.combined(with: .move(edge: .top)))
                 }
             }
         }

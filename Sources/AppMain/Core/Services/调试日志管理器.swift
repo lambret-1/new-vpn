@@ -74,6 +74,65 @@ final class 调试日志管理器: ObservableObject {
 
     private init() {
         加载日志()
+        启动扩展日志读取定时器()
+    }
+
+    // MARK: - 扩展日志读取
+
+    /// 扩展日志读取定时器
+    private var 扩展日志定时器: Timer?
+
+    /// 已读取的扩展日志 ID 集合（避免重复）
+    private var 已读取扩展日志ID = Set<String>()
+
+    /// 启动扩展日志读取定时器（每 2 秒读取一次隧道扩展日志）
+    private func 启动扩展日志读取定时器() {
+        DispatchQueue.main.async { [weak self] in
+            self?.扩展日志定时器 = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { _ in
+                self?.读取扩展日志()
+            }
+            self?.扩展日志定时器?.tolerance = 0.5
+        }
+    }
+
+    /// 从共享 UserDefaults 读取隧道扩展日志
+    func 读取扩展日志() {
+        guard let 共享默认 = UserDefaults(suiteName: "group.com.newvpn.app"),
+              let 日志数据 = 共享默认.data(forKey: "tunnelLogs"),
+              let 扩展日志列表 = try? JSONDecoder().decode([扩展日志条目].self, from: 日志数据) else {
+            return
+        }
+
+        for 扩展日志 in 扩展日志列表 {
+            let id字符串 = 扩展日志.id.uuidString
+            guard !已读取扩展日志ID.contains(id字符串) else { continue }
+            已读取扩展日志ID.insert(id字符串)
+
+            let 级别 = 日志级别(rawValue: 扩展日志.级别) ?? .信息
+            let 日志 = 日志模型(
+                id: 扩展日志.id,
+                时间: 扩展日志.时间,
+                级别: 级别,
+                模块: "扩展-\(扩展日志.模块)",
+                内容: 扩展日志.内容
+            )
+
+            DispatchQueue.main.async { [weak self] in
+                self?.日志列表.append(日志)
+                if (self?.日志列表.count ?? 0) > (self?.最大日志条数 ?? 2000) {
+                    self?.日志列表.removeFirst()
+                }
+            }
+        }
+    }
+
+    /// 扩展日志条目（与隧道扩展写入格式一致）
+    private struct 扩展日志条目: Codable {
+        let id: UUID
+        let 时间: Date
+        let 级别: String
+        let 模块: String
+        let 内容: String
     }
 
     // MARK: - 日志添加

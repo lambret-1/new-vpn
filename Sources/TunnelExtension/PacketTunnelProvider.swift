@@ -66,12 +66,14 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     override func startTunnel(options: [String: NSObject]?,
                               completionHandler: @escaping (Error?) -> Void) {
         日志.info("隧道开始启动")
+        记录扩展日志(级别: "信息", 模块: "隧道", 内容: "扩展开始启动，进程已唤醒")
 
         // 解析启动选项
         if let 选项 = options {
             节点ID = 选项["nodeId"] as? String
             节点名称 = 选项["nodeName"] as? String
             日志.info("节点：\(self.节点名称 ?? "未知")")
+            记录扩展日志(级别: "信息", 模块: "隧道", 内容: "启动节点：\(self.节点名称 ?? "未知")")
         }
 
         // 加载配置
@@ -334,24 +336,33 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
     // MARK: - 日志管理
 
+    /// 扩展日志条目（与主 App 隧道日志模型格式一致）
+    private struct 扩展日志条目: Codable {
+        let id: UUID
+        let 时间: Date
+        let 级别: String
+        let 模块: String
+        let 内容: String
+    }
+
     /// 记录扩展日志
     private func 记录扩展日志(级别: String, 模块: String, 内容: String) {
-        let 日志条目: [String: Any] = [
-            "id": UUID().uuidString,
-            "time": Date().timeIntervalSince1970,
-            "level": 级别,
-            "module": 模块,
-            "content": 内容
-        ]
+        let 条目 = 扩展日志条目(id: UUID(), 时间: Date(), 级别: 级别, 模块: 模块, 内容: 内容)
 
-        // 保存到共享 UserDefaults
+        // 保存到共享 UserDefaults（格式与主 App 读取一致）
         if let 共享默认 = 共享默认 {
-            var 日志列表 = 共享默认.array(forKey: "tunnelLogList") as? [[String: Any]] ?? []
-            日志列表.insert(日志条目, at: 0)
-            if 日志列表.count > 200 {
-                日志列表.removeLast()
+            var 日志列表: [扩展日志条目] = []
+            if let 日志数据 = 共享默认.data(forKey: "tunnelLogs"),
+               let 已存列表 = try? JSONDecoder().decode([扩展日志条目].self, from: 日志数据) {
+                日志列表 = 已存列表
             }
-            共享默认.set(日志列表, forKey: "tunnelLogList")
+            日志列表.insert(条目, at: 0)
+            if 日志列表.count > 300 {
+                日志列表.removeLast(日志列表.count - 300)
+            }
+            if let 编码数据 = try? JSONEncoder().encode(日志列表) {
+                共享默认.set(编码数据, forKey: "tunnelLogs")
+            }
         }
 
         // 输出到系统日志
@@ -365,15 +376,6 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         default:
             日志.info("\(模块): \(内容)")
         }
-    }
-
-    /// 读取扩展日志
-    private func 读取扩展日志() -> [[String: Any]] {
-        guard let 共享默认 = 共享默认,
-              let 日志列表 = 共享默认.array(forKey: "tunnelLogList") as? [[String: Any]] else {
-            return []
-        }
-        return 日志列表
     }
 
     // MARK: - 工具方法

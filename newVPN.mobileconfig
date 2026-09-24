@@ -12,7 +12,7 @@
 			<key>PayloadType</key>
 			<string>com.apple.vpn.managed</string>
 			<key>PayloadUUID</key>
-			<string>BE326D84-5B5A-41BB-B157-CA19725A8169</string>
+			<string>8D9B75CF-C4F2-4FE9-BA7B-CD21360BC176</string>
 			<key>PayloadVersion</key>
 			<integer>1</integer>
 			<key>UserDefinedName</key>
@@ -46,7 +46,7 @@
 	<key>PayloadType</key>
 	<string>Configuration</string>
 	<key>PayloadUUID</key>
-	<string>3B5A4A37-E232-457C-B77F-41B990B121D2</string>
+	<string>D31BC949-4E07-4366-B480-38C6C1A5AF94</string>
 	<key>PayloadVersion</key>
 	<integer>1</integer>
 </dict>

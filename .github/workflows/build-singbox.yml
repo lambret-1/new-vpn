@@ -36,7 +36,9 @@ jobs:
 
       - name: 安装 Go
         run: |
-          brew install go
+          brew install go@1.22
+          echo 'export PATH="/usr/local/opt/go@1.22/bin:$PATH"' >> $GITHUB_ENV
+          export PATH="/usr/local/opt/go@1.22/bin:$PATH"
           go version
           echo "export PATH=\$PATH:$(go env GOPATH)/bin" >> $GITHUB_ENV
 
@@ -71,7 +73,7 @@ jobs:
           go mod tidy
 
           echo "开始编译 libbox.xcframework..."
-          gomobile bind -target=ios -ldflags="-s -w" -o $GITHUB_WORKSPACE/Frameworks/libbox.xcframework ./experimental/libbox 2>&1 | tail -50
+          gomobile bind -target=ios -o $GITHUB_WORKSPACE/Frameworks/libbox.xcframework ./experimental/libbox 2>&1 | tail -50
 
           if [ -d "$GITHUB_WORKSPACE/Frameworks/libbox.xcframework" ]; then
             echo "编译成功"

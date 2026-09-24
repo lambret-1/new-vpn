@@ -365,19 +365,30 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
     /// 加载隧道配置
     private func 加载隧道配置() {
+        记录扩展日志(级别: "调试", 模块: "隧道", 内容: "加载隧道配置-开始")
+
         // 从协议配置读取
+        记录扩展日志(级别: "调试", 模块: "隧道", 内容: "加载隧道配置-读取协议配置")
         if let 协议配置 = protocolConfiguration as? NETunnelProviderProtocol,
            let 提供者配置 = 协议配置.providerConfiguration {
             隧道配置 = 提供者配置
+            记录扩展日志(级别: "调试", 模块: "隧道", 内容: "加载隧道配置-协议配置读取成功，键数量=\(提供者配置.count)")
+        } else {
+            记录扩展日志(级别: "调试", 模块: "隧道", 内容: "加载隧道配置-无协议配置")
         }
 
         // 从共享 UserDefaults 读取额外配置
+        记录扩展日志(级别: "调试", 模块: "隧道", 内容: "加载隧道配置-读取UserDefaults")
         if let 共享默认 = 共享默认,
            let 配置数据 = 共享默认.data(forKey: "tunnelConfig"),
            let 配置 = try? JSONSerialization.jsonObject(with: 配置数据) as? [String: Any] {
             隧道配置.merge(配置) { _, 新 in 新 }
+            记录扩展日志(级别: "调试", 模块: "隧道", 内容: "加载隧道配置-UserDefaults读取成功")
+        } else {
+            记录扩展日志(级别: "调试", 模块: "隧道", 内容: "加载隧道配置-无UserDefaults配置")
         }
 
+        记录扩展日志(级别: "调试", 模块: "隧道", 内容: "加载隧道配置-完成")
         日志.debug("隧道配置加载完成")
     }
 

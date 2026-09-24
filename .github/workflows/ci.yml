@@ -80,8 +80,18 @@ jobs:
               "https://github.com/lambret-1/new-vpn/releases/download/singbox-v1.11.0/libbox-ios-v1.11.0.zip"
           }
           unzip -o /tmp/libbox-ios-v1.11.0.zip -d Frameworks/
-          echo "libbox.xcframework 下载完成"
-          ls -la Frameworks/libbox.xcframework
+          echo "框架下载完成"
+          if [ -d "Frameworks/Libbox.xcframework" ]; then
+            echo "使用 Libbox.xcframework（大写）"
+            ls -la Frameworks/Libbox.xcframework
+          elif [ -d "Frameworks/libbox.xcframework" ]; then
+            echo "使用 libbox.xcframework（小写，旧版）"
+            ls -la Frameworks/libbox.xcframework
+          else
+            echo "错误：未找到框架目录"
+            ls -la Frameworks/
+            exit 1
+          fi
 
       # ── 6. 生成 Xcode 工程 ──
       - name: 生成 Xcode 工程

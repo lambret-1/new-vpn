@@ -40,11 +40,11 @@ jobs:
           go version
           echo "export PATH=\$PATH:$(go env GOPATH)/bin" >> $GITHUB_ENV
 
-      - name: 安装 gomobile
+      - name: 安装 gomobile（使用 sing-box 团队 fork 版本）
         run: |
           export PATH=$PATH:$(go env GOPATH)/bin
-          go install golang.org/x/mobile/cmd/gomobile@latest
-          go install golang.org/x/mobile/cmd/gobind@latest
+          go install github.com/sagernet/gomobile/cmd/gomobile@v0.1.4
+          go install github.com/sagernet/gomobile/cmd/gobind@v0.1.4
           gomobile version
 
       - name: 初始化 gomobile
@@ -59,24 +59,32 @@ jobs:
           cd /tmp/sing-box
           git log --oneline -1
 
-      - name: 编译 libbox.xcframework
+      - name: 编译 libbox.xcframework（使用官方构建标签）
         run: |
           export PATH=$PATH:$(go env GOPATH)/bin
           cd /tmp/sing-box
 
           # 固定旧版 golang.org/x/net 解决 connPool 符号链接错误
           go mod edit -replace golang.org/x/net=golang.org/x/net@v0.25.0
-          go get -tool golang.org/x/mobile/cmd/gobind
+          go get -tool github.com/sagernet/gomobile/cmd/gobind
           go mod download
           go mod tidy
 
-          echo "开始编译 libbox.xcframework..."
-          gomobile bind -target=ios/arm64 -o $GITHUB_WORKSPACE/Frameworks/libbox.xcframework ./experimental/libbox 2>&1 | tail -50
+          echo "开始编译 Libbox.xcframework..."
+          gomobile bind -v \
+            -target=ios/arm64 \
+            -libname=box \
+            -trimpath \
+            -buildvcs=false \
+            -ldflags "-X github.com/sagernet/sing-box/constant.Version=${SINGBOX_VERSION} -s -w -buildid=" \
+            -tags "with_gvisor,with_quic,with_wireguard,with_ech,with_utls,with_clash_api,with_dhcp,with_low_memory,with_conntrack" \
+            -o $GITHUB_WORKSPACE/Frameworks/Libbox.xcframework \
+            ./experimental/libbox 2>&1 | tail -50
 
-          if [ -d "$GITHUB_WORKSPACE/Frameworks/libbox.xcframework" ]; then
+          if [ -d "$GITHUB_WORKSPACE/Frameworks/Libbox.xcframework" ]; then
             echo "编译成功"
-            ls -la $GITHUB_WORKSPACE/Frameworks/libbox.xcframework
-            find $GITHUB_WORKSPACE/Frameworks/libbox.xcframework -type f | head -20
+            ls -la $GITHUB_WORKSPACE/Frameworks/Libbox.xcframework
+            find $GITHUB_WORKSPACE/Frameworks/Libbox.xcframework -type f | head -20
           else
             echo "编译失败"
             exit 1
@@ -85,7 +93,7 @@ jobs:
       - name: 打包框架
         run: |
           cd $GITHUB_WORKSPACE/Frameworks
-          zip -r libbox-ios-${{ env.SINGBOX_VERSION }}.zip libbox.xcframework
+          zip -r libbox-ios-${{ env.SINGBOX_VERSION }}.zip Libbox.xcframework
           ls -lh libbox-ios-${{ env.SINGBOX_VERSION }}.zip
 
       - name: 上传框架到 Release

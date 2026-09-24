@@ -47,17 +47,6 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     /// sing-box 内核桥接
     private let singBox桥接 = SingBox内核桥接.共享
 
-    // MARK: - socketpair 数据包转发
-
-    /// socketpair：sing-box 端文件描述符
-    private var singBox端fd: Int32 = -1
-    /// socketpair：转发端文件描述符（与 packetFlow 之间转发）
-    private var 转发端fd: Int32 = -1
-    /// 数据包转发队列
-    private let 转发队列 = DispatchQueue(label: "com.newvpn.packetforward", qos: .userInteractive)
-    /// 转发是否运行中
-    private var 转发运行中 = false
-
     /// sing-box 配置文件路径
     private var singBox配置路径: String? {
         guard let 容器URL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.com.newvpn.app") else {
@@ -535,67 +524,28 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         }
         记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "日志回调已设置")
 
-        // 输出配置前1000字符用于排查
-        let 配置预览 = String(配置内容.prefix(1000))
-        记录扩展日志(级别: "调试", 模块: "sing-box", 内容: "配置预览：\(配置预览)")
+        // 使用 libbox 提供的函数获取 TUN 文件描述符（这是 iOS Network Extension 的正确方式）
+        let tun文件描述符 = LibboxGetTunnelFileDescriptor()
+        记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "LibboxGetTunnelFileDescriptor 返回 fd=\(tun文件描述符)")
 
-        // 创建 socketpair：一端给 sing-box，另一端与 packetFlow 转发
-        // NEPacketTunnelFlow 不暴露文件描述符，因此用 socketpair 桥接
-        记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "创建 socketpair...")
-        var socketPair: [Int32] = [-1, -1]
-        let 创建结果 = socketpair(AF_UNIX, SOCK_DGRAM, 0, &socketPair)
-        guard 创建结果 == 0 else {
-            记录扩展日志(级别: "错误", 模块: "sing-box", 内容: "socketpair 创建失败，errno=\(errno)")
-            完成(false)
-            return
-        }
-        singBox端fd = socketPair[0]
-        转发端fd = socketPair[1]
-        记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "socketpair 创建成功，sing-box端=\(singBox端fd)，转发端=\(转发端fd)")
-
-        // 第一步：用 nil 平台接口测试（排查平台接口是否导致崩溃）
-        let 最小配置 = """
-        {
-          "inbounds": [{"type": "mixed", "tag": "mixed-in", "listen": "127.0.0.1", "listen_port": 7890}],
-          "outbounds": [{"type": "direct", "tag": "direct"}]
-        }
-        """
-        记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "第一步：nil 平台接口测试...")
-        let nil接口成功 = singBox桥接.测试创建服务无平台接口(配置内容: 最小配置)
-        记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "nil 平台接口测试结果：\(nil接口成功 ? "成功" : "失败")")
-
-        if !nil接口成功 {
-            记录扩展日志(级别: "错误", 模块: "sing-box", 内容: "nil 平台接口也崩溃，问题出在libbox框架或配置")
-            关闭SocketPair()
+        guard tun文件描述符 >= 0 else {
+            记录扩展日志(级别: "错误", 模块: "sing-box", 内容: "TUN 文件描述符无效：\(tun文件描述符)")
             完成(false)
             return
         }
 
-        // 第二步：用平台接口 + 最小配置测试
-        记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "第二步：平台接口 + 最小配置测试...")
-        let 最小配置成功 = singBox桥接.启动内核(配置内容: 最小配置, tun文件描述符: singBox端fd)
-        记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "最小配置测试结果：\(最小配置成功 ? "成功" : "失败")")
+        // 直接用完整配置启动内核
+        记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "调用 LibboxNewService 创建服务...")
+        let 成功 = singBox桥接.启动内核(配置内容: 配置内容, tun文件描述符: tun文件描述符)
 
-        if 最小配置成功 {
-            // 最小配置成功，停止后用完整配置启动
-            singBox桥接.停止内核()
-            记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "最小配置成功，用完整配置启动...")
-            let 成功 = singBox桥接.启动内核(配置内容: 配置内容, tun文件描述符: singBox端fd)
-
-            if 成功 {
-                singBox运行中 = true
-                记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "内核启动成功，启动数据包转发")
-                启动数据包转发()
-            } else {
-                记录扩展日志(级别: "错误", 模块: "sing-box", 内容: "完整配置启动失败，请查看上方 sing-box内核 错误日志")
-                关闭SocketPair()
-            }
-            完成(成功)
+        if 成功 {
+            singBox运行中 = true
+            记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "内核启动成功，TUN 由 sing-box 直接接管")
         } else {
-            记录扩展日志(级别: "错误", 模块: "sing-box", 内容: "平台接口导致崩溃，问题出在平台接口实现")
-            关闭SocketPair()
-            完成(false)
+            记录扩展日志(级别: "错误", 模块: "sing-box", 内容: "内核启动失败，请查看上方 sing-box内核 错误日志")
         }
+
+        完成(成功)
     }
 
     /// 停止 sing-box 内核
@@ -609,99 +559,6 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         singBox运行中 = false
 
         记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "内核已停止")
-
-        // 停止数据包转发并关闭 socketpair
-        停止数据包转发()
-        关闭SocketPair()
-    }
-
-    // MARK: - socketpair 数据包转发
-
-    /// 启动数据包转发：在转发端fd和packetFlow之间双向转发IP包
-    private func 启动数据包转发() {
-        guard !转发运行中 else { return }
-        转发运行中 = true
-        记录扩展日志(级别: "信息", 模块: "转发", 内容: "数据包转发启动")
-
-        // 方向1：packetFlow -> 转发端fd（上行）
-        开始从PacketFlow读取()
-
-        // 方向2：转发端fd -> packetFlow（下行）
-        转发队列.async { [weak self] in
-            self?.从转发端读取循环()
-        }
-    }
-
-    /// 停止数据包转发
-    private func 停止数据包转发() {
-        转发运行中 = false
-    }
-
-    /// 关闭 socketpair
-    private func 关闭SocketPair() {
-        if singBox端fd >= 0 {
-            close(singBox端fd)
-            singBox端fd = -1
-        }
-        if 转发端fd >= 0 {
-            close(转发端fd)
-            转发端fd = -1
-        }
-        记录扩展日志(级别: "信息", 模块: "转发", 内容: "socketpair 已关闭")
-    }
-
-    /// 从 packetFlow 读取数据包并写入转发端fd（上行）
-    private func 开始从PacketFlow读取() {
-        guard 转发运行中 else { return }
-
-        packetFlow.readPackets { [weak self] 数据包列表, 协议号列表 in
-            guard let self = self, self.转发运行中 else { return }
-
-            for (数据包, 协议号) in zip(数据包列表, 协议号列表) {
-                // 写入转发端fd，sing-box会从singBox端fd读取
-                let 发送结果 = 数据包.withUnsafeBytes { 指针 -> Int in
-                    guard let 基地址 = 指针.baseAddress else { return -1 }
-                    return write(self.转发端fd, 基地址, 数据包.count)
-                }
-                if 发送结果 > 0 {
-                    self.上行字节 += UInt64(发送结果)
-                }
-            }
-
-            // 继续读取下一批
-            self.开始从PacketFlow读取()
-        }
-    }
-
-    /// 从转发端fd读取数据包并写回 packetFlow（下行）
-    private func 从转发端读取循环() {
-        let 缓冲区 = UnsafeMutablePointer<UInt8>.allocate(capacity: 65535)
-        defer { 缓冲区.deallocate() }
-
-        while 转发运行中 && 转发端fd >= 0 {
-            let 读取字节数 = read(转发端fd, 缓冲区, 65535)
-            guard 读取字节数 > 0 else {
-                if 读取字节数 < 0 && errno != EAGAIN && errno != EINTR {
-                    记录扩展日志(级别: "错误", 模块: "转发", 内容: "从转发端读取失败，errno=\(errno)")
-                }
-                continue
-            }
-
-            // 从IP头判断协议版本：IPv4=0x40, IPv6=0x60
-            let 版本 = (缓冲区.pointee & 0xF0) >> 4
-            let 协议号: NSNumber
-            if 版本 == 4 {
-                协议号 = NSNumber(value: AF_INET)
-            } else if 版本 == 6 {
-                协议号 = NSNumber(value: AF_INET6)
-            } else {
-                continue // 未知IP版本，丢弃
-            }
-
-            let 数据包 = Data(bytes: 缓冲区, count: 读取字节数)
-            packetFlow.writePackets([数据包], withProtocols: [协议号])
-            下行字节 += UInt64(读取字节数)
-        }
     }
 
     /// 重新加载 sing-box 内核配置

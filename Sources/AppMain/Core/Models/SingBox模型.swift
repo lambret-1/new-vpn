@@ -43,6 +43,7 @@ struct SingBox配置: Codable, Equatable {
     /// 转换为 JSON 数据
     func 转换为JSON数据(格式化: Bool = true) -> Data? {
         let 编码器 = JSONEncoder()
+        编码器.keyEncodingStrategy = .convertToSnakeCase
         if 格式化 {
             编码器.outputFormatting = [.prettyPrinted, .sortedKeys]
         }
@@ -207,16 +208,30 @@ struct SingBox入站配置: Codable, Equatable {
     var transport: SingBox传输配置?
     /// 多路复用配置
     var multiplex: SingBox多路复用配置?
+    /// TUN 地址列表
+    var address: [String]?
+    /// TUN MTU
+    var mtu: Int?
+    /// TUN 自动路由
+    var autoRoute: Bool?
+    /// TUN 严格路由
+    var strictRoute: Bool?
+    /// TUN 网络栈（system/gvisor）
+    var stack: String?
 
     /// 创建 TUN 入站
     static func tun入站(标签: String = "tun-in",
                         地址: String = "172.19.0.1/30",
                         MTU: Int = 1500,
                         自动路由: Bool = true,
-                        严格路由: Bool = true) -> SingBox入站配置 {
+                        严格路由: Bool = true,
+                        网络栈: String = "system") -> SingBox入站配置 {
         var 配置 = SingBox入站配置(type: "tun", tag: 标签)
-        配置.listen = 地址
-        配置.listenPort = MTU
+        配置.address = [地址]
+        配置.mtu = MTU
+        配置.autoRoute = 自动路由
+        配置.strictRoute = 严格路由
+        配置.stack = 网络栈
         return 配置
     }
 

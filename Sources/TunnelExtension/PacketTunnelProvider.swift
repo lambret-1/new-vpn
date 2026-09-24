@@ -90,14 +90,13 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             // 启动 sing-box 内核
             self.启动SingBox内核 { 内核启动成功 in
                 if 内核启动成功 {
-                    self.日志.info("sing-box 内核启动成功")
+                    self.日志.info("sing-box 内核启动成功，由内核直接处理数据包")
                     self.singBox运行中 = true
                 } else {
-                    self.日志.error("sing-box 内核启动失败，继续使用基础隧道")
+                    self.日志.error("sing-box 内核启动失败，使用基础数据包处理")
+                    // 仅在内核启动失败时才启动基础数据包读取循环
+                    self.启动数据包处理()
                 }
-
-                // 启动数据包处理
-                self.启动数据包处理()
 
                 // 启动统计定时器
                 self.启动统计定时器()
@@ -106,7 +105,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                 self.是否运行中 = true
 
                 // 记录启动日志
-                self.记录扩展日志(级别: "信息", 模块: "隧道", 内容: "隧道启动成功，节点：\(self.节点名称 ?? "未知")")
+                self.记录扩展日志(级别: "信息", 模块: "隧道", 内容: "隧道启动成功，节点：\(self.节点名称 ?? "未知")，sing-box内核：\(内核启动成功 ? "已启用" : "未启用")")
 
                 self.日志.info("隧道启动成功")
                 completionHandler(nil)

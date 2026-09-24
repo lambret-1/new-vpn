@@ -488,6 +488,10 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         }
         记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "日志回调已设置")
 
+        // 输出配置前1000字符用于排查
+        let 配置预览 = String(配置内容.prefix(1000))
+        记录扩展日志(级别: "调试", 模块: "sing-box", 内容: "配置预览：\(配置预览)")
+
         // 创建 socketpair：一端给 sing-box，另一端与 packetFlow 转发
         // NEPacketTunnelFlow 不暴露文件描述符，因此用 socketpair 桥接
         记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "创建 socketpair...")

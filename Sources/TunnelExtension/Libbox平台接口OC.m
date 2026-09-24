@@ -38,6 +38,9 @@
 /// 重写 openTun，返回 packetFlow 的文件描述符
 /// 这是 sing-box 内核能读写系统 VPN 数据包的关键
 - (BOOL)openTun:(id<LibboxTunOptions> _Nullable)options ret0_:(int32_t * _Nullable)ret0_ error:(NSError * _Nullable * _Nullable)error {
+    if (self.日志回调) {
+        self.日志回调(2, [NSString stringWithFormat:@"openTun 被调用，tunfd=%d", self.tun文件描述符]);
+    }
     if (self.tun文件描述符 < 0) {
         if (error) {
             *error = [NSError errorWithDomain:@"com.newvpn.tunnel" code:-1 userInfo:@{NSLocalizedDescriptionKey: @"TUN 文件描述符无效"}];
@@ -46,6 +49,9 @@
     }
     if (ret0_) {
         *ret0_ = self.tun文件描述符;
+    }
+    if (self.日志回调) {
+        self.日志回调(2, [NSString stringWithFormat:@"openTun 返回 fd=%d", self.tun文件描述符]);
     }
     return YES;
 }

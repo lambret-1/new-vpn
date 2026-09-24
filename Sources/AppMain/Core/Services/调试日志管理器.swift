@@ -503,12 +503,14 @@ final class 调试日志管理器: ObservableObject {
 
     /// 清除所有日志（内存 + 文件）
     func 清除日志() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            self.日志列表.removeAll()
+            self.已读取扩展日志ID.removeAll()
+        }
+
         队列.async { [weak self] in
             guard let self = self else { return }
-
-            DispatchQueue.main.async {
-                self.日志列表.removeAll()
-            }
 
             // 清除文件日志
             if let 目录 = self.日志目录 {
@@ -591,14 +593,17 @@ final class 调试日志管理器: ObservableObject {
     /// 保存内存日志到 JSON 文件
     private func 保存内存日志() {
         guard let 路径 = 容器URL?.appendingPathComponent("debug_logs.json") else { return }
-        队列.async {
-            do {
-                // 只保存最近 500 条，避免文件过大
-                let 保存列表 = Array(self.日志列表.suffix(500))
-                let 数据 = try JSONEncoder().encode(保存列表)
-                try 数据.write(to: 路径, options: .atomic)
-            } catch {
-                // 忽略保存错误
+        // 先在主线程复制日志列表，避免后台线程访问导致竞争条件
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            let 保存列表 = Array(self.日志列表.suffix(500))
+            self.队列.async {
+                do {
+                    let 数据 = try JSONEncoder().encode(保存列表)
+                    try 数据.write(to: 路径, options: .atomic)
+                } catch {
+                    // 忽略保存错误
+                }
             }
         }
     }

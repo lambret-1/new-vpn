@@ -547,8 +547,14 @@ struct SingBox传输配置: Codable, Equatable {
     static func ws传输(路径: String = "/", 主机: String? = nil, 头部: [String: String]? = nil) -> SingBox传输配置 {
         var 配置 = SingBox传输配置(type: "ws")
         配置.path = 路径
-        配置.host = 主机
-        配置.headers = 头部
+        // host 必须放在 headers 中，sing-box 不认识 transport.host 字段
+        if let 主机 = 主机, !主机.isEmpty {
+            var 合并头部 = 头部 ?? [:]
+            合并头部["Host"] = 主机
+            配置.headers = 合并头部
+        } else {
+            配置.headers = 头部
+        }
         return 配置
     }
 
@@ -563,7 +569,10 @@ struct SingBox传输配置: Codable, Equatable {
     static func httpUpgrade传输(路径: String = "/", 主机: String? = nil) -> SingBox传输配置 {
         var 配置 = SingBox传输配置(type: "httpupgrade")
         配置.path = 路径
-        配置.host = 主机
+        // host 必须放在 headers 中
+        if let 主机 = 主机, !主机.isEmpty {
+            配置.headers = ["Host": 主机]
+        }
         return 配置
     }
 

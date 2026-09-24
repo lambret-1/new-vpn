@@ -2,52 +2,65 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>PayloadContent</key>
-	<array>
-		<dict>
-			<key>PayloadDisplayName</key>
-			<string>newVPN</string>
-			<key>PayloadIdentifier</key>
-			<string>com.newvpn.app.config.vpn</string>
-			<key>PayloadType</key>
-			<string>com.apple.vpn.managed</string>
-			<key>PayloadUUID</key>
-			<string>8D9B75CF-C4F2-4FE9-BA7B-CD21360BC176</string>
-			<key>PayloadVersion</key>
-			<integer>1</integer>
-			<key>UserDefinedName</key>
-			<string>newVPN</string>
-			<key>VPNType</key>
-			<string>VPN</string>
-			<key>VPNSubType</key>
-			<string>com.newvpn.app.tunnel</string>
-			<key>ProviderBundleIdentifier</key>
-			<string>com.newvpn.app</string>
-			<key>ProviderType</key>
-			<string>packet-tunnel</string>
-			<key>RemoteAddress</key>
-			<string>127.0.0.1</string>
-			<key>VPN</key>
-			<dict>
-				<key>ProviderConfiguration</key>
-				<dict>
-					<key>serverAddress</key>
-					<string>127.0.0.1</string>
-				</dict>
-			</dict>
-			<key>OnDemandEnabled</key>
-			<integer>0</integer>
-		</dict>
-	</array>
-	<key>PayloadDisplayName</key>
-	<string>newVPN 配置</string>
-	<key>PayloadIdentifier</key>
-	<string>com.newvpn.app.config</string>
-	<key>PayloadType</key>
-	<string>Configuration</string>
-	<key>PayloadUUID</key>
-	<string>D31BC949-4E07-4366-B480-38C6C1A5AF94</string>
-	<key>PayloadVersion</key>
-	<integer>1</integer>
+  <key>PayloadContent</key>
+  <array>
+    <dict>
+      <key>PayloadDisplayName</key>
+      <string>newVPN</string>
+      <key>PayloadDescription</key>
+      <string>配置 newVPN 隧道连接</string>
+      <key>PayloadIdentifier</key>
+      <string>com.newvpn.app.config.vpn</string>
+      <key>PayloadType</key>
+      <string>com.apple.vpn.managed</string>
+      <key>PayloadUUID</key>
+      <string>8D9B75CF-C4F2-4FE9-BA7B-CD21360BC176</string>
+      <key>PayloadVersion</key>
+      <integer>1</integer>
+
+      <key>UserDefinedName</key>
+      <string>newVPN</string>
+      <key>VPNType</key>
+      <string>VPN</string>
+      <key>VPNSubType</key>
+      <string>com.newvpn.app.tunnel</string>
+      <key>ProviderBundleIdentifier</key>
+      <string>com.newvpn.app</string>
+      <key>ProviderType</key>
+      <string>packet-tunnel</string>
+
+      <!-- 修正点 1：提到一级，不再包在 VPN 字典里 -->
+      <key>ProviderConfiguration</key>
+      <dict>
+        <key>serverAddress</key>
+        <string>vpn.example.com</string>
+        <key>serverPort</key>
+        <integer>443</integer>
+      </dict>
+
+      <!-- 修正点 2：Boolean 而非 integer -->
+      <key>OnDemandEnabled</key>
+      <false/>
+    </dict>
+  </array>
+
+  <key>PayloadDisplayName</key>
+  <string>newVPN 配置</string>
+  <key>PayloadDescription</key>
+  <string>newVPN 客户端的 VPN 隧道配置</string>
+  <key>PayloadOrganization</key>
+  <string>NewVPN Inc.</string>
+  <key>PayloadIdentifier</key>
+  <string>com.newvpn.app.config</string>
+  <key>PayloadType</key>
+  <string>Configuration</string>
+  <key>PayloadUUID</key>
+  <string>D31BC949-4E07-4366-B480-38C6C1A5AF94</string>
+  <key>PayloadVersion</key>
+  <integer>1</integer>
+  <key>PayloadRemovalDisallowed</key>
+  <false/>
+  <key>PayloadScope</key>
+  <string>System</string>
 </dict>
 </plist>

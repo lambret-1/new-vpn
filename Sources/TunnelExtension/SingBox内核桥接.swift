@@ -75,7 +75,11 @@ final class SingBox内核桥接 {
         if 服务 != nil {
             日志回调?(2, "桥接层：nil 平台接口创建成功")
             // 立即关闭，不保留
-            服务?.close()
+            do {
+                try 服务?.close()
+            } catch {
+                日志回调?(3, "桥接层：关闭测试服务失败：\(error.localizedDescription)")
+            }
             return true
         } else {
             日志回调?(4, "桥接层：nil 平台接口创建失败，错误：\(错误?.localizedDescription ?? "未知")")

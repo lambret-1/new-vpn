@@ -32,7 +32,7 @@ final class SingBox配置生成器 {
                   节点列表: [节点模型] = [],
                   分流规则: [分流规则项] = [],
                   DNS配置: DNS配置模型? = nil,
-                  日志级别: String = "info") -> SingBox配置 {
+                  日志级别: String = "debug") -> SingBox配置 {
         var 配置 = SingBox配置()
 
         // 日志配置
@@ -107,7 +107,7 @@ final class SingBox配置生成器 {
             SingBox入站配置.tun入站(
                 标签: "tun-in",
                 地址: "10.0.0.2/24",
-                MTU: 4064,
+                MTU: 1500,
                 自动路由: false,
                 严格路由: false,
                 网络栈: "gvisor"

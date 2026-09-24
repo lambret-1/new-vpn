@@ -377,7 +377,7 @@ final class 配置描述文件管理器: ObservableObject {
         """
         {
           "log": {
-            "level": "info",
+            "level": "debug",
             "timestamp": true
           },
           "dns": {
@@ -401,7 +401,7 @@ final class 配置描述文件管理器: ObservableObject {
               "type": "tun",
               "tag": "tun-in",
               "address": ["172.19.0.1/30"],
-              "mtu": 9000,
+              "mtu": 1500,
               "auto_route": true,
               "strict_route": true,
               "stack": "mixed"

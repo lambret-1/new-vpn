@@ -506,7 +506,7 @@ final class 调试日志管理器: ObservableObject {
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
             self.日志列表.removeAll()
-            self.已读取扩展日志ID.removeAll()
+            // 注意：不清空 已读取扩展日志ID，否则共享 UserDefaults 中的旧扩展日志会被重新读取添加
         }
 
         队列.async { [weak self] in

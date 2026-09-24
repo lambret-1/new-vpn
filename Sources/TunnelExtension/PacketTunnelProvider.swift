@@ -80,20 +80,36 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         记录扩展日志(级别: "信息", 模块: "隧道", 内容: "扩展开始启动，进程已唤醒")
 
         // 解析启动选项
+        记录扩展日志(级别: "调试", 模块: "隧道", 内容: "开始解析启动选项")
         if let 选项 = options {
             节点ID = 选项["nodeId"] as? String
             节点名称 = 选项["nodeName"] as? String
+            记录扩展日志(级别: "调试", 模块: "隧道", 内容: "启动选项解析完成，节点ID=\(节点ID ?? "空")，节点名=\(节点名称 ?? "空")")
+        } else {
+            记录扩展日志(级别: "调试", 模块: "隧道", 内容: "无启动选项")
         }
 
         // 如果节点名称为空，尝试从 sing-box 配置文件解析
         if 节点名称 == nil || 节点名称?.isEmpty == true {
-            if let 配置路径 = singBox配置路径,
-               let 配置数据 = try? Data(contentsOf: URL(fileURLWithPath: 配置路径)),
-               let 配置JSON = try? JSONSerialization.jsonObject(with: 配置数据) as? [String: Any],
-               let 出站列表 = 配置JSON["outbounds"] as? [[String: Any]],
-               let 第一个出站 = 出站列表.first,
-               let 标签 = 第一个出站["tag"] as? String {
-                节点名称 = 标签
+            记录扩展日志(级别: "调试", 模块: "隧道", 内容: "节点名为空，尝试从配置文件解析")
+            if let 配置路径 = singBox配置路径 {
+                记录扩展日志(级别: "调试", 模块: "隧道", 内容: "配置路径=\(配置路径)")
+                if let 配置数据 = try? Data(contentsOf: URL(fileURLWithPath: 配置路径)) {
+                    记录扩展日志(级别: "调试", 模块: "隧道", 内容: "配置数据读取成功，大小=\(配置数据.count)")
+                    if let 配置JSON = try? JSONSerialization.jsonObject(with: 配置数据) as? [String: Any] {
+                        记录扩展日志(级别: "调试", 模块: "隧道", 内容: "JSON解析成功")
+                        if let 出站列表 = 配置JSON["outbounds"] as? [[String: Any]] {
+                            记录扩展日志(级别: "调试", 模块: "隧道", 内容: "出站列表数量=\(出站列表.count)")
+                            if let 第一个出站 = 出站列表.first,
+                               let 标签 = 第一个出站["tag"] as? String {
+                                节点名称 = 标签
+                                记录扩展日志(级别: "调试", 模块: "隧道", 内容: "从配置解析到节点名=\(标签)")
+                            }
+                        }
+                    }
+                }
+            } else {
+                记录扩展日志(级别: "警告", 模块: "隧道", 内容: "配置路径为空")
             }
         }
 

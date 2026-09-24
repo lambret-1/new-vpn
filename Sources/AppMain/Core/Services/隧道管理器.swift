@@ -507,18 +507,34 @@ final class 隧道管理器: NSObject, ObservableObject {
         let 所有节点 = 状态.节点分组列表.flatMap { $0.节点列表 }
         let 当前节点 = 节点ID.flatMap { id in 所有节点.first(where: { $0.id == id }) }
 
+        // 检查是否有节点
+        guard !所有节点.isEmpty else {
+            调试日志管理器.共享.警告("隧道", "节点列表为空，请先添加远程订阅并更新节点")
+            完成(false)
+            return
+        }
+
+        // 如果没有指定节点，使用第一个节点
+        let 使用节点 = 当前节点 ?? 所有节点.first
+        调试日志管理器.共享.信息("隧道", "使用节点：\(使用节点?.名称 ?? "未知")")
+
         // 生成 sing-box 配置
         let 配置 = SingBox配置生成器.共享.生成配置(
-            节点: 当前节点,
+            节点: 使用节点,
             节点列表: 所有节点,
             分流规则: [],
             DNS配置: nil
         )
 
-        // 保存配置到 App Group 共享目录
-        let 成功 = SingBox配置生成器.共享.保存配置(配置, 到路径: "singbox_config.json")
+        // 保存配置到 App Group 共享目录（必须使用完整路径）
+        guard let 共享路径 = SingBox配置生成器.共享.共享配置路径 else {
+            调试日志管理器.共享.错误("隧道", "获取App Group共享目录失败")
+            完成(false)
+            return
+        }
 
-        调试日志管理器.共享.信息("隧道", "sing-box 配置生成\(成功 ? "成功" : "失败")")
+        let 成功 = SingBox配置生成器.共享.保存配置(配置, 到路径: 共享路径)
+        调试日志管理器.共享.信息("隧道", "sing-box 配置生成\(成功 ? "成功" : "失败")，路径：\(共享路径)")
         完成(成功)
     }
 

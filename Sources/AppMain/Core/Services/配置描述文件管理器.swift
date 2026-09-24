@@ -425,7 +425,7 @@ final class 配置描述文件管理器: ObservableObject {
               }
             ],
             "final": "DIRECT",
-            "auto_detect_interface": true
+            "auto_detect_interface": false
           }
         }
         """

@@ -305,7 +305,7 @@ final class SingBox配置生成器 {
 
         return SingBox路由配置(
             final: "proxy",
-            autoDetectInterface: true,
+            autoDetectInterface: false,
             rules: 规则列表
         )
     }

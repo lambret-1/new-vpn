@@ -791,7 +791,7 @@ struct SingBox路由配置: Codable, Equatable {
     /// 默认配置（兼容当前 libbox 版本）
     static let 默认 = SingBox路由配置(
         final: "proxy",
-        autoDetectInterface: true,
+        autoDetectInterface: false,
         rules: [
             // 私有 IP 直连
             SingBox路由规则(ipIsPrivate: true, outbound: "DIRECT"),

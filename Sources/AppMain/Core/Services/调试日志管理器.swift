@@ -501,16 +501,23 @@ final class 调试日志管理器: ObservableObject {
 
     // MARK: - 日志操作
 
-    /// 清除所有日志（内存 + 文件）
+    /// 清除所有日志（内存 + 文件 + 共享 UserDefaults 扩展日志）
     func 清除日志() {
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
             self.日志列表.removeAll()
-            // 注意：不清空 已读取扩展日志ID，否则共享 UserDefaults 中的旧扩展日志会被重新读取添加
+            // 清空已读取扩展日志 ID 集合，避免旧日志 ID 残留
+            self.已读取扩展日志ID.removeAll()
         }
 
         队列.async { [weak self] in
             guard let self = self else { return }
+
+            // 清除共享 UserDefaults 中的隧道扩展日志（关键：否则旧日志会被定时器反复读取）
+            if let 共享默认 = UserDefaults(suiteName: "group.com.newvpn.app") {
+                共享默认.removeObject(forKey: "tunnelLogs")
+                共享默认.synchronize()
+            }
 
             // 清除文件日志
             if let 目录 = self.日志目录 {

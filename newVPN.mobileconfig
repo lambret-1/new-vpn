@@ -6,40 +6,51 @@
 	<array>
 		<dict>
 			<key>PayloadDescription</key>
-			<string>VPN</string>
+			<string>newVPN</string>
 			<key>PayloadDisplayName</key>
 			<string>newVPN</string>
 			<key>PayloadIdentifier</key>
-			<string>com.newvpn.vpn.134C3CB4-9299-4495-8132-8F94441CE0DA</string>
+			<string>com.newvpn.vpn.E28F5106-D337-49CC-949E-520465AB7FDC</string>
 			<key>PayloadType</key>
 			<string>com.apple.vpn.managed</string>
 			<key>PayloadUUID</key>
-			<string>134C3CB4-9299-4495-8132-8F94441CE0DA</string>
+			<string>E28F5106-D337-49CC-949E-520465AB7FDC</string>
 			<key>PayloadVersion</key>
 			<integer>1</integer>
 			<key>UserDefinedName</key>
 			<string>newVPN</string>
+			<key>VPNType</key>
+			<string>VPN</string>
+			<key>VPNSubType</key>
+			<string>com.newvpn.app.tunnel</string>
+			<key>ProviderType</key>
+			<string>packet-tunnel</string>
+			<key>ProviderBundleIdentifier</key>
+			<string>com.newvpn.app.tunnel</string>
+			<key>RemoteAddress</key>
+			<string>127.0.0.1</string>
+			<key>AuthenticationMethod</key>
+			<string>Password</string>
+			<key>DisconnectOnIdle</key>
+			<integer>0</integer>
+			<key>IncludeAllNetworkTraffic</key>
+			<true/>
 			<key>VPN</key>
 			<dict>
-				<key>VPNType</key>
-				<string>VPN</string>
-				<key>VPNSubType</key>
-				<string>com.newvpn.app.tunnel</string>
-				<key>ProviderBundleIdentifier</key>
-				<string>com.newvpn.app.tunnel</string>
-				<key>ProviderType</key>
-				<string>packet-tunnel</string>
-				<key>RemoteAddress</key>
-				<string>127.0.0.1</string>
+				<key>ProviderConfiguration</key>
+				<dict>
+					<key>serverAddress</key>
+					<string>127.0.0.1</string>
+				</dict>
 			</dict>
 		</dict>
 	</array>
 	<key>PayloadDescription</key>
-	<string>newVPN</string>
+	<string>newVPN Profile</string>
 	<key>PayloadDisplayName</key>
 	<string>newVPN</string>
 	<key>PayloadIdentifier</key>
-	<string>com.newvpn.profile.33DE7F7A-F15C-4909-9757-0A5EE9441DEB</string>
+	<string>com.newvpn.profile.B345525D-3159-4D40-9916-5DF8369A257E</string>
 	<key>PayloadOrganization</key>
 	<string>NewVPN</string>
 	<key>PayloadRemovalDisallowed</key>
@@ -47,7 +58,7 @@
 	<key>PayloadType</key>
 	<string>Configuration</string>
 	<key>PayloadUUID</key>
-	<string>33DE7F7A-F15C-4909-9757-0A5EE9441DEB</string>
+	<string>B345525D-3159-4D40-9916-5DF8369A257E</string>
 	<key>PayloadVersion</key>
 	<integer>1</integer>
 </dict>

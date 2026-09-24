@@ -77,7 +77,7 @@ final class VPN描述文件服务 {
                     <key>PayloadDisplayName</key>
                     <string>\(描述文件.名称)</string>
                     <key>PayloadIdentifier</key>
-                    <string>com.apple.vpn.managed.\(UUID字符串)</string>
+                    <string>com.newvpn.vpn.\(UUID字符串)</string>
                     <key>PayloadType</key>
                     <string>com.apple.vpn.managed</string>
                     <key>PayloadUUID</key>
@@ -86,40 +86,26 @@ final class VPN描述文件服务 {
                     <integer>1</integer>
                     <key>UserDefinedName</key>
                     <string>\(描述文件.名称)</string>
+                    <key>VPNType</key>
+                    <string>VPN</string>
+                    <key>VPNSubType</key>
+                    <string>\(描述文件.扩展BundleID)</string>
+                    <key>ProviderType</key>
+                    <string>packet-tunnel</string>
+                    <key>ProviderBundleIdentifier</key>
+                    <string>\(描述文件.扩展BundleID)</string>
+                    <key>RemoteAddress</key>
+                    <string>\(服务器地址)</string>
+                    <key>AuthenticationMethod</key>
+                    <string>Password</string>
+                    <key>DisconnectOnIdle</key>
+                    <integer>\(描述文件.断开时保持连接 ? 0 : 1)</integer>
+                    <key>IncludeAllNetworkTraffic</key>
+                    <\(描述文件.包含所有流量 ? "true" : "false")/>
                     <key>VPN</key>
                     <dict>
-                        <key>VPNType</key>
-                        <string>VPN</string>
-                        <key>VPNSubType</key>
-                        <string>\(描述文件.扩展BundleID)</string>
-                        <key>ProviderBundleIdentifier</key>
-                        <string>\(描述文件.扩展BundleID)</string>
-                        <key>ProviderType</key>
-                        <string>packet-tunnel</string>
-                        <key>RemoteAddress</key>
-                        <string>\(服务器地址)</string>
-                        <key>AuthenticationMethod</key>
-                        <string>Password</string>
-                        <key>DisconnectOnIdle</key>
-                        <integer>\(描述文件.断开时保持连接 ? 0 : 1)</integer>
-                        <key>DisconnectOnIdleTimer</key>
-                        <integer>0</integer>
-                        <key>IncludeAllNetworkTraffic</key>
-                        <\(描述文件.包含所有流量 ? "true" : "false")/>
-                        <key>OnDemandEnabled</key>
-                        <integer>\(描述文件.按需连接 ? 1 : 0)</integer>
-        \(按需规则XML)
                         <key>ProviderConfiguration</key>
                         \(提供者配置XML)
-                        <key>DNSSettings</key>
-                        <dict>
-                            <key>DNSDomains</key>
-                            <array/>
-                            <key>DNSServerAddresses</key>
-                            <array>
-                                \(描述文件.DNS服务器.map { "<string>\($0)</string>" }.joined(separator: "\n                                "))
-                            </array>
-                        </dict>
                     </dict>
                 </dict>
             </array>
@@ -128,7 +114,7 @@ final class VPN描述文件服务 {
             <key>PayloadDisplayName</key>
             <string>\(描述文件.名称)</string>
             <key>PayloadIdentifier</key>
-            <string>com.newvpn.app.vpn.\(UUID().uuidString)</string>
+            <string>com.newvpn.profile.\(UUID().uuidString)</string>
             <key>PayloadOrganization</key>
             <string>NewVPN</string>
             <key>PayloadRemovalDisallowed</key>

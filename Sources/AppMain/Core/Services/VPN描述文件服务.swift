@@ -88,10 +88,10 @@ final class VPN描述文件服务 {
                     <string>\(描述文件.名称)</string>
                     <key>VPN</key>
                     <dict>
-                        <key>VPNSubType</key>
-                        <string>\(描述文件.扩展BundleID)</string>
                         <key>VPNType</key>
                         <string>VPN</string>
+                        <key>VPNSubType</key>
+                        <string>\(描述文件.扩展BundleID)</string>
                         <key>ProviderBundleIdentifier</key>
                         <string>\(描述文件.扩展BundleID)</string>
                         <key>ProviderType</key>

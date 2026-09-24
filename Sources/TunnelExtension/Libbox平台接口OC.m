@@ -52,17 +52,28 @@
 #pragma mark - 安全获取文件描述符
 
 + (int32_t)安全获取文件描述符:(id)packetFlow error:(NSError **)error {
+    NSMutableString *调试信息 = [NSMutableString string];
+
     // 尝试多种属性名获取文件描述符
-    NSArray *属性列表 = @[@"fileDescriptor", @"socket", @"_fileDescriptor", @"_socket", @"fileHandle"];
+    NSArray *属性列表 = @[@"fileDescriptor", @"socket", @"_fileDescriptor", @"_socket", @"fileHandle", @"_fileHandle"];
 
     for (NSString *属性名 in 属性列表) {
         @try {
             id 值 = [packetFlow valueForKey:属性名];
             if ([值 isKindOfClass:[NSNumber class]]) {
-                return [(NSNumber *)值 intValue];
+                int32_t fd = [(NSNumber *)值 intValue];
+                [调试信息 appendFormat:@"%@=%d; ", 属性名, fd];
+                // 只接受大于 2 的文件描述符（0/1/2 是 stdin/stdout/stderr）
+                if (fd > 2) {
+                    return fd;
+                }
+            } else if (值 != nil) {
+                [调试信息 appendFormat:@"%@=%@(非数字); ", 属性名, 值];
+            } else {
+                [调试信息 appendFormat:@"%@=nil; ", 属性名];
             }
         } @catch (NSException *异常) {
-            // 继续尝试下一个属性名
+            [调试信息 appendFormat:@"%@=异常(%@); ", 属性名, 异常.name];
         }
     }
 
@@ -73,16 +84,25 @@
         if ([packetFlow respondsToSelector:选择子]) {
             @try {
                 int (*函数指针)(id, SEL) = (int (*)(id, SEL))[packetFlow methodForSelector:选择子];
-                return 函数指针(packetFlow, 选择子);
+                int fd = 函数指针(packetFlow, 选择子);
+                [调试信息 appendFormat:@"SEL %@=%d; ", 选择子名, fd];
+                if (fd > 2) {
+                    return fd;
+                }
             } @catch (NSException *异常) {
-                // 继续尝试
+                [调试信息 appendFormat:@"SEL %@=异常; ", 选择子名];
             }
+        } else {
+            [调试信息 appendFormat:@"SEL %@=无响应; ", 选择子名];
         }
     }
 
+    // 记录 packetFlow 的类名和所有属性
+    [调试信息 appendFormat:@"类名=%@; ", NSStringFromClass([packetFlow class])];
+
     if (error) {
         *error = [NSError errorWithDomain:@"com.newvpn.tunnel" code:-2
-                                 userInfo:@{NSLocalizedDescriptionKey: @"所有方式均无法获取 packetFlow 文件描述符"}];
+                                 userInfo:@{NSLocalizedDescriptionKey: [NSString stringWithFormat:@"未找到有效 TUN 文件描述符。调试信息：%@", 调试信息]}];
     }
     return -1;
 }

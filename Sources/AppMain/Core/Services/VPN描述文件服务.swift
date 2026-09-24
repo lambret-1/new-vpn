@@ -96,14 +96,14 @@ final class VPN描述文件服务 {
                     <string>\(描述文件.扩展BundleID)</string>
                     <key>RemoteAddress</key>
                     <string>\(服务器地址)</string>
-                    <key>AuthenticationMethod</key>
-                    <string>Password</string>
-                    <key>DisconnectOnIdle</key>
-                    <integer>\(描述文件.断开时保持连接 ? 0 : 1)</integer>
-                    <key>IncludeAllNetworkTraffic</key>
-                    <\(描述文件.包含所有流量 ? "true" : "false")/>
                     <key>VPN</key>
                     <dict>
+                        <key>AuthenticationMethod</key>
+                        <string>Password</string>
+                        <key>DisconnectOnIdle</key>
+                        <integer>\(描述文件.断开时保持连接 ? 0 : 1)</integer>
+                        <key>IncludeAllNetworkTraffic</key>
+                        <\(描述文件.包含所有流量 ? "true" : "false")/>
                         <key>ProviderConfiguration</key>
                         \(提供者配置XML)
                     </dict>

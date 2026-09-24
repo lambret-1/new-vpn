@@ -10,11 +10,11 @@
 			<key>PayloadDisplayName</key>
 			<string>newVPN</string>
 			<key>PayloadIdentifier</key>
-			<string>com.newvpn.vpn.E28F5106-D337-49CC-949E-520465AB7FDC</string>
+			<string>com.newvpn.vpn.75EE6C69-9A58-4128-A6BD-0BE0EF44733F</string>
 			<key>PayloadType</key>
 			<string>com.apple.vpn.managed</string>
 			<key>PayloadUUID</key>
-			<string>E28F5106-D337-49CC-949E-520465AB7FDC</string>
+			<string>75EE6C69-9A58-4128-A6BD-0BE0EF44733F</string>
 			<key>PayloadVersion</key>
 			<integer>1</integer>
 			<key>UserDefinedName</key>
@@ -29,14 +29,14 @@
 			<string>com.newvpn.app.tunnel</string>
 			<key>RemoteAddress</key>
 			<string>127.0.0.1</string>
-			<key>AuthenticationMethod</key>
-			<string>Password</string>
-			<key>DisconnectOnIdle</key>
-			<integer>0</integer>
-			<key>IncludeAllNetworkTraffic</key>
-			<true/>
 			<key>VPN</key>
 			<dict>
+				<key>AuthenticationMethod</key>
+				<string>Password</string>
+				<key>DisconnectOnIdle</key>
+				<integer>0</integer>
+				<key>IncludeAllNetworkTraffic</key>
+				<true/>
 				<key>ProviderConfiguration</key>
 				<dict>
 					<key>serverAddress</key>
@@ -50,7 +50,7 @@
 	<key>PayloadDisplayName</key>
 	<string>newVPN</string>
 	<key>PayloadIdentifier</key>
-	<string>com.newvpn.profile.B345525D-3159-4D40-9916-5DF8369A257E</string>
+	<string>com.newvpn.profile.DE3AA882-AA6D-4F37-95FB-09586C015747</string>
 	<key>PayloadOrganization</key>
 	<string>NewVPN</string>
 	<key>PayloadRemovalDisallowed</key>
@@ -58,7 +58,7 @@
 	<key>PayloadType</key>
 	<string>Configuration</string>
 	<key>PayloadUUID</key>
-	<string>B345525D-3159-4D40-9916-5DF8369A257E</string>
+	<string>DE3AA882-AA6D-4F37-95FB-09586C015747</string>
 	<key>PayloadVersion</key>
 	<integer>1</integer>
 </dict>

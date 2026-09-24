@@ -72,18 +72,15 @@ jobs:
 
           # 补丁：强制引用 golang.org/x/net/http2，解决链接错误
           echo "添加链接补丁..."
-          cat > /tmp/sing-box/experimental/libbox/linkfix.go << 'PATCH_EOF'
-package libbox
-
-import (
-	"reflect"
-	"golang.org/x/net/http2"
-)
-
-// 强制保留 http2.Transport 类型及其所有字段的符号
-var _ = reflect.TypeOf(http2.Transport{}).NumField()
-var _ = &http2.Transport{}
-PATCH_EOF
+          echo 'package libbox' > /tmp/sing-box/experimental/libbox/linkfix.go
+          echo '' >> /tmp/sing-box/experimental/libbox/linkfix.go
+          echo 'import (' >> /tmp/sing-box/experimental/libbox/linkfix.go
+          echo '	"reflect"' >> /tmp/sing-box/experimental/libbox/linkfix.go
+          echo '	"golang.org/x/net/http2"' >> /tmp/sing-box/experimental/libbox/linkfix.go
+          echo ')' >> /tmp/sing-box/experimental/libbox/linkfix.go
+          echo '' >> /tmp/sing-box/experimental/libbox/linkfix.go
+          echo 'var _ = reflect.TypeOf(http2.Transport{}).NumField()' >> /tmp/sing-box/experimental/libbox/linkfix.go
+          echo 'var _ = &http2.Transport{}' >> /tmp/sing-box/experimental/libbox/linkfix.go
 
           echo "开始编译 libbox.xcframework..."
           gomobile bind -target=ios -o $GITHUB_WORKSPACE/Frameworks/libbox.xcframework ./experimental/libbox 2>&1 | tail -50

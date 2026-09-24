@@ -576,7 +576,7 @@ struct SingBoxTLS配置: Codable, Equatable {
         var 配置 = SingBoxTLS配置(enabled: true)
         配置.serverName = SNI
         配置.insecure = 跳过验证
-        配置.alpn = ["h2", "http/1.1"]
+        配置.alpn = ["http/1.1"]
         return 配置
     }
 

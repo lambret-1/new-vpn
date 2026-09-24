@@ -40,13 +40,30 @@
 }
 
 /// 查找连接所有者（iOS 不支持，返回 -1）
-- (int32_t)findConnectionOwner:(int32_t)ipProtocol sourceAddress:(NSString * _Nullable)sourceAddress sourcePort:(int32_t)sourcePort destinationAddress:(NSString * _Nullable)destinationAddress destinationPort:(int32_t)destinationPort error:(NSError * _Nullable * _Nullable)error {
-    return -1;
+- (BOOL)findConnectionOwner:(int32_t)ipProtocol sourceAddress:(NSString * _Nullable)sourceAddress sourcePort:(int32_t)sourcePort destinationAddress:(NSString * _Nullable)destinationAddress destinationPort:(int32_t)destinationPort ret0_:(int32_t * _Nullable)ret0_ error:(NSError * _Nullable * _Nullable)error {
+    if (ret0_) *ret0_ = -1;
+    return NO;
 }
 
-/// 根据 UID 获取包名（iOS 不支持，返回 nil）
-- (NSString * _Nullable)packageNameByUid:(int32_t)uid {
-    return nil;
+/// 根据 UID 获取包名（iOS 不支持，返回空字符串）
+- (NSString * _Nonnull)packageNameByUid:(int32_t)uid error:(NSError * _Nullable * _Nullable)error {
+    return @"";
+}
+
+/// 根据包名获取 UID（iOS 不支持，返回 -1）
+- (BOOL)uidByPackageName:(NSString * _Nullable)packageName ret0_:(int32_t * _Nullable)ret0_ error:(NSError * _Nullable * _Nullable)error {
+    if (ret0_) *ret0_ = -1;
+    return NO;
+}
+
+/// 启动默认接口监视器（iOS 由系统管理，返回 NO）
+- (BOOL)startDefaultInterfaceMonitor:(id<LibboxInterfaceUpdateListener> _Nullable)listener error:(NSError * _Nullable * _Nullable)error {
+    return NO;
+}
+
+/// 关闭默认接口监视器（iOS 由系统管理，返回 NO）
+- (BOOL)closeDefaultInterfaceMonitor:(id<LibboxInterfaceUpdateListener> _Nullable)listener error:(NSError * _Nullable * _Nullable)error {
+    return NO;
 }
 
 /// 获取网络接口列表（iOS 返回空，由系统管理）

@@ -67,12 +67,11 @@ jobs:
           # 添加依赖（gomobile bind 需要）
           echo "添加依赖..."
           go get -tool golang.org/x/mobile/cmd/gobind
-          go get golang.org/x/net
           go mod download
           go mod tidy
 
           echo "开始编译 libbox.xcframework..."
-          gomobile bind -target=ios -o $GITHUB_WORKSPACE/Frameworks/libbox.xcframework ./experimental/libbox 2>&1 | tail -50
+          gomobile bind -target=ios -ldflags="-s -w" -o $GITHUB_WORKSPACE/Frameworks/libbox.xcframework ./experimental/libbox 2>&1 | tail -50
 
           if [ -d "$GITHUB_WORKSPACE/Frameworks/libbox.xcframework" ]; then
             echo "编译成功"

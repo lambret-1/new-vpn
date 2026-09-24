@@ -266,8 +266,14 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
     /// 处理单个数据包
     private func 处理数据包(_ 数据包: Data, 协议: NSNumber) {
-        // 占位实现：实际应将数据包发送到 sing-box 内核处理
-        // 此处仅统计流量，不做实际转发
+        // 当前为占位实现：sing-box 内核尚未集成
+        // 数据包被读取后未转发到代理服务器，因此网络不通
+        // TODO: 集成 sing-box Go 库后，将数据包发送到内核处理
+
+        // 记录前10个数据包的大小，用于调试
+        if 上行字节 < UInt64(数据包.count) * 10 {
+            日志.debug("收到数据包：大小=\(数据包.count)字节，协议=\(协议)")
+        }
 
         // 模拟下行响应（实际应从代理内核接收）
         // let 响应数据 = Data()

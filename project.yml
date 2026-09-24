@@ -84,8 +84,8 @@ targets:
         CODE_SIGN_ENTITLEMENTS: Sources/TunnelExtension/NewVPN-Tunnel.entitlements
         # 框架搜索路径
         FRAMEWORK_SEARCH_PATHS: $(SRCROOT)/Frameworks
-        # 链接 libbox 框架，-all_load 强制加载所有静态库符号解决Go链接错误
-        OTHER_LDFLAGS: -framework Libbox -Wl,-all_load
+        # 链接 libbox 框架
+        OTHER_LDFLAGS: -framework Libbox
     dependencies:
       - sdk: NetworkExtension.framework
       - framework: Frameworks/libbox.xcframework

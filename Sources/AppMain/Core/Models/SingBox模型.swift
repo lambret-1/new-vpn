@@ -218,6 +218,8 @@ struct SingBox入站配置: Codable, Equatable {
     var strictRoute: Bool?
     /// TUN 网络栈（system/gvisor）
     var stack: String?
+    /// TUN 接口名
+    var interfaceName: String?
 
     /// 创建 TUN 入站
     static func tun入站(标签: String = "tun-in",

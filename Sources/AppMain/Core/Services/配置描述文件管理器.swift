@@ -384,14 +384,11 @@ final class 配置描述文件管理器: ObservableObject {
             "servers": [
               {
                 "tag": "dns_resolver",
-                "type": "udp",
-                "server": "223.5.5.5"
+                "address": "223.5.5.5"
               },
               {
                 "tag": "dns_proxy",
-                "type": "tls",
-                "server": "8.8.8.8",
-                "domain_resolver": "dns_resolver"
+                "address": "tls://8.8.8.8"
               }
             ],
             "final": "dns_proxy",

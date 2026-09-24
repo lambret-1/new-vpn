@@ -131,48 +131,43 @@ struct SingBoxDNS配置: Codable, Equatable {
 }
 
 /// sing-box DNS 服务器
-/// sing-box DNS 服务器（对齐官方客户端格式）
+/// sing-box DNS 服务器（旧格式 address，兼容当前 libbox 版本）
 struct SingBoxDNS服务器: Codable, Equatable {
     /// 服务器标签
     var tag: String
-    /// DNS 协议类型（udp/tcp/tls/https/h3/fakeip）
-    var type: String
-    /// 服务器地址
-    var server: String
-    /// 服务器端口（可选）
-    var serverPort: Int?
-    /// 域名解析器标签（解析 DNS 服务器自身域名时使用，避免回环）
-    var domainResolver: String?
-    /// fakeip IPv4 范围（type=fakeip 时使用）
-    var inet4Range: String?
+    /// 服务器地址（包含协议前缀，如 tls://8.8.8.8、https://1.1.1.1/dns-query）
+    var address: String
 
     /// 创建 UDP DNS 服务器
     static func udp服务器(标签: String, 地址: String, 端口: Int? = nil) -> SingBoxDNS服务器 {
-        SingBoxDNS服务器(tag: 标签, type: "udp", server: 地址, serverPort: 端口)
+        let 地址字符串 = 端口 != nil ? "\(地址):\(端口!)" : 地址
+        return SingBoxDNS服务器(tag: 标签, address: 地址字符串)
     }
 
     /// 创建 TLS DNS 服务器
     static func tls服务器(标签: String, 地址: String, 域名解析器: String? = nil) -> SingBoxDNS服务器 {
-        SingBoxDNS服务器(tag: 标签, type: "tls", server: 地址, domainResolver: 域名解析器)
+        SingBoxDNS服务器(tag: 标签, address: "tls://\(地址)")
     }
 
     /// 创建 H3 DNS 服务器
     static func h3服务器(标签: String, 地址: String, 域名解析器: String? = nil) -> SingBoxDNS服务器 {
-        SingBoxDNS服务器(tag: 标签, type: "h3", server: 地址, domainResolver: 域名解析器)
+        SingBoxDNS服务器(tag: 标签, address: "h3://\(地址)/dns-query")
+    }
+
+    /// 创建 HTTPS DNS 服务器
+    static func https服务器(标签: String, 地址: String) -> SingBoxDNS服务器 {
+        let 路径 = 地址.hasPrefix("https://") ? 地址 : "https://\(地址)/dns-query"
+        return SingBoxDNS服务器(tag: 标签, address: 路径)
     }
 
     /// 创建 fakeip DNS 服务器
     static func fakeip服务器(标签: String, IPv4范围: String) -> SingBoxDNS服务器 {
-        SingBoxDNS服务器(tag: 标签, type: "fakeip", server: "", inet4Range: IPv4范围)
+        SingBoxDNS服务器(tag: 标签, address: "fakeip")
     }
 
     enum CodingKeys: String, CodingKey {
         case tag
-        case type
-        case server
-        case serverPort = "server_port"
-        case domainResolver = "domain_resolver"
-        case inet4Range = "inet4_range"
+        case address
     }
 }
 

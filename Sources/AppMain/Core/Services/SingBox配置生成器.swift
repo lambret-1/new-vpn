@@ -65,16 +65,16 @@ final class SingBox配置生成器 {
         return 配置
     }
 
-    // MARK: - 生成 DNS 配置（完全对齐官方客户端格式）
+    // MARK: - 生成 DNS 配置（旧格式 address，兼容当前 libbox 版本）
 
     /// 生成 DNS 配置
     private func 生成DNS配置(_ DNS配置: DNS配置模型?) -> SingBoxDNS配置 {
-        // 默认 DNS 服务器（对齐官方客户端）
-        // dns_resolver: 国内直连 UDP，解析其他 DNS 服务器域名用，避免回环
-        // dns_proxy: TLS 加密，普通域名解析用
+        // 默认 DNS 服务器（使用 IP 地址，避免域名解析导致回环）
+        // dns_resolver: 国内直连 UDP（223.5.5.5）
+        // dns_proxy: TLS 加密（tls://8.8.8.8）
         let 默认服务器 = [
             SingBoxDNS服务器.udp服务器(标签: "dns_resolver", 地址: "223.5.5.5"),
-            SingBoxDNS服务器.tls服务器(标签: "dns_proxy", 地址: "8.8.8.8", 域名解析器: "dns_resolver")
+            SingBoxDNS服务器.tls服务器(标签: "dns_proxy", 地址: "8.8.8.8")
         ]
 
         return SingBoxDNS配置(

@@ -378,21 +378,34 @@ final class 隧道管理器: NSObject, ObservableObject {
 
     /// 执行隧道连接
     private func 执行隧道连接(节点ID: UUID? = nil, 节点名称: String? = nil) {
-        // 如果 vpn管理器 为 nil，先创建并保存配置
-        if vpn管理器 == nil {
-            调试日志管理器.共享.信息("隧道", "VPN管理器为空，创建新配置并保存")
-            创建并保存配置 { [weak self] 成功 in
-                guard let self = self else { return }
+        // 先加载已有的VPN配置，这会触发系统VPN权限授权对话框
+        调试日志管理器.共享.信息("隧道", "开始加载VPN配置（触发系统权限授权）")
+        NETunnelProviderManager.loadAllFromPreferences { [weak self] 列表, 错误 in
+            guard let self = self else { return }
+
+            if let 错误 = 错误 {
+                调试日志管理器.共享.错误("隧道", "加载VPN配置失败：\(错误.localizedDescription)")
+            }
+
+            // 如果已有配置，使用第一个
+            if let 已有管理器 = 列表?.first {
+                self.vpn管理器 = 已有管理器
+                调试日志管理器.共享.信息("隧道", "找到已安装的VPN配置，直接使用")
+                self.开始隧道连接(节点ID: 节点ID, 节点名称: 节点名称)
+                return
+            }
+
+            // 没有配置，创建新的并保存
+            调试日志管理器.共享.信息("隧道", "未找到VPN配置，创建新配置并保存")
+            self.创建并保存配置 { 成功 in
                 if 成功 {
                     self.开始隧道连接(节点ID: 节点ID, 节点名称: 节点名称)
                 } else {
                     self.当前状态 = .配置无效
-                    self.最近错误 = .配置无效("创建VPN配置失败")
+                    self.最近错误 = .配置无效("创建VPN配置失败，请检查VPN权限是否已授权")
                     调试日志管理器.共享.错误("隧道", "创建VPN配置失败")
                 }
             }
-        } else {
-            开始隧道连接(节点ID: 节点ID, 节点名称: 节点名称)
         }
     }
 

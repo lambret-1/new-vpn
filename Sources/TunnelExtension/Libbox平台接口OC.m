@@ -10,9 +10,10 @@
 
 @implementation Libbox平台接口OC
 
-- (BOOL)underNetworkExtension {
-    return YES;
-}
+// 暂时注释掉 underNetworkExtension，使用默认值，排查是否导致 LibboxNewService 崩溃
+// - (BOOL)underNetworkExtension {
+//     return YES;
+// }
 
 - (void)writeLog:(NSString * _Nullable)message {
     if (message && self.日志回调) {
@@ -20,20 +21,21 @@
     }
 }
 
-- (BOOL)includeAllNetworks {
-    return YES;
-}
-
-- (BOOL)useProcFS {
-    return NO;
-}
-
-- (BOOL)usePlatformAutoDetectControl {
-    return NO;
-}
-
-- (void)clearDNSCache {
-}
+// 暂时注释掉以下方法，使用默认值，排查是否导致 LibboxNewService 崩溃
+// - (BOOL)includeAllNetworks {
+//     return YES;
+// }
+//
+// - (BOOL)useProcFS {
+//     return NO;
+// }
+//
+// - (BOOL)usePlatformAutoDetectControl {
+//     return NO;
+// }
+//
+// - (void)clearDNSCache {
+// }
 
 /// 重写 openTun，返回 packetFlow 的文件描述符
 /// 这是 sing-box 内核能读写系统 VPN 数据包的关键

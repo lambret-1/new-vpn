@@ -12,8 +12,8 @@ import Libbox
 // MARK: - 平台接口实现
 
 /// libbox 平台接口实现
-/// 实现 LibboxPlatformInterface 协议，为 sing-box 提供平台相关功能
-final class Libbox平台接口: NSObject, LibboxPlatformInterface {
+/// 继承 LibboxPlatformInterface 类，为 sing-box 提供平台相关功能
+final class Libbox平台接口: LibboxPlatformInterface {
     /// 日志回调
     var 日志回调: ((_ 级别: Int, _ 内容: String) -> Void)?
 
@@ -184,7 +184,7 @@ final class SingBox内核桥接 {
 
         // 创建服务
         var 错误: NSError?
-        guard let 新服务 = LibboxNewService(配置内容, 平台接口, &错误) else {
+        guard let 新服务 = LibboxNewService(配置内容, 平台接口 as? LibboxPlatformInterfaceProtocol, &错误) else {
             日志回调?(4, "创建 sing-box 服务失败：\(错误?.localizedDescription ?? "未知错误")")
             return false
         }
@@ -214,12 +214,7 @@ final class SingBox内核桥接 {
 
         日志回调?(2, "正在停止 sing-box 内核")
 
-        var 错误: NSError?
-        _ = 服务.close(&错误)
-
-        if let 错误 = 错误 {
-            日志回调?(4, "停止 sing-box 内核出错：\(错误.localizedDescription)")
-        }
+        _ = 服务.close()
 
         self.服务 = nil
         是否运行中 = false
@@ -252,4 +247,12 @@ final class SingBox内核桥接 {
     var 版本: String {
         LibboxVersion()
     }
+
+    // MARK: - 统计信息（占位，待接入真实统计API）
+
+    /// 上行字节数
+    var 上行字节: UInt64 { 0 }
+
+    /// 下行字节数
+    var 下行字节: UInt64 { 0 }
 }

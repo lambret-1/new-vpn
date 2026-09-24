@@ -34,19 +34,17 @@ jobs:
       - name: 选择 Xcode 15.4
         run: sudo xcode-select -s /Applications/Xcode_15.4.app
 
-      - name: 安装 Go 1.23
+      - name: 安装 Go
         run: |
-          brew install go@1.23
-          echo 'export PATH="/opt/homebrew/opt/go@1.23/bin:$PATH"' >> $GITHUB_ENV
-          export PATH="/opt/homebrew/opt/go@1.23/bin:$PATH"
+          brew install go
           go version
           echo "export PATH=\$PATH:$(go env GOPATH)/bin" >> $GITHUB_ENV
 
-      - name: 安装 gomobile（与Go 1.23兼容版本）
+      - name: 安装 gomobile
         run: |
           export PATH=$PATH:$(go env GOPATH)/bin
-          go install golang.org/x/mobile/cmd/gomobile@v0.0.0-20240417151828-2418644de54a
-          go install golang.org/x/mobile/cmd/gobind@v0.0.0-20240417151828-2418644de54a
+          go install golang.org/x/mobile/cmd/gomobile@latest
+          go install golang.org/x/mobile/cmd/gobind@latest
           gomobile version
 
       - name: 初始化 gomobile
@@ -66,8 +64,9 @@ jobs:
           export PATH=$PATH:$(go env GOPATH)/bin
           cd /tmp/sing-box
 
-          # 添加gobind依赖（Go 1.23兼容版本）
-          go get golang.org/x/mobile/cmd/gobind@v0.0.0-20240417151828-2418644de54a
+          # 固定旧版 golang.org/x/net 解决 connPool 符号链接错误
+          go mod edit -replace golang.org/x/net=golang.org/x/net@v0.25.0
+          go get -tool golang.org/x/mobile/cmd/gobind
           go mod download
           go mod tidy
 

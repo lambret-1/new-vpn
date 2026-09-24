@@ -43,8 +43,8 @@ jobs:
       - name: 安装 gomobile（使用 sing-box 团队 fork 版本）
         run: |
           export PATH=$PATH:$(go env GOPATH)/bin
-          go install github.com/sagernet/gomobile/cmd/gomobile@v0.1.4
-          go install github.com/sagernet/gomobile/cmd/gobind@v0.1.4
+          go install github.com/sagernet/gomobile/cmd/gomobile@v0.1.13
+          go install github.com/sagernet/gomobile/cmd/gobind@v0.1.13
           gomobile version
 
       - name: 初始化 gomobile

@@ -65,61 +65,21 @@ final class SingBox配置生成器 {
         return 配置
     }
 
-    // MARK: - 生成 DNS 配置
+    // MARK: - 生成 DNS 配置（完全对齐官方客户端格式）
 
     /// 生成 DNS 配置
     private func 生成DNS配置(_ DNS配置: DNS配置模型?) -> SingBoxDNS配置 {
-        var 服务器列表: [SingBoxDNS服务器] = []
-
-        if let 配置 = DNS配置, 配置.启用自定义DNS {
-            for (索引, 服务器) in 配置.启用服务器.enumerated() {
-                let 标签 = "dns-\(索引)"
-                let 地址: String
-
-                switch 服务器.类型 {
-                case .doh:
-                    地址 = 服务器.地址.hasPrefix("https://") ? 服务器.地址 : "https://\(服务器.地址)/dns-query"
-                case .dot:
-                    地址 = "tls://\(服务器.地址)"
-                case .tcp:
-                    地址 = "tcp://\(服务器.地址):\(服务器.端口)"
-                case .udp:
-                    地址 = "\(服务器.地址):\(服务器.端口)"
-                }
-
-                服务器列表.append(SingBoxDNS服务器(
-                    tag: 标签,
-                    address: 地址,
-                    detour: "proxy"
-                ))
-            }
-        }
-
-        // 默认 DNS 服务器（完全参考 sing-box 官方客户端配置格式）
-        // dns_resolver: 国内直连 UDP DNS，用于解析其他 DNS 服务器域名，避免回环
-        // dns_proxy: TLS 加密 DNS，用于普通域名解析
-        // 注意：官方配置中 DNS 服务器没有 detour 字段，出站由路由规则控制
-        if 服务器列表.isEmpty {
-            服务器列表 = [
-                SingBoxDNS服务器(
-                    tag: "dns_resolver",
-                    address: "",
-                    type: "udp",
-                    server: "223.5.5.5"
-                ),
-                SingBoxDNS服务器(
-                    tag: "dns_proxy",
-                    address: "",
-                    type: "tls",
-                    server: "8.8.8.8",
-                    domainResolver: "dns_resolver"
-                )
-            ]
-        }
+        // 默认 DNS 服务器（对齐官方客户端）
+        // dns_resolver: 国内直连 UDP，解析其他 DNS 服务器域名用，避免回环
+        // dns_proxy: TLS 加密，普通域名解析用
+        let 默认服务器 = [
+            SingBoxDNS服务器.udp服务器(标签: "dns_resolver", 地址: "223.5.5.5"),
+            SingBoxDNS服务器.tls服务器(标签: "dns_proxy", 地址: "8.8.8.8", 域名解析器: "dns_resolver")
+        ]
 
         return SingBoxDNS配置(
-            servers: 服务器列表,
-            final: 服务器列表.contains(where: { $0.tag == "dns_proxy" }) ? "dns_proxy" : (服务器列表.first?.tag ?? "dns_proxy"),
+            servers: 默认服务器,
+            final: "dns_proxy",
             strategy: "ipv4_only",
             disableCache: false
         )
@@ -293,19 +253,20 @@ final class SingBox配置生成器 {
         )
     }
 
-    // MARK: - 生成路由配置
+    // MARK: - 生成路由配置（对齐官方客户端格式）
 
     /// 生成路由配置
     private func 生成路由配置(分流规则: [分流规则项], 节点: 节点模型?) -> SingBox路由配置 {
         var 规则列表: [SingBox路由规则] = []
 
-        // 注意：DNS 查询由 TUN 入站自动拦截交给 DNS 模块（sing-box 内置机制）
-        // 参考官方客户端配置，不需要 dns-out 出站和 protocol=dns 路由规则
+        // 第一条：TUN 入站启用嗅探（对齐官方客户端）
+        规则列表.append(SingBox路由规则(inbound: ["tun-in"], action: "sniff"))
 
         // 私有 IP 直连
         规则列表.append(SingBox路由规则(
             ipIsPrivate: true,
-            outbound: "DIRECT"
+            outbound: "DIRECT",
+            action: "route"
         ))
 
         // 局域网地址直连
@@ -319,7 +280,8 @@ final class SingBox配置生成器 {
                 "224.0.0.0/4",
                 "255.255.255.255/32"
             ],
-            outbound: "DIRECT"
+            outbound: "DIRECT",
+            action: "route"
         ))
 
         // 应用分流规则
@@ -332,6 +294,7 @@ final class SingBox配置生成器 {
         return SingBox路由配置(
             final: "proxy",
             autoDetectInterface: true,
+            defaultDomainResolver: "dns_resolver",
             rules: 规则列表
         )
     }
@@ -347,7 +310,7 @@ final class SingBox配置生成器 {
         case .放行: return nil // 放行不生成规则
         }
 
-        var 路由规则 = SingBox路由规则(outbound: 出站标签)
+        var 路由规则 = SingBox路由规则(outbound: 出站标签, action: "route")
 
         switch 规则.类型 {
         case .域名精确:
@@ -408,10 +371,10 @@ final class SingBox配置生成器 {
             错误列表.append("缺少标签为 proxy 的出站配置")
         }
 
-        // 检查是否有 direct 出站
+        // 检查是否有 DIRECT 出站
         if let 出站列表 = 配置.outbounds,
-           !出站列表.contains(where: { $0.tag == "direct" }) {
-            错误列表.append("缺少标签为 direct 的出站配置")
+           !出站列表.contains(where: { $0.tag == "DIRECT" }) {
+            错误列表.append("缺少标签为 DIRECT 的出站配置")
         }
 
         // 检查路由最终出站

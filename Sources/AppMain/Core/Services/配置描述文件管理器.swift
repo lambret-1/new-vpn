@@ -372,7 +372,7 @@ final class 配置描述文件管理器: ObservableObject {
 
     // MARK: - 私有方法
 
-    /// 生成默认配置内容
+    /// 生成默认配置内容（对齐官方客户端格式）
     private func 生成默认配置内容() -> String {
         """
         {
@@ -383,43 +383,56 @@ final class 配置描述文件管理器: ObservableObject {
           "dns": {
             "servers": [
               {
-                "tag": "dns_direct",
-                "address": "223.5.5.5",
-                "detour": "direct"
+                "tag": "dns_resolver",
+                "type": "udp",
+                "server": "223.5.5.5"
+              },
+              {
+                "tag": "dns_proxy",
+                "type": "tls",
+                "server": "8.8.8.8",
+                "domain_resolver": "dns_resolver"
               }
             ],
-            "final": "dns_direct"
+            "final": "dns_proxy",
+            "strategy": "ipv4_only"
           },
           "inbounds": [
             {
               "type": "tun",
               "tag": "tun-in",
-              "interface_name": "utun123",
               "address": ["172.19.0.1/30"],
               "mtu": 9000,
               "auto_route": true,
-              "strict_route": true
+              "strict_route": true,
+              "stack": "mixed"
             }
           ],
           "outbounds": [
             {
               "type": "direct",
-              "tag": "direct"
+              "tag": "DIRECT"
             },
             {
-              "type": "dns",
-              "tag": "dns-out"
+              "type": "block",
+              "tag": "REJECT"
             }
           ],
           "route": {
             "rules": [
               {
-                "protocol": "dns",
-                "outbound": "dns-out"
+                "inbound": "tun-in",
+                "action": "sniff"
+              },
+              {
+                "ip_is_private": true,
+                "outbound": "DIRECT",
+                "action": "route"
               }
             ],
-            "final": "direct",
-            "auto_detect_interface": true
+            "final": "DIRECT",
+            "auto_detect_interface": true,
+            "default_domain_resolver": "dns_resolver"
           }
         }
         """

@@ -119,55 +119,78 @@ struct SingBoxDNS配置: Codable, Equatable {
     /// DNS 规则列表
     var rules: [SingBoxDNS规则]?
 
-    /// 默认配置
+    /// 默认配置（对齐官方客户端）
     static let 默认 = SingBoxDNS配置(
         servers: [
-            SingBoxDNS服务器(tag: "google", address: "tls://8.8.8.8"),
-            SingBoxDNS服务器(tag: "cloudflare", address: "https://1.1.1.1/dns-query")
+            SingBoxDNS服务器.udp服务器(标签: "dns_resolver", 地址: "223.5.5.5"),
+            SingBoxDNS服务器.tls服务器(标签: "dns_proxy", 地址: "8.8.8.8", 域名解析器: "dns_resolver")
         ],
-        final: "google",
+        final: "dns_proxy",
         strategy: "ipv4_only"
     )
 }
 
 /// sing-box DNS 服务器
+/// sing-box DNS 服务器（对齐官方客户端格式）
 struct SingBoxDNS服务器: Codable, Equatable {
     /// 服务器标签
     var tag: String
-    /// 服务器地址（旧格式，包含协议前缀如 tls://8.8.8.8）
-    var address: String
-    /// DNS 协议类型（新格式：udp/tcp/tls/https/h3/fakeip）
-    var type: String?
-    /// 服务器地址（新格式，纯地址不含协议前缀）
-    var server: String?
-    /// 服务器端口（新格式）
+    /// DNS 协议类型（udp/tcp/tls/https/h3/fakeip）
+    var type: String
+    /// 服务器地址
+    var server: String
+    /// 服务器端口（可选）
     var serverPort: Int?
     /// 域名解析器标签（解析 DNS 服务器自身域名时使用，避免回环）
     var domainResolver: String?
-    /// 地址解析策略
-    var addressResolver: String?
-    /// 地址策略
-    var addressStrategy: String?
-    /// 协议类型（udp/tcp/tls/https/quic）
-    var `protocol`: String?
-    /// 服务器端口
-    var port: Int?
-    /// 域名（DoH/DoT）
-    var domain: String?
-    /// 路径（DoH）
-    var path: String?
-    /// 用户名（DoH）
-    var username: String?
-    /// 密码（DoH）
-    var password: String?
-    /// 出站标签（DNS 查询通过此出站发送，避免回环）
-    var detour: String?
+    /// fakeip IPv4 范围（type=fakeip 时使用）
+    var inet4Range: String?
+    /// 地址（旧格式兼容，新格式使用 type+server，设为空字符串）
+    var address: String = ""
+
+    /// 创建 UDP DNS 服务器
+    static func udp服务器(标签: String, 地址: String, 端口: Int? = nil) -> SingBoxDNS服务器 {
+        SingBoxDNS服务器(tag: 标签, type: "udp", server: 地址, serverPort: 端口)
+    }
+
+    /// 创建 TLS DNS 服务器
+    static func tls服务器(标签: String, 地址: String, 域名解析器: String? = nil) -> SingBoxDNS服务器 {
+        SingBoxDNS服务器(tag: 标签, type: "tls", server: 地址, domainResolver: 域名解析器)
+    }
+
+    /// 创建 H3 DNS 服务器
+    static func h3服务器(标签: String, 地址: String, 域名解析器: String? = nil) -> SingBoxDNS服务器 {
+        SingBoxDNS服务器(tag: 标签, type: "h3", server: 地址, domainResolver: 域名解析器)
+    }
+
+    /// 创建 fakeip DNS 服务器
+    static func fakeip服务器(标签: String, IPv4范围: String) -> SingBoxDNS服务器 {
+        SingBoxDNS服务器(tag: 标签, type: "fakeip", server: "", inet4Range: IPv4范围)
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case tag
+        case type
+        case server
+        case serverPort = "server_port"
+        case domainResolver = "domain_resolver"
+        case inet4Range = "inet4_range"
+        case address
+    }
 }
 
-/// sing-box DNS 规则
+/// sing-box DNS 规则（对齐官方客户端格式）
 struct SingBoxDNS规则: Codable, Equatable {
-    /// 规则标签
-    var tag: String?
+    /// 规则动作（route/predefined/reject）
+    var action: String?
+    /// 目标 DNS 服务器标签（action=route 时使用）
+    var server: String?
+    /// 规则集标签列表（geosite/geoip）
+    var ruleSet: [String]?
+    /// 查询类型列表（A/AAAA/HTTPS 等）
+    var queryType: [String]?
+    /// 拒绝响应码（action=predefined 时使用，如 NOERROR）
+    var rcode: String?
     /// 域名列表
     var domain: [String]?
     /// 域名后缀列表
@@ -176,18 +199,30 @@ struct SingBoxDNS规则: Codable, Equatable {
     var domainKeyword: [String]?
     /// 域名正则列表
     var domainRegex: [String]?
-    /// 出站标签列表
+    /// 出站标签列表（任意匹配）
     var outboundAny: [String]?
     /// 出站标签（全部匹配）
     var outboundAll: [String]?
-    /// 目标 DNS 服务器标签
-    var server: String?
     /// 是否拒绝解析
     var reject: Bool?
     /// 拒绝方法
     var rejectMethod: String?
-    /// 无响应
-    var noDrop: Bool?
+
+    enum CodingKeys: String, CodingKey {
+        case action
+        case server
+        case ruleSet = "rule_set"
+        case queryType = "query_type"
+        case rcode
+        case domain
+        case domainSuffix = "domain_suffix"
+        case domainKeyword = "domain_keyword"
+        case domainRegex = "domain_regex"
+        case outboundAny = "outbound_any"
+        case outboundAll = "outbound_all"
+        case reject
+        case rejectMethod = "reject_method"
+    }
 }
 
 // MARK: - 入站配置
@@ -230,8 +265,6 @@ struct SingBox入站配置: Codable, Equatable {
     var stack: String?
     /// TUN 接口名
     var interfaceName: String?
-    /// TUN DNS 服务器地址（设置后 TUN 入站直接拦截 DNS 查询交给 DNS 模块，无需 dns-out 出站）
-    var dnsAddress: [String]?
     /// 是否启用协议嗅探
     var sniff: Bool?
     /// 嗅探是否覆盖目标地址
@@ -246,8 +279,7 @@ struct SingBox入站配置: Codable, Equatable {
                         自动路由: Bool = true,
                         严格路由: Bool = true,
                         网络栈: String = "system",
-                        启用嗅探: Bool = true,
-                        DNS地址: String? = nil) -> SingBox入站配置 {
+                        启用嗅探: Bool = true) -> SingBox入站配置 {
         var 配置 = SingBox入站配置(type: "tun", tag: 标签)
         配置.address = [地址]
         配置.mtu = MTU
@@ -257,9 +289,6 @@ struct SingBox入站配置: Codable, Equatable {
         配置.sniff = 启用嗅探
         配置.sniffOverrideDestination = false
         配置.sniffTimeout = "300ms"
-        if let dns = DNS地址 {
-            配置.dnsAddress = [dns]
-        }
         return 配置
     }
 
@@ -291,6 +320,30 @@ struct SingBox入站配置: Codable, Equatable {
         配置.listen = 地址
         配置.listenPort = 端口
         return 配置
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case type
+        case tag
+        case listen
+        case listenPort = "listen_port"
+        case tcpFastOpen = "tcp_fast_open"
+        case tcpMultiPath = "tcp_multi_path"
+        case udpForward = "udp_forward"
+        case udpTimeout = "udp_timeout"
+        case users
+        case tls
+        case transport
+        case multiplex
+        case address
+        case mtu
+        case autoRoute = "auto_route"
+        case strictRoute = "strict_route"
+        case stack
+        case interfaceName = "interface_name"
+        case sniff
+        case sniffOverrideDestination = "sniff_override_destination"
+        case sniffTimeout = "sniff_timeout"
     }
 }
 
@@ -336,8 +389,6 @@ struct SingBox出站配置: Codable, Equatable {
     var security: String?
     /// 加密方式（Shadowsocks）
     var method: String?
-    /// 密码（Shadowsocks）
-    var password_: String?
     /// TLS 配置
     var tls: SingBoxTLS配置?
     /// 传输配置
@@ -435,19 +486,14 @@ struct SingBox出站配置: Codable, Equatable {
         return 配置
     }
 
-    /// 创建 Direct 出站
-    static func direct出站(标签: String = "direct") -> SingBox出站配置 {
+    /// 创建 Direct 出站（标签大写对齐官方客户端）
+    static func direct出站(标签: String = "DIRECT") -> SingBox出站配置 {
         SingBox出站配置(type: "direct", tag: 标签)
     }
 
-    /// 创建 Block 出站
-    static func block出站(标签: String = "block") -> SingBox出站配置 {
+    /// 创建 Block 出站（标签大写对齐官方客户端）
+    static func block出站(标签: String = "REJECT") -> SingBox出站配置 {
         SingBox出站配置(type: "block", tag: 标签)
-    }
-
-    /// 创建 DNS 出站
-    static func dns出站(标签: String = "dns-out") -> SingBox出站配置 {
-        SingBox出站配置(type: "dns", tag: 标签)
     }
 
     /// 创建 Selector 出站
@@ -467,6 +513,36 @@ struct SingBox出站配置: Codable, Equatable {
         配置.url = 测试URL
         配置.interval = 间隔
         return 配置
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case type
+        case tag
+        case server
+        case serverPort = "server_port"
+        case tcpFastOpen = "tcp_fast_open"
+        case tcpMultiPath = "tcp_multi_path"
+        case udpForward = "udp_forward"
+        case network
+        case username
+        case password
+        case uuid
+        case flow
+        case security
+        case method
+        case tls
+        case transport
+        case multiplex
+        case dialerOptions = "dialer_options"
+        case outbounds
+        case url
+        case interval
+        case tolerance
+        case blockMethod = "block_method"
+        case noDrop = "no_drop"
+        case version
+        case overrideAddress = "override_address"
+        case overridePort = "override_port"
     }
 }
 
@@ -663,32 +739,45 @@ struct SingBox拨号器配置: Codable, Equatable {
 
 // MARK: - 路由配置
 
-/// sing-box 路由配置
+/// sing-box 路由配置（对齐官方客户端格式）
 struct SingBox路由配置: Codable, Equatable {
     /// 最终出站标签
     var final: String?
     /// 自动检测接口
     var autoDetectInterface: Bool?
+    /// 默认域名解析器标签
+    var defaultDomainResolver: String?
     /// 路由规则列表
     var rules: [SingBox路由规则]?
     /// 规则集列表
     var ruleSet: [SingBox规则集]?
 
-    /// 默认配置
+    /// 默认配置（对齐官方客户端）
     static let 默认 = SingBox路由配置(
         final: "proxy",
         autoDetectInterface: true,
+        defaultDomainResolver: "dns_resolver",
         rules: [
+            // 第一条：TUN 入站启用嗅探
+            SingBox路由规则(inbound: ["tun-in"], action: "sniff"),
+            // 私有 IP 直连
+            SingBox路由规则(ipIsPrivate: true, outbound: "DIRECT", action: "route"),
+            // 局域网地址直连
             SingBox路由规则(
-                protocol_: ["dns"],
-                outbound: "dns-out"
-            ),
-            SingBox路由规则(
-                ipIsPrivate: true,
-                outbound: "direct"
+                ipCidr: ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8"],
+                outbound: "DIRECT",
+                action: "route"
             )
         ]
     )
+
+    enum CodingKeys: String, CodingKey {
+        case final
+        case autoDetectInterface = "auto_detect_interface"
+        case defaultDomainResolver = "default_domain_resolver"
+        case rules
+        case ruleSet = "rule_set"
+    }
 }
 
 /// sing-box 路由规则
@@ -757,6 +846,10 @@ struct SingBox路由规则: Codable, Equatable {
     var hijackDns: Bool?
     /// 目标出站标签
     var outbound: String?
+    /// 规则动作（sniff/route/reject/hijack-dns）
+    var action: String?
+    /// Clash 模式（Global/Direct/Rule）
+    var clashMode: String?
     /// 规则集标签
     var ruleSet: [String]?
     /// 是否取反
@@ -795,6 +888,8 @@ struct SingBox路由规则: Codable, Equatable {
         case networkType
         case hijackDns
         case outbound
+        case action
+        case clashMode = "clash_mode"
         case ruleSet
         case invert
     }

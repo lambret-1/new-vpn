@@ -9,33 +9,6 @@
 import Foundation
 import Libbox
 
-// MARK: - 平台接口实现
-
-/// libbox 平台接口实现
-/// 继承 LibboxPlatformInterface 类，重写关键方法，其他使用默认实现
-final class Libbox平台接口: LibboxPlatformInterface {
-    /// 日志回调
-    var 日志回调: ((_ 级别: Int, _ 内容: String) -> Void)?
-
-    /// TUN 文件描述符（由 PacketTunnelProvider 设置）
-    var tun文件描述符: Int32 = -1
-
-    override func underNetworkExtension() -> Bool { true }
-
-    override func writeLog(_ message: String?) {
-        guard let 消息 = message else { return }
-        日志回调?(2, 消息)
-    }
-
-    override func includeAllNetworks() -> Bool { true }
-
-    override func useProcFS() -> Bool { false }
-
-    override func usePlatformAutoDetectControl() -> Bool { false }
-
-    override func clearDNSCache() {}
-}
-
 // MARK: - sing-box 内核桥接
 
 /// sing-box 内核桥接类
@@ -53,8 +26,8 @@ final class SingBox内核桥接 {
     /// libbox 服务实例
     private var 服务: LibboxBoxService?
 
-    /// 平台接口
-    private let 平台接口 = Libbox平台接口()
+    /// 平台接口（OC实现，正确重写openTun）
+    private let 平台接口 = Libbox平台接口OC()
 
     /// 是否已初始化
     private var 已初始化 = false
@@ -62,7 +35,7 @@ final class SingBox内核桥接 {
     /// 私有初始化
     private init() {
         平台接口.日志回调 = { [weak self] 级别, 内容 in
-            self?.日志回调?(级别, 内容)
+            self?.日志回调?(Int(级别), 内容)
         }
     }
 

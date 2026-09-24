@@ -119,11 +119,11 @@ struct SingBoxDNS配置: Codable, Equatable {
     /// DNS 规则列表
     var rules: [SingBoxDNS规则]?
 
-    /// 默认配置（对齐官方客户端）
+    /// 默认配置（兼容当前 libbox 版本，detour 避免 DNS 回环）
     static let 默认 = SingBoxDNS配置(
         servers: [
-            SingBoxDNS服务器.udp服务器(标签: "dns_resolver", 地址: "223.5.5.5"),
-            SingBoxDNS服务器.tls服务器(标签: "dns_proxy", 地址: "8.8.8.8", 域名解析器: "dns_resolver")
+            SingBoxDNS服务器.udp服务器(标签: "dns_resolver", 地址: "223.5.5.5", 出站: "DIRECT"),
+            SingBoxDNS服务器.tls服务器(标签: "dns_proxy", 地址: "8.8.8.8", 出站: "proxy")
         ],
         final: "dns_proxy",
         strategy: "ipv4_only"
@@ -137,27 +137,29 @@ struct SingBoxDNS服务器: Codable, Equatable {
     var tag: String
     /// 服务器地址（包含协议前缀，如 tls://8.8.8.8、https://1.1.1.1/dns-query）
     var address: String
+    /// 出站标签（指定 DNS 查询走哪个出站，避免回环）
+    var detour: String?
 
     /// 创建 UDP DNS 服务器
-    static func udp服务器(标签: String, 地址: String, 端口: Int? = nil) -> SingBoxDNS服务器 {
+    static func udp服务器(标签: String, 地址: String, 端口: Int? = nil, 出站: String? = nil) -> SingBoxDNS服务器 {
         let 地址字符串 = 端口 != nil ? "\(地址):\(端口!)" : 地址
-        return SingBoxDNS服务器(tag: 标签, address: 地址字符串)
+        return SingBoxDNS服务器(tag: 标签, address: 地址字符串, detour: 出站)
     }
 
     /// 创建 TLS DNS 服务器
-    static func tls服务器(标签: String, 地址: String, 域名解析器: String? = nil) -> SingBoxDNS服务器 {
-        SingBoxDNS服务器(tag: 标签, address: "tls://\(地址)")
+    static func tls服务器(标签: String, 地址: String, 域名解析器: String? = nil, 出站: String? = nil) -> SingBoxDNS服务器 {
+        SingBoxDNS服务器(tag: 标签, address: "tls://\(地址)", detour: 出站)
     }
 
     /// 创建 H3 DNS 服务器
-    static func h3服务器(标签: String, 地址: String, 域名解析器: String? = nil) -> SingBoxDNS服务器 {
-        SingBoxDNS服务器(tag: 标签, address: "h3://\(地址)/dns-query")
+    static func h3服务器(标签: String, 地址: String, 域名解析器: String? = nil, 出站: String? = nil) -> SingBoxDNS服务器 {
+        SingBoxDNS服务器(tag: 标签, address: "h3://\(地址)/dns-query", detour: 出站)
     }
 
     /// 创建 HTTPS DNS 服务器
-    static func https服务器(标签: String, 地址: String) -> SingBoxDNS服务器 {
+    static func https服务器(标签: String, 地址: String, 出站: String? = nil) -> SingBoxDNS服务器 {
         let 路径 = 地址.hasPrefix("https://") ? 地址 : "https://\(地址)/dns-query"
-        return SingBoxDNS服务器(tag: 标签, address: 路径)
+        return SingBoxDNS服务器(tag: 标签, address: 路径, detour: 出站)
     }
 
     /// 创建 fakeip DNS 服务器
@@ -168,20 +170,19 @@ struct SingBoxDNS服务器: Codable, Equatable {
     enum CodingKeys: String, CodingKey {
         case tag
         case address
+        case detour
     }
 }
 
-/// sing-box DNS 规则（对齐官方客户端格式）
+/// sing-box DNS 规则（旧格式，兼容当前 libbox 版本）
 struct SingBoxDNS规则: Codable, Equatable {
-    /// 规则动作（route/predefined/reject）
-    var action: String?
-    /// 目标 DNS 服务器标签（action=route 时使用）
+    /// 目标 DNS 服务器标签
     var server: String?
     /// 规则集标签列表（geosite/geoip）
     var ruleSet: [String]?
     /// 查询类型列表（A/AAAA/HTTPS 等）
     var queryType: [String]?
-    /// 拒绝响应码（action=predefined 时使用，如 NOERROR）
+    /// 拒绝响应码（如 NOERROR）
     var rcode: String?
     /// 域名列表
     var domain: [String]?
@@ -200,8 +201,13 @@ struct SingBoxDNS规则: Codable, Equatable {
     /// 拒绝方法
     var rejectMethod: String?
 
+    /// 创建域名 DNS 规则（指定域名走某个 DNS 服务器）
+    init(域名: [String], 服务器: String) {
+        self.domain = 域名
+        self.server = 服务器
+    }
+
     enum CodingKeys: String, CodingKey {
-        case action
         case server
         case ruleSet = "rule_set"
         case queryType = "query_type"

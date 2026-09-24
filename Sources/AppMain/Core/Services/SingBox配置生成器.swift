@@ -42,7 +42,7 @@ final class SingBox配置生成器 {
         )
 
         // DNS 配置
-        配置.dns = 生成DNS配置(DNS配置)
+        配置.dns = 生成DNS配置(DNS配置, 节点: 节点)
 
         // 入站配置
         配置.inbounds = 生成入站配置()
@@ -68,20 +68,32 @@ final class SingBox配置生成器 {
     // MARK: - 生成 DNS 配置（旧格式 address，兼容当前 libbox 版本）
 
     /// 生成 DNS 配置
-    private func 生成DNS配置(_ DNS配置: DNS配置模型?) -> SingBoxDNS配置 {
-        // 默认 DNS 服务器（使用 IP 地址，避免域名解析导致回环）
-        // dns_resolver: 国内直连 UDP（223.5.5.5）
-        // dns_proxy: TLS 加密（tls://8.8.8.8）
+    private func 生成DNS配置(_ DNS配置: DNS配置模型?, 节点: 节点模型?) -> SingBoxDNS配置 {
+        // 默认 DNS 服务器（detour 显式指定出站，避免 DNS 回环）
+        // dns_resolver: 国内直连 UDP（223.5.5.5），走 DIRECT
+        // dns_proxy: TLS 加密（tls://8.8.8.8），走 proxy
         let 默认服务器 = [
-            SingBoxDNS服务器.udp服务器(标签: "dns_resolver", 地址: "223.5.5.5"),
-            SingBoxDNS服务器.tls服务器(标签: "dns_proxy", 地址: "8.8.8.8")
+            SingBoxDNS服务器.udp服务器(标签: "dns_resolver", 地址: "223.5.5.5", 出站: "DIRECT"),
+            SingBoxDNS服务器.tls服务器(标签: "dns_proxy", 地址: "8.8.8.8", 出站: "proxy")
         ]
+
+        // DNS 规则：代理服务器域名用直连 DNS 解析，避免回环
+        var DNS规则列表: [SingBoxDNS规则] = []
+        if let 节点服务器 = 节点?.服务器, !节点服务器.isEmpty {
+            // 判断是否为域名（不是 IP 地址）
+            let 是否域名 = !节点服务器.contains(where: { $0.isLetter || $0 == "-" }) == false ||
+                           (节点服务器.contains(".") && !节点服务器.allSatisfy({ $0.isNumber || $0 == "." }))
+            if 是否域名 {
+                DNS规则列表.append(SingBoxDNS规则(域名: [节点服务器], 服务器: "dns_resolver"))
+            }
+        }
 
         return SingBoxDNS配置(
             servers: 默认服务器,
             final: "dns_proxy",
             strategy: "ipv4_only",
-            disableCache: false
+            disableCache: false,
+            rules: DNS规则列表.isEmpty ? nil : DNS规则列表
         )
     }
 
@@ -276,6 +288,12 @@ final class SingBox配置生成器 {
                 "224.0.0.0/4",
                 "255.255.255.255/32"
             ],
+            outbound: "DIRECT"
+        ))
+
+        // DNS 服务器 IP 直连（避免 DNS 查询走代理导致回环）
+        规则列表.append(SingBox路由规则(
+            ipCidr: ["223.5.5.5/32", "8.8.8.8/32", "1.1.1.1/32"],
             outbound: "DIRECT"
         ))
 

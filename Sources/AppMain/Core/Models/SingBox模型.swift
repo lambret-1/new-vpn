@@ -152,6 +152,8 @@ struct SingBoxDNS服务器: Codable, Equatable {
     var username: String?
     /// 密码（DoH）
     var password: String?
+    /// 出站标签（DNS 查询通过此出站发送，避免回环）
+    var detour: String?
 }
 
 /// sing-box DNS 规则

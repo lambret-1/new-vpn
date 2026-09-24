@@ -89,16 +89,19 @@ final class SingBox配置生成器 {
 
                 服务器列表.append(SingBoxDNS服务器(
                     tag: 标签,
-                    address: 地址
+                    address: 地址,
+                    detour: "proxy"
                 ))
             }
         }
 
-        // 如果没有自定义 DNS，使用默认（普通 UDP，避免 TLS/HTTPS DNS 在网络不通时加剧问题）
+        // 默认 DNS 服务器
+        // 关键：detour=proxy 让 DNS 查询直接通过代理出站发送
+        // 避免查询被 protocol=dns 路由规则匹配到 dns-out，形成 DNS 回环死循环
         if 服务器列表.isEmpty {
             服务器列表 = [
-                SingBoxDNS服务器(tag: "dns-google", address: "8.8.8.8"),
-                SingBoxDNS服务器(tag: "dns-cloudflare", address: "1.1.1.1")
+                SingBoxDNS服务器(tag: "dns-google", address: "8.8.8.8", detour: "proxy"),
+                SingBoxDNS服务器(tag: "dns-cloudflare", address: "1.1.1.1", detour: "proxy")
             ]
         }
 

@@ -34,11 +34,11 @@ jobs:
       - name: 选择 Xcode 15.4
         run: sudo xcode-select -s /Applications/Xcode_15.4.app
 
-      - name: 安装 Go
+      - name: 安装 Go 1.22
         run: |
           brew install go@1.22
-          echo 'export PATH="/usr/local/opt/go@1.22/bin:$PATH"' >> $GITHUB_ENV
-          export PATH="/usr/local/opt/go@1.22/bin:$PATH"
+          echo 'export PATH="/opt/homebrew/opt/go@1.22/bin:$PATH"' >> $GITHUB_ENV
+          export PATH="/opt/homebrew/opt/go@1.22/bin:$PATH"
           go version
           echo "export PATH=\$PATH:$(go env GOPATH)/bin" >> $GITHUB_ENV
 
@@ -68,7 +68,7 @@ jobs:
 
           # 添加依赖（gomobile bind 需要）
           echo "添加依赖..."
-          go get -tool golang.org/x/mobile/cmd/gobind
+          go install golang.org/x/mobile/cmd/gobind@latest
           go mod download
           go mod tidy
 

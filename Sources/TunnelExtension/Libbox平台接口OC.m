@@ -7,6 +7,42 @@
 
 #import "Libbox平台接口OC.h"
 #import <objc/runtime.h>
+#include <ifaddrs.h>
+#include <net/if.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+
+#pragma mark - 网络接口迭代器
+
+/// 网络接口迭代器（实现 LibboxNetworkInterfaceIterator 协议）
+@interface 网络接口迭代器 : NSObject <LibboxNetworkInterfaceIterator>
+/// 接口列表
+@property (nonatomic, strong) NSArray<LibboxNetworkInterface *> *接口列表;
+/// 当前索引
+@property (nonatomic, assign) NSInteger 当前索引;
+@end
+
+@implementation 网络接口迭代器
+
+- (instancetype)initWith接口列表:(NSArray<LibboxNetworkInterface *> *)列表 {
+    self = [super init];
+    if (self) {
+        _接口列表 = 列表;
+        _当前索引 = 0;
+    }
+    return self;
+}
+
+- (LibboxNetworkInterface * _Nullable)next {
+    if (self.当前索引 < self.接口列表.count) {
+        LibboxNetworkInterface *接口 = self.接口列表[self.当前索引];
+        self.当前索引 += 1;
+        return 接口;
+    }
+    return nil;
+}
+
+@end
 
 @implementation Libbox平台接口OC
 
@@ -66,9 +102,59 @@
     return YES;
 }
 
-/// 获取网络接口列表（iOS 返回空，由系统管理）
+/// 获取网络接口列表（使用 ifaddrs 获取系统真实接口）
 - (id<LibboxNetworkInterfaceIterator> _Nullable)getInterfaces:(NSError * _Nullable * _Nullable)error {
-    return nil;
+    struct ifaddrs *接口链表 = NULL;
+    if (getifaddrs(&接口链表) != 0) {
+        return nil;
+    }
+
+    NSMutableArray<LibboxNetworkInterface *> *接口列表 = [NSMutableArray array];
+    int32_t 索引 = 0;
+
+    for (struct ifaddrs *当前 = 接口链表; 当前 != NULL; 当前 = 当前->ifa_next) {
+        // 跳过无地址的接口
+        if (当前->ifa_addr == NULL) continue;
+
+        // 只处理 IPv4 接口
+        if (当前->ifa_addr->sa_family != AF_INET) continue;
+
+        NSString *接口名 = [NSString stringWithUTF8String:当前->ifa_name];
+        // 跳过回环接口和隧道接口
+        if ([接口名 isEqualToString:@"lo0"]) continue;
+        if ([接口名 hasPrefix:@"utun"]) continue;
+        if ([接口名 hasPrefix:@"ipsec"]) continue;
+
+        struct sockaddr_in *地址 = (struct sockaddr_in *)当前->ifa_addr;
+        NSString *IP字符串 = [NSString stringWithUTF8String:inet_ntoa(地址->sin_addr)];
+
+        // 跳过无有效 IP 的接口
+        if ([IP字符串 isEqualToString:@"0.0.0.0"]) continue;
+
+        LibboxNetworkInterface *接口 = [[LibboxNetworkInterface alloc] init];
+        接口.index = 索引;
+        接口.name = 接口名;
+        int32_t MTU值 = 1500;
+        if (当前->ifa_data != NULL) {
+            MTU值 = (int32_t)((struct if_data *)当前->ifa_data)->ifi_mtu;
+        }
+        接口.mtu = MTU值;
+        接口.flags = (int32_t)当前->ifa_flags;
+        接口.type = 0; // 0 表示未知类型
+        接口.metered = NO;
+        // addresses 留空（nil），sing-box 不需要具体地址
+
+        [接口列表 addObject:接口];
+        索引 += 1;
+    }
+
+    freeifaddrs(接口链表);
+
+    if (接口列表.count == 0) {
+        return nil;
+    }
+
+    return [[网络接口迭代器 alloc] initWith接口列表:接口列表];
 }
 
 /// 读取 WIFI 状态（iOS 不使用，返回 nil）

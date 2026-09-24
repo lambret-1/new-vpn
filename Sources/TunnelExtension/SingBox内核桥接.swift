@@ -29,8 +29,7 @@ final class Libbox平台接口: LibboxPlatformInterface {
 
     /// 打开 TUN 接口，返回 packetFlow 的文件描述符
     /// 这是 sing-box 内核能读写系统 VPN 数据包的关键
-    @objc(openTun:ret0_:error:)
-    func openTun(_ options: LibboxTunOptions?, ret0_: UnsafeMutablePointer<Int32>?, error: NSErrorPointer) -> Bool {
+    override func openTun(_ options: LibboxTunOptions?, ret0_: UnsafeMutablePointer<Int32>?) -> Bool {
         guard tun文件描述符 >= 0 else {
             日志回调?(4, "TUN 文件描述符无效")
             return false

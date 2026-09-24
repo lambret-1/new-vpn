@@ -70,8 +70,23 @@ jobs:
           go mod download
           go mod tidy
 
+          # 补丁：强制引用 golang.org/x/net/http2，解决链接错误
+          echo "添加链接补丁..."
+          cat > /tmp/sing-box/experimental/libbox/linkfix.go << 'PATCH_EOF'
+package libbox
+
+import (
+	"reflect"
+	"golang.org/x/net/http2"
+)
+
+// 强制保留 http2.Transport 类型及其所有字段的符号
+var _ = reflect.TypeOf(http2.Transport{}).NumField()
+var _ = &http2.Transport{}
+PATCH_EOF
+
           echo "开始编译 libbox.xcframework..."
-          gomobile bind -target=ios -gcflags=all=-l -o $GITHUB_WORKSPACE/Frameworks/libbox.xcframework ./experimental/libbox 2>&1 | tail -50
+          gomobile bind -target=ios -o $GITHUB_WORKSPACE/Frameworks/libbox.xcframework ./experimental/libbox 2>&1 | tail -50
 
           if [ -d "$GITHUB_WORKSPACE/Frameworks/libbox.xcframework" ]; then
             echo "编译成功"

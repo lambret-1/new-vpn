@@ -66,9 +66,7 @@ jobs:
           export PATH=$PATH:$(go env GOPATH)/bin
           cd /tmp/sing-box
 
-          # 添加依赖（gomobile bind 需要）
-          echo "添加依赖..."
-          go get -tool golang.org/x/mobile/cmd/gobind
+          # 依赖已在前面步骤安装，直接编译
           go mod download
           go mod tidy
 

@@ -38,7 +38,7 @@ final class Libbox平台接口: NSObject, LibboxPlatformInterfaceProtocol {
 
     func useProcFS() -> Bool { false }
 
-    func usePlatformAutoDetectInterfaceControl() -> Bool { false }
+    func usePlatformAutoDetectControl() -> Bool { false }
 
     func autoDetectInterfaceControl(_ fd: Int32, error: NSErrorPointer) -> Bool { true }
 

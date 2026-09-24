@@ -355,7 +355,8 @@ struct SingBox出站配置: Codable, Equatable {
         配置.serverPort = 端口
         配置.uuid = UUID
         配置.flow = 流控
-        配置.security = 加密
+        // 注意：VLESS 出站没有 security 字段，那是 VMess 的字段
+        // security 字段会导致 sing-box 解析配置失败
         配置.tls = TLS
         配置.transport = 传输
         return 配置

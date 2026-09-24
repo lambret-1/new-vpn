@@ -396,10 +396,10 @@ final class 隧道管理器: NSObject, ObservableObject {
         }
     }
 
-    /// 创建并保存 VPN 配置
+    /// 创建并保存 VPN 配置（参考 sing-box-for-apple，直接用代码创建，不依赖 mobileconfig 描述文件）
     private func 创建并保存配置(完成: @escaping (Bool) -> Void) {
         let 管理器 = NETunnelProviderManager()
-        管理器.localizedDescription = "newVPN 隧道"
+        管理器.localizedDescription = "newVPN"
 
         let 协议配置 = NETunnelProviderProtocol()
         协议配置.providerBundleIdentifier = 隧道常量.扩展BundleID
@@ -407,24 +407,19 @@ final class 隧道管理器: NSObject, ObservableObject {
         管理器.protocolConfiguration = 协议配置
         管理器.isEnabled = true
 
-        管理器.saveToPreferences { 错误 in
+        管理器.saveToPreferences { [weak self] 错误 in
+            guard let self = self else { return }
+
             if let 错误 = 错误 {
                 调试日志管理器.共享.错误("隧道", "保存VPN配置失败：\(错误.localizedDescription)")
                 完成(false)
                 return
             }
-            调试日志管理器.共享.信息("隧道", "VPN配置保存成功")
-            // 重新加载配置
-            NETunnelProviderManager.loadAllFromPreferences { 列表, _ in
-                if let 匹配的管理器 = 列表?.first(where: { 管理器 in
-                    guard let 协议 = 管理器.protocolConfiguration as? NETunnelProviderProtocol else { return false }
-                    return 协议.providerBundleIdentifier == 隧道常量.扩展BundleID
-                }) {
-                    self.vpn管理器 = 匹配的管理器
-                    调试日志管理器.共享.信息("隧道", "已匹配并设置VPN管理器")
-                }
-                完成(true)
-            }
+
+            调试日志管理器.共享.信息("隧道", "VPN配置保存成功，直接使用创建的管理器")
+            // 保存成功后直接使用创建的管理器，不需要重新加载
+            self.vpn管理器 = 管理器
+            完成(true)
         }
     }
 

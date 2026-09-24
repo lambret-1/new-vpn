@@ -227,15 +227,13 @@ struct SingBox入站配置: Codable, Equatable {
                         MTU: Int = 1500,
                         自动路由: Bool = true,
                         严格路由: Bool = true,
-                        网络栈: String = "system",
-                        接口名: String = "utun123") -> SingBox入站配置 {
+                        网络栈: String = "system") -> SingBox入站配置 {
         var 配置 = SingBox入站配置(type: "tun", tag: 标签)
         配置.address = [地址]
         配置.mtu = MTU
         配置.autoRoute = 自动路由
         配置.strictRoute = 严格路由
         配置.stack = 网络栈
-        配置.interfaceName = 接口名
         return 配置
     }
 
@@ -643,12 +641,8 @@ struct SingBox拨号器配置: Codable, Equatable {
 struct SingBox路由配置: Codable, Equatable {
     /// 最终出站标签
     var final: String?
-    /// 域名解析策略
-    var domainStrategy: String?
     /// 自动检测接口
     var autoDetectInterface: Bool?
-    /// 独立域
-    var independentDomain: Bool?
     /// 路由规则列表
     var rules: [SingBox路由规则]?
     /// 规则集列表
@@ -657,7 +651,7 @@ struct SingBox路由配置: Codable, Equatable {
     /// 默认配置
     static let 默认 = SingBox路由配置(
         final: "proxy",
-        domainStrategy: "ipv4_only",
+        autoDetectInterface: true,
         rules: [
             SingBox路由规则(
                 protocol_: ["dns"],

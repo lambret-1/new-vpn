@@ -319,7 +319,6 @@ final class SingBox配置生成器 {
 
         return SingBox路由配置(
             final: "proxy",
-            domainStrategy: "ipv4_only",
             autoDetectInterface: true,
             rules: 规则列表
         )

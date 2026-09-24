@@ -95,26 +95,24 @@ final class SingBox配置生成器 {
             }
         }
 
-        // 默认 DNS 服务器（参考 sing-box 官方客户端配置）
-        // TUN 入站 dns_address 直接拦截 DNS 查询交给 DNS 模块
-        // dns_resolver: 国内直连 DNS，用于解析其他 DNS 服务器域名，避免回环
-        // dns_proxy: TLS 加密 DNS，走代理出站，用于普通域名解析
+        // 默认 DNS 服务器（完全参考 sing-box 官方客户端配置格式）
+        // dns_resolver: 国内直连 UDP DNS，用于解析其他 DNS 服务器域名，避免回环
+        // dns_proxy: TLS 加密 DNS，用于普通域名解析
+        // 注意：官方配置中 DNS 服务器没有 detour 字段，出站由路由规则控制
         if 服务器列表.isEmpty {
             服务器列表 = [
                 SingBoxDNS服务器(
                     tag: "dns_resolver",
-                    address: "223.5.5.5",
+                    address: "",
                     type: "udp",
-                    server: "223.5.5.5",
-                    detour: "direct"
+                    server: "223.5.5.5"
                 ),
                 SingBoxDNS服务器(
                     tag: "dns_proxy",
-                    address: "tls://8.8.8.8",
+                    address: "",
                     type: "tls",
                     server: "8.8.8.8",
-                    domainResolver: "dns_resolver",
-                    detour: "proxy"
+                    domainResolver: "dns_resolver"
                 )
             ]
         }
@@ -141,8 +139,7 @@ final class SingBox配置生成器 {
                 MTU: 4064,
                 自动路由: false,
                 严格路由: false,
-                网络栈: "gvisor",
-                DNS地址: "10.0.0.2"
+                网络栈: "gvisor"
             ),
             // Mixed 入站（HTTP+SOCKS5，用于本地应用）
             SingBox入站配置.mixed入站(
@@ -198,11 +195,11 @@ final class SingBox配置生成器 {
             ))
         }
 
-        // Direct 出站
-        出站列表.append(SingBox出站配置.direct出站(标签: "direct"))
+        // Direct 出站（标签大写参考官方客户端）
+        出站列表.append(SingBox出站配置.direct出站(标签: "DIRECT"))
 
         // Block 出站
-        出站列表.append(SingBox出站配置.block出站(标签: "block"))
+        出站列表.append(SingBox出站配置.block出站(标签: "REJECT"))
 
         // 注意：不再需要 dns-out 出站，TUN 入站的 dns_address 直接拦截 DNS 查询交给 DNS 模块
 
@@ -302,13 +299,13 @@ final class SingBox配置生成器 {
     private func 生成路由配置(分流规则: [分流规则项], 节点: 节点模型?) -> SingBox路由配置 {
         var 规则列表: [SingBox路由规则] = []
 
-        // 注意：DNS 查询由 TUN 入站的 dns_address 直接拦截交给 DNS 模块
-        // 不再需要 protocol=dns → dns-out 路由规则，从根源避免 DNS 回环
+        // 注意：DNS 查询由 TUN 入站自动拦截交给 DNS 模块（sing-box 内置机制）
+        // 参考官方客户端配置，不需要 dns-out 出站和 protocol=dns 路由规则
 
         // 私有 IP 直连
         规则列表.append(SingBox路由规则(
             ipIsPrivate: true,
-            outbound: "direct"
+            outbound: "DIRECT"
         ))
 
         // 局域网地址直连
@@ -322,7 +319,7 @@ final class SingBox配置生成器 {
                 "224.0.0.0/4",
                 "255.255.255.255/32"
             ],
-            outbound: "direct"
+            outbound: "DIRECT"
         ))
 
         // 应用分流规则
@@ -343,9 +340,9 @@ final class SingBox配置生成器 {
     private func 分流规则转换为路由规则(_ 规则: 分流规则项) -> SingBox路由规则? {
         let 出站标签: String
         switch 规则.动作 {
-        case .直连: 出站标签 = "direct"
+        case .直连: 出站标签 = "DIRECT"
         case .代理: 出站标签 = "proxy"
-        case .拦截, .拒绝: 出站标签 = "block"
+        case .拦截, .拒绝: 出站标签 = "REJECT"
         case .全局代理: 出站标签 = "proxy"
         case .放行: return nil // 放行不生成规则
         }

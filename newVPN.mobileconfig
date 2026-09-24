@@ -8,7 +8,7 @@
     <key>PayloadIdentifier</key>
     <string>com.newvpn.app.config</string>
     <key>PayloadUUID</key>
-    <string>11111111-2222-3333-4444-555555555555</string>
+    <string>78ae5732-a11e-9d26-47d8-abf784d65c0d</string>
     <key>PayloadType</key>
     <string>Configuration</string>
     <key>PayloadVersion</key>
@@ -22,7 +22,7 @@
             <key>PayloadIdentifier</key>
             <string>com.newvpn.app.config.vpn</string>
             <key>PayloadUUID</key>
-            <string>66666666-7777-8888-9999-000000000000</string>
+            <string>010a7f90-fa4c-ffde-cf5f-c6b423689bdd</string>
             <key>PayloadType</key>
             <string>com.apple.vpn.managed</string>
             <key>PayloadVersion</key>

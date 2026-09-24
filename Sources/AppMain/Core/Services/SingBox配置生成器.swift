@@ -96,15 +96,12 @@ final class SingBox配置生成器 {
         }
 
         // 默认 DNS 服务器
-        // 关键：detour=proxy 让 DNS 查询直接通过代理出站发送
-        // 避免查询被 protocol=dns 路由规则匹配到 dns-out，形成 DNS 回环死循环
+        // TUN 入站 dns_address 直接拦截 DNS 查询交给 DNS 模块
+        // detour=proxy 让上游 DNS 查询通过代理出站发送
         if 服务器列表.isEmpty {
             服务器列表 = [
                 SingBoxDNS服务器(tag: "dns-google", address: "8.8.8.8", detour: "proxy"),
-                SingBoxDNS服务器(tag: "dns-cloudflare", address: "1.1.1.1", detour: "proxy"),
-                // 专门用于解析代理节点域名的 DNS 服务器，走 direct 避免回环
-                // 当出站 server 是域名时，address_resolver 指向此服务器
-                SingBoxDNS服务器(tag: "dns-direct", address: "223.5.5.5", detour: "direct")
+                SingBoxDNS服务器(tag: "dns-cloudflare", address: "1.1.1.1", detour: "proxy")
             ]
         }
 
@@ -130,7 +127,8 @@ final class SingBox配置生成器 {
                 MTU: 4064,
                 自动路由: false,
                 严格路由: false,
-                网络栈: "gvisor"
+                网络栈: "gvisor",
+                DNS地址: "10.0.0.2"
             ),
             // Mixed 入站（HTTP+SOCKS5，用于本地应用）
             SingBox入站配置.mixed入站(
@@ -192,40 +190,23 @@ final class SingBox配置生成器 {
         // Block 出站
         出站列表.append(SingBox出站配置.block出站(标签: "block"))
 
-        // DNS 出站
-        出站列表.append(SingBox出站配置.dns出站(标签: "dns-out"))
+        // 注意：不再需要 dns-out 出站，TUN 入站的 dns_address 直接拦截 DNS 查询交给 DNS 模块
 
         return 出站列表
     }
 
     /// 将节点模型转换为 sing-box 出站配置
     func 节点转换为出站(_ 节点: 节点模型, 标签: String) -> SingBox出站配置? {
-        var 出站: SingBox出站配置?
         switch 节点.协议 {
         case .vless:
-            出站 = 生成VLESS出站(节点, 标签: 标签)
+            return 生成VLESS出站(节点, 标签: 标签)
         case .vmess:
-            出站 = 生成VMess出站(节点, 标签: 标签)
+            return 生成VMess出站(节点, 标签: 标签)
         case .trojan:
-            出站 = 生成Trojan出站(节点, 标签: 标签)
+            return 生成Trojan出站(节点, 标签: 标签)
         case .shadowsocks:
-            出站 = 生成Shadowsocks出站(节点, 标签: 标签)
+            return 生成Shadowsocks出站(节点, 标签: 标签)
         }
-        // 关键：如果服务器地址是域名，设置 address_resolver 走 dns-direct
-        // 避免解析节点域名时走 detour=proxy 的 DNS 服务器形成回环死循环
-        if var 配置 = 出站,
-           let 服务器 = 配置.server,
-           是域名(服务器) {
-            配置.addressResolver = "dns-direct"
-            出站 = 配置
-        }
-        return 出站
-    }
-
-    /// 判断字符串是否为域名（包含字母且不是纯 IP）
-    private func 是域名(_ 字符串: String) -> Bool {
-        // 包含字母即为域名（IP 只含数字和点）
-        return 字符串.rangeOfCharacter(from: .letters) != nil
     }
 
     /// 生成 TLS 配置
@@ -307,19 +288,8 @@ final class SingBox配置生成器 {
     private func 生成路由配置(分流规则: [分流规则项], 节点: 节点模型?) -> SingBox路由配置 {
         var 规则列表: [SingBox路由规则] = []
 
-        // 关键：DNS 服务器上游查询直接走 proxy，避免被 protocol=dns 规则匹配走 dns-out 形成回环
-        // 此规则必须在 protocol=dns 规则之前
-        规则列表.append(SingBox路由规则(
-            ipCidr: ["8.8.8.8/32", "8.8.4.4/32", "1.1.1.1/32", "1.0.0.1/32"],
-            port: [53],
-            outbound: "proxy"
-        ))
-
-        // DNS 流量走 dns-out（由 sing-box DNS 模块处理）
-        规则列表.append(SingBox路由规则(
-            protocol_: ["dns"],
-            outbound: "dns-out"
-        ))
+        // 注意：DNS 查询由 TUN 入站的 dns_address 直接拦截交给 DNS 模块
+        // 不再需要 protocol=dns → dns-out 路由规则，从根源避免 DNS 回环
 
         // 私有 IP 直连
         规则列表.append(SingBox路由规则(

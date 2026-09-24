@@ -440,7 +440,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         }
 
         日志.info("正在启动 sing-box 内核，配置：\(配置路径)")
-        记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "正在启动内核...")
+        记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "正在启动内核，配置路径存在")
 
         // 读取配置文件内容
         guard let 配置数据 = try? Data(contentsOf: URL(fileURLWithPath: 配置路径)),
@@ -450,12 +450,15 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             完成(false)
             return
         }
+        记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "配置读取成功，大小：\(配置内容.utf8.count) 字节")
 
         // 获取工作目录（App Group 容器目录）
         let 工作目录 = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.com.newvpn.app")?.path ?? NSTemporaryDirectory()
+        记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "工作目录：\(工作目录)")
 
         // 初始化 libbox
         singBox桥接.初始化(工作目录: 工作目录)
+        记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "libbox 初始化完成")
 
         // 设置日志回调
         singBox桥接.日志回调 = { [weak self] 级别, 内容 in
@@ -470,31 +473,33 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             case 5: 级别字符串 = "致命"
             default: 级别字符串 = "未知"
             }
-            self.记录扩展日志(级别: 级别字符串, 模块: "sing-box", 内容: 内容)
+            self.记录扩展日志(级别: 级别字符串, 模块: "sing-box内核", 内容: 内容)
         }
+        记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "日志回调已设置")
 
         // 获取 packetFlow 的文件描述符（通过 KVC 获取私有属性）
-        guard let tun文件描述符 = packetFlow.value(forKey: "fileDescriptor") as? Int32 else {
-            日志.error("无法获取 packetFlow 文件描述符")
-            记录扩展日志(级别: "错误", 模块: "sing-box", 内容: "无法获取 TUN 文件描述符，KVC 获取 fileDescriptor 失败")
+        记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "开始获取 TUN 文件描述符...")
+        let 文件描述符对象 = packetFlow.value(forKey: "fileDescriptor")
+        记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "KVC 返回类型：\(type(of: 文件描述符对象))，值：\(文件描述符对象 ?? "nil")")
+
+        guard let 文件描述符数字 = 文件描述符对象 as? NSNumber else {
+            记录扩展日志(级别: "错误", 模块: "sing-box", 内容: "fileDescriptor 不是 NSNumber 类型，无法转换")
             完成(false)
             return
         }
 
-        日志.info("TUN 文件描述符：\(tun文件描述符)")
+        let tun文件描述符 = 文件描述符数字.int32Value
         记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "获取到 TUN 文件描述符：\(tun文件描述符)")
 
-        // 记录配置大小用于调试
-        记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "配置大小：\(配置内容.utf8.count) 字节")
-
         // 启动内核
+        记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "调用 LibboxNewService 创建服务...")
         let 成功 = singBox桥接.启动内核(配置内容: 配置内容, tun文件描述符: tun文件描述符)
 
         if 成功 {
             singBox运行中 = true
             记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "内核启动成功，TUN 由 sing-box 接管")
         } else {
-            记录扩展日志(级别: "错误", 模块: "sing-box", 内容: "内核启动失败，请查看上方 sing-box 错误日志")
+            记录扩展日志(级别: "错误", 模块: "sing-box", 内容: "内核启动失败，请查看上方 sing-box内核 错误日志")
         }
 
         完成(成功)

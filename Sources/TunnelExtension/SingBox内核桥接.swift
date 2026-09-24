@@ -76,28 +76,32 @@ final class SingBox内核桥接 {
             return true
         }
 
-        日志回调?(2, "正在启动 sing-box 内核...")
+        日志回调?(2, "桥接层：开始启动内核，TUN fd=\(tun文件描述符)")
 
         // 设置 TUN 文件描述符
         平台接口.tun文件描述符 = tun文件描述符
+        日志回调?(2, "桥接层：TUN 文件描述符已设置到平台接口")
 
         // 创建服务
+        日志回调?(2, "桥接层：调用 LibboxNewService...")
         var 错误: NSError?
         guard let 新服务 = LibboxNewService(配置内容, 平台接口, &错误) else {
-            日志回调?(4, "创建 sing-box 服务失败：\(错误?.localizedDescription ?? "未知错误")")
+            日志回调?(4, "桥接层：LibboxNewService 返回 nil，错误：\(错误?.localizedDescription ?? "未知")")
             return false
         }
+        日志回调?(2, "桥接层：LibboxNewService 成功，服务对象已创建")
 
         服务 = 新服务
 
         // 启动服务（Swift 中 start 映射为 throws）
+        日志回调?(2, "桥接层：调用 service.start()...")
         do {
             try 新服务.start()
             是否运行中 = true
-            日志回调?(2, "sing-box 内核启动成功")
+            日志回调?(2, "桥接层：service.start() 成功，内核运行中")
             return true
         } catch {
-            日志回调?(4, "sing-box 内核启动失败：\(error.localizedDescription)")
+            日志回调?(4, "桥接层：service.start() 抛出异常：\(error.localizedDescription)")
             服务 = nil
             return false
         }

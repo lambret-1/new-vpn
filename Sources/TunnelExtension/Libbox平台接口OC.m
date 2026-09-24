@@ -55,12 +55,12 @@
 }
 
 /// 读取 WIFI 状态（iOS 不使用，返回 nil）
-- (id<LibboxWIFIState> _Nullable)readWIFIState {
+- (LibboxWIFIState * _Nullable)readWIFIState {
     return nil;
 }
 
 /// 发送通知（iOS 不使用，返回 NO）
-- (BOOL)sendNotification:(id<LibboxNotification> _Nullable)notification error:(NSError * _Nullable * _Nullable)error {
+- (BOOL)sendNotification:(LibboxNotification * _Nullable)notification error:(NSError * _Nullable * _Nullable)error {
     return NO;
 }
 

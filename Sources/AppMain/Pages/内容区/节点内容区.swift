@@ -22,13 +22,31 @@ struct 节点内容区: View {
                 测速管理器.取消测速()
             }
 
-            // 分组列表
-            LazyVStack(spacing: 10) {
-                ForEach($状态.节点分组列表) { $分组 in
-                    分组行视图(分组: $分组)
+            if 状态.节点分组列表.isEmpty {
+                // 空状态：无节点时提示添加远程订阅
+                VStack(spacing: 16) {
+                    Image(systemName: "server.rack")
+                        .font(.system(size: 48))
+                        .foregroundColor(.secondary)
+                    Text("暂无节点")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(.secondary)
+                    Text("请在「编辑配置文件」中添加远程订阅并更新")
+                        .font(.system(size: 14))
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
                 }
+                .frame(maxWidth: .infinity)
+                .padding(.top, 60)
+            } else {
+                // 分组列表（远程订阅导入的节点按订阅名称分组常驻显示）
+                LazyVStack(spacing: 10) {
+                    ForEach($状态.节点分组列表) { $分组 in
+                        分组行视图(分组: $分组)
+                    }
+                }
+                .padding(.horizontal, 15)
             }
-            .padding(.horizontal, 15)
         }
     }
 }

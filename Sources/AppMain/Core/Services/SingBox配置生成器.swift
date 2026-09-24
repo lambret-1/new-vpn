@@ -101,7 +101,10 @@ final class SingBox配置生成器 {
         if 服务器列表.isEmpty {
             服务器列表 = [
                 SingBoxDNS服务器(tag: "dns-google", address: "8.8.8.8", detour: "proxy"),
-                SingBoxDNS服务器(tag: "dns-cloudflare", address: "1.1.1.1", detour: "proxy")
+                SingBoxDNS服务器(tag: "dns-cloudflare", address: "1.1.1.1", detour: "proxy"),
+                // 专门用于解析代理节点域名的 DNS 服务器，走 direct 避免回环
+                // 当出站 server 是域名时，address_resolver 指向此服务器
+                SingBoxDNS服务器(tag: "dns-direct", address: "223.5.5.5", detour: "direct")
             ]
         }
 
@@ -197,16 +200,32 @@ final class SingBox配置生成器 {
 
     /// 将节点模型转换为 sing-box 出站配置
     func 节点转换为出站(_ 节点: 节点模型, 标签: String) -> SingBox出站配置? {
+        var 出站: SingBox出站配置?
         switch 节点.协议 {
         case .vless:
-            return 生成VLESS出站(节点, 标签: 标签)
+            出站 = 生成VLESS出站(节点, 标签: 标签)
         case .vmess:
-            return 生成VMess出站(节点, 标签: 标签)
+            出站 = 生成VMess出站(节点, 标签: 标签)
         case .trojan:
-            return 生成Trojan出站(节点, 标签: 标签)
+            出站 = 生成Trojan出站(节点, 标签: 标签)
         case .shadowsocks:
-            return 生成Shadowsocks出站(节点, 标签: 标签)
+            出站 = 生成Shadowsocks出站(节点, 标签: 标签)
         }
+        // 关键：如果服务器地址是域名，设置 address_resolver 走 dns-direct
+        // 避免解析节点域名时走 detour=proxy 的 DNS 服务器形成回环死循环
+        if var 配置 = 出站,
+           let 服务器 = 配置.server,
+           是域名(服务器) {
+            配置.addressResolver = "dns-direct"
+            出站 = 配置
+        }
+        return 出站
+    }
+
+    /// 判断字符串是否为域名（包含字母且不是纯 IP）
+    private func 是域名(_ 字符串: String) -> Bool {
+        // 包含字母即为域名（IP 只含数字和点）
+        return 字符串.rangeOfCharacter(from: .letters) != nil
     }
 
     /// 生成 TLS 配置

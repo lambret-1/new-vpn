@@ -300,6 +300,8 @@ struct SingBox出站配置: Codable, Equatable {
     var tag: String
     /// 服务器地址
     var server: String?
+    /// 服务器地址解析器（解析服务器域名时使用的 DNS 服务器标签，避免 DNS 回环）
+    var addressResolver: String?
     /// 服务器端口
     var serverPort: Int?
     /// TCP 快速打开

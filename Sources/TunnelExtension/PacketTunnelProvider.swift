@@ -507,20 +507,37 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "socketpair 创建成功，sing-box端=\(singBox端fd)，转发端=\(转发端fd)")
 
         // 启动内核（将 sing-box 端的 fd 传给 openTun）
-        记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "调用 LibboxNewService 创建服务...")
-        let 成功 = singBox桥接.启动内核(配置内容: 配置内容, tun文件描述符: singBox端fd)
-
-        if 成功 {
-            singBox运行中 = true
-            记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "内核启动成功，启动数据包转发")
-            // 启动数据包转发：在转发端fd和packetFlow之间转发IP包
-            启动数据包转发()
-        } else {
-            记录扩展日志(级别: "错误", 模块: "sing-box", 内容: "内核启动失败，请查看上方 sing-box内核 错误日志")
-            关闭SocketPair()
+        // 先用最小配置测试 LibboxNewService 是否能成功
+        let 最小配置 = """
+        {
+          "inbounds": [{"type": "mixed", "tag": "mixed-in", "listen": "127.0.0.1", "listen_port": 7890}],
+          "outbounds": [{"type": "direct", "tag": "direct"}]
         }
+        """
+        记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "先用最小配置测试 LibboxNewService...")
+        let 最小配置成功 = singBox桥接.启动内核(配置内容: 最小配置, tun文件描述符: singBox端fd)
+        记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "最小配置测试结果：\(最小配置成功 ? "成功" : "失败")")
 
-        完成(成功)
+        if 最小配置成功 {
+            // 最小配置成功，停止后用完整配置启动
+            singBox桥接.停止内核()
+            记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "最小配置成功，用完整配置启动...")
+            let 成功 = singBox桥接.启动内核(配置内容: 配置内容, tun文件描述符: singBox端fd)
+
+            if 成功 {
+                singBox运行中 = true
+                记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "内核启动成功，启动数据包转发")
+                启动数据包转发()
+            } else {
+                记录扩展日志(级别: "错误", 模块: "sing-box", 内容: "完整配置启动失败，请查看上方 sing-box内核 错误日志")
+                关闭SocketPair()
+            }
+            完成(成功)
+        } else {
+            记录扩展日志(级别: "错误", 模块: "sing-box", 内容: "最小配置也失败，问题出在平台接口或libbox框架")
+            关闭SocketPair()
+            完成(false)
+        }
     }
 
     /// 停止 sing-box 内核

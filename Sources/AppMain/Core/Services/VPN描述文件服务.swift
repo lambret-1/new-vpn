@@ -38,20 +38,20 @@ final class VPN描述文件服务 {
         // 服务器地址为空时使用 127.0.0.1 作为默认值
         let 服务器地址 = 描述文件.服务器地址.isEmpty ? "127.0.0.1" : 描述文件.服务器地址
 
-        // 生成 VendorConfig（自定义参数，由 Packet Tunnel Provider 代码解析）
-        var 厂商配置: [String: Any] = [
+        // 生成 ProviderConfiguration（自定义参数，由 Packet Tunnel Provider 代码解析）
+        var 提供者配置: [String: Any] = [
             "serverAddress": 服务器地址
         ]
 
         if let 节点ID = 描述文件.关联节点ID {
-            厂商配置["nodeId"] = 节点ID.uuidString
+            提供者配置["nodeId"] = 节点ID.uuidString
         }
         if let 节点名称 = 描述文件.关联节点名称 {
-            厂商配置["nodeName"] = 节点名称
+            提供者配置["nodeName"] = 节点名称
         }
 
         // 转换为 XML 兼容的字典
-        let 厂商配置XML = 字典转XML(厂商配置)
+        let 提供者配置XML = 字典转XML(提供者配置)
 
         // 主 App Bundle ID（去掉最后一个组件）
         let 主AppBundleID = 描述文件.扩展BundleID.components(separatedBy: ".").dropLast().joined(separator: ".")
@@ -92,8 +92,15 @@ final class VPN描述文件服务 {
                     <string>\(描述文件.扩展BundleID)</string>
                     <key>ProviderBundleIdentifier</key>
                     <string>\(主AppBundleID)</string>
-                    <key>VendorConfig</key>
-                    \(厂商配置XML)
+                    <key>ProviderType</key>
+                    <string>packet-tunnel</string>
+                    <key>RemoteAddress</key>
+                    <string>\(服务器地址)</string>
+                    <key>VPN</key>
+                    <dict>
+                        <key>ProviderConfiguration</key>
+                        \(提供者配置XML)
+                    </dict>
                     <key>OnDemandEnabled</key>
                     <integer>\(描述文件.按需连接 ? 1 : 0)</integer>
                 </dict>

@@ -21,6 +21,11 @@ NS_ASSUME_NONNULL_BEGIN
 /// 日志回调
 @property (nonatomic, copy, nullable) void (^日志回调)(NSInteger 级别, NSString *内容);
 
+/// 安全获取 packetFlow 的文件描述符（@try/@catch 防止 KVC 崩溃）
+/// @param packetFlow NEPacketTunnelFlow 实例
+/// @return 文件描述符，失败返回 -1，错误信息通过 error 参数返回
++ (int32_t)安全获取文件描述符:(id)packetFlow error:(NSError **)error;
+
 @end
 
 NS_ASSUME_NONNULL_END

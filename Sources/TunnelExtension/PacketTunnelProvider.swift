@@ -477,18 +477,23 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         }
         记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "日志回调已设置")
 
-        // 获取 packetFlow 的文件描述符（通过 KVC 获取私有属性）
-        记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "开始获取 TUN 文件描述符...")
-        let 文件描述符对象 = packetFlow.value(forKey: "fileDescriptor")
-        记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "KVC 返回类型：\(type(of: 文件描述符对象))，值：\(文件描述符对象 ?? "nil")")
+        // 获取 packetFlow 的文件描述符（使用 OC 安全方法，@try/@catch 防止 KVC 崩溃）
+        记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "开始安全获取 TUN 文件描述符...")
+        var 获取错误: NSError?
+        let tun文件描述符 = Libbox平台接口OC.安全获取文件描述符(packetFlow, error: &获取错误)
 
-        guard let 文件描述符数字 = 文件描述符对象 as? NSNumber else {
-            记录扩展日志(级别: "错误", 模块: "sing-box", 内容: "fileDescriptor 不是 NSNumber 类型，无法转换")
+        if let 错误 = 获取错误 {
+            记录扩展日志(级别: "错误", 模块: "sing-box", 内容: "获取 TUN 文件描述符失败：\(错误.localizedDescription)")
             完成(false)
             return
         }
 
-        let tun文件描述符 = 文件描述符数字.int32Value
+        guard tun文件描述符 >= 0 else {
+            记录扩展日志(级别: "错误", 模块: "sing-box", 内容: "TUN 文件描述符无效：\(tun文件描述符)")
+            完成(false)
+            return
+        }
+
         记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "获取到 TUN 文件描述符：\(tun文件描述符)")
 
         // 启动内核

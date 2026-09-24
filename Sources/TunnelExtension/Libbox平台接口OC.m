@@ -49,4 +49,42 @@
     return YES;
 }
 
+#pragma mark - 安全获取文件描述符
+
++ (int32_t)安全获取文件描述符:(id)packetFlow error:(NSError **)error {
+    // 尝试多种属性名获取文件描述符
+    NSArray *属性列表 = @[@"fileDescriptor", @"socket", @"_fileDescriptor", @"_socket", @"fileHandle"];
+
+    for (NSString *属性名 in 属性列表) {
+        @try {
+            id 值 = [packetFlow valueForKey:属性名];
+            if ([值 isKindOfClass:[NSNumber class]]) {
+                return [(NSNumber *)值 intValue];
+            }
+        } @catch (NSException *异常) {
+            // 继续尝试下一个属性名
+        }
+    }
+
+    // 尝试 performSelector 方式
+    NSArray *选择子列表 = @[@"fileDescriptor", @"socket", @"fileDescriptor"];
+    for (NSString *选择子名 in 选择子列表) {
+        SEL 选择子 = NSSelectorFromString(选择子名);
+        if ([packetFlow respondsToSelector:选择子]) {
+            @try {
+                int (*函数指针)(id, SEL) = (int (*)(id, SEL))[packetFlow methodForSelector:选择子];
+                return 函数指针(packetFlow, 选择子);
+            } @catch (NSException *异常) {
+                // 继续尝试
+            }
+        }
+    }
+
+    if (error) {
+        *error = [NSError errorWithDomain:@"com.newvpn.tunnel" code:-2
+                                 userInfo:@{NSLocalizedDescriptionKey: @"所有方式均无法获取 packetFlow 文件描述符"}];
+    }
+    return -1;
+}
+
 @end

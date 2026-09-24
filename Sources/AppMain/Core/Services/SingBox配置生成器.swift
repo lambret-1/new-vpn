@@ -113,8 +113,8 @@ final class SingBox配置生成器 {
                     address: "tls://8.8.8.8",
                     type: "tls",
                     server: "8.8.8.8",
-                    detour: "proxy",
-                    domainResolver: "dns_resolver"
+                    domainResolver: "dns_resolver",
+                    detour: "proxy"
                 )
             ]
         }

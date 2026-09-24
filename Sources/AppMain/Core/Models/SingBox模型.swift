@@ -145,8 +145,6 @@ struct SingBoxDNS服务器: Codable, Equatable {
     var domainResolver: String?
     /// fakeip IPv4 范围（type=fakeip 时使用）
     var inet4Range: String?
-    /// 地址（旧格式兼容，新格式使用 type+server，设为空字符串）
-    var address: String = ""
 
     /// 创建 UDP DNS 服务器
     static func udp服务器(标签: String, 地址: String, 端口: Int? = nil) -> SingBoxDNS服务器 {
@@ -175,7 +173,6 @@ struct SingBoxDNS服务器: Codable, Equatable {
         case serverPort = "server_port"
         case domainResolver = "domain_resolver"
         case inet4Range = "inet4_range"
-        case address
     }
 }
 

@@ -501,6 +501,8 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             return
         }
         记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "配置读取成功，大小：\(配置内容.utf8.count) 字节")
+        // 输出完整配置用于排查 DNS 回环问题
+        记录扩展日志(级别: "调试", 模块: "sing-box", 内容: "完整配置：\(配置内容)")
 
         // 获取工作目录（App Group 容器目录）
         let 工作目录 = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.com.newvpn.app")?.path ?? NSTemporaryDirectory()

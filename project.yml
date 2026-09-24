@@ -92,7 +92,7 @@ targets:
         OTHER_LDFLAGS: -framework Libbox
     dependencies:
       - sdk: NetworkExtension.framework
-      - framework: Frameworks/libbox.xcframework
+      - framework: Frameworks/Libbox.xcframework
 
 # Scheme
 schemes:

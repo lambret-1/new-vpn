@@ -67,6 +67,7 @@ jobs:
           # 添加依赖（gomobile bind 需要）
           echo "添加依赖..."
           go get -tool golang.org/x/mobile/cmd/gobind
+          go get golang.org/x/net@latest
           go mod download
           go mod tidy
 

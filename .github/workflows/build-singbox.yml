@@ -64,6 +64,11 @@ jobs:
           export PATH=$PATH:$(go env GOPATH)/bin
           cd /tmp/sing-box
 
+          # 添加 golang.org/x/mobile 依赖（gomobile bind 需要）
+          echo "添加 golang.org/x/mobile 依赖..."
+          go get -tool golang.org/x/mobile/cmd/gobind
+          go mod tidy
+
           echo "开始编译 libbox.xcframework..."
           gomobile bind -target=ios -o $GITHUB_WORKSPACE/Frameworks/libbox.xcframework ./experimental/libbox 2>&1 | tail -50
 

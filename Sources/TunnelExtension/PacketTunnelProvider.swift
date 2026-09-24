@@ -378,6 +378,22 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         }
     }
 
+    /// 读取扩展日志（供主 App 通过 IPC 查询）
+    private func 读取扩展日志() -> [[String: Any]] {
+        guard let 共享默认 = 共享默认,
+              let 日志数据 = 共享默认.data(forKey: "tunnelLogs"),
+              let 日志列表 = try? JSONDecoder().decode([扩展日志条目].self, from: 日志数据) else {
+            return []
+        }
+        return 日志列表.map { [
+            "id": $0.id.uuidString,
+            "time": $0.时间.timeIntervalSince1970,
+            "level": $0.级别,
+            "module": $0.模块,
+            "content": $0.内容
+        ]}
+    }
+
     // MARK: - 工具方法
 
     /// 停止原因描述

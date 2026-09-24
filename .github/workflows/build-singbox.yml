@@ -1,0 +1,104 @@
+name: 编译sing-box内核
+
+# 触发条件：手动触发、tag 触发
+on:
+  workflow_dispatch:
+    inputs:
+      singbox_version:
+        description: "sing-box 版本"
+        required: false
+        default: "v1.11.0"
+        type: string
+  push:
+    tags: ["singbox-*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build-libbox:
+    name: 编译libbox XCFramework
+    runs-on: macos-14
+
+    defaults:
+      run:
+        shell: zsh -e {0}
+
+    env:
+      SINGBOX_VERSION: ${{ github.event.inputs.singbox_version || 'v1.11.0' }}
+
+    steps:
+      - name: 拉取代码
+        uses: actions/checkout@v4
+
+      - name: 选择 Xcode 15.4
+        run: sudo xcode-select -s /Applications/Xcode_15.4.app
+
+      - name: 安装 Go
+        run: |
+          brew install go
+          go version
+          echo "export PATH=\$PATH:$(go env GOPATH)/bin" >> $GITHUB_ENV
+
+      - name: 安装 gomobile
+        run: |
+          export PATH=$PATH:$(go env GOPATH)/bin
+          go install golang.org/x/mobile/cmd/gomobile@latest
+          go install golang.org/x/mobile/cmd/gobind@latest
+          gomobile version
+
+      - name: 初始化 gomobile
+        run: |
+          export PATH=$PATH:$(go env GOPATH)/bin
+          gomobile init
+
+      - name: 克隆 sing-box
+        run: |
+          rm -rf /tmp/sing-box
+          git clone --depth 1 --branch $SINGBOX_VERSION https://github.com/SagerNet/sing-box.git /tmp/sing-box
+          cd /tmp/sing-box
+          git log --oneline -1
+
+      - name: 编译 libbox.xcframework
+        run: |
+          export PATH=$PATH:$(go env GOPATH)/bin
+          cd /tmp/sing-box
+
+          echo "开始编译 libbox.xcframework..."
+          gomobile bind -target=ios -o $GITHUB_WORKSPACE/Frameworks/libbox.xcframework ./experimental/libbox 2>&1 | tail -50
+
+          if [ -d "$GITHUB_WORKSPACE/Frameworks/libbox.xcframework" ]; then
+            echo "编译成功"
+            ls -la $GITHUB_WORKSPACE/Frameworks/libbox.xcframework
+            find $GITHUB_WORKSPACE/Frameworks/libbox.xcframework -type f | head -20
+          else
+            echo "编译失败"
+            exit 1
+          fi
+
+      - name: 打包框架
+        run: |
+          cd $GITHUB_WORKSPACE/Frameworks
+          zip -r libbox-ios-${{ env.SINGBOX_VERSION }}.zip libbox.xcframework
+          ls -lh libbox-ios-${{ env.SINGBOX_VERSION }}.zip
+
+      - name: 上传框架到 Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: singbox-${{ env.SINGBOX_VERSION }}
+          name: sing-box libbox ${{ env.SINGBOX_VERSION }}
+          body: |
+            ## sing-box libbox iOS 框架
+
+            **版本**：${{ env.SINGBOX_VERSION }}
+            **平台**：iOS (arm64)
+            **格式**：XCFramework
+
+            **使用方法**：
+            1. 下载 libbox-ios-${{ env.SINGBOX_VERSION }}.zip
+            2. 解压到项目 Frameworks 目录
+            3. 在 Xcode 中添加框架引用
+          files: |
+            Frameworks/libbox-ios-${{ env.SINGBOX_VERSION }}.zip
+          draft: false
+          prerelease: false

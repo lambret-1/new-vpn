@@ -777,28 +777,22 @@ struct SingBox路由配置: Codable, Equatable {
     var final: String?
     /// 自动检测接口
     var autoDetectInterface: Bool?
-    /// 默认域名解析器标签
-    var defaultDomainResolver: String?
     /// 路由规则列表
     var rules: [SingBox路由规则]?
     /// 规则集列表
     var ruleSet: [SingBox规则集]?
 
-    /// 默认配置（对齐官方客户端）
+    /// 默认配置（兼容当前 libbox 版本）
     static let 默认 = SingBox路由配置(
         final: "proxy",
         autoDetectInterface: true,
-        defaultDomainResolver: "dns_resolver",
         rules: [
-            // 第一条：TUN 入站启用嗅探
-            SingBox路由规则(inbound: ["tun-in"], action: "sniff"),
             // 私有 IP 直连
-            SingBox路由规则(ipIsPrivate: true, outbound: "DIRECT", action: "route"),
+            SingBox路由规则(ipIsPrivate: true, outbound: "DIRECT"),
             // 局域网地址直连
             SingBox路由规则(
                 ipCidr: ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8"],
-                outbound: "DIRECT",
-                action: "route"
+                outbound: "DIRECT"
             )
         ]
     )
@@ -806,7 +800,6 @@ struct SingBox路由配置: Codable, Equatable {
     enum CodingKeys: String, CodingKey {
         case final
         case autoDetectInterface = "auto_detect_interface"
-        case defaultDomainResolver = "default_domain_resolver"
         case rules
         case ruleSet = "rule_set"
     }
@@ -878,10 +871,6 @@ struct SingBox路由规则: Codable, Equatable {
     var hijackDns: Bool?
     /// 目标出站标签
     var outbound: String?
-    /// 规则动作（sniff/route/reject/hijack-dns）
-    var action: String?
-    /// Clash 模式（Global/Direct/Rule）
-    var clashMode: String?
     /// 规则集标签
     var ruleSet: [String]?
     /// 是否取反
@@ -920,8 +909,6 @@ struct SingBox路由规则: Codable, Equatable {
         case networkType
         case hijackDns
         case outbound
-        case action
-        case clashMode = "clash_mode"
         case ruleSet
         case invert
     }

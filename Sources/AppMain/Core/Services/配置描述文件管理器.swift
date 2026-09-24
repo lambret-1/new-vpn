@@ -418,18 +418,12 @@ final class 配置描述文件管理器: ObservableObject {
           "route": {
             "rules": [
               {
-                "inbound": "tun-in",
-                "action": "sniff"
-              },
-              {
                 "ip_is_private": true,
-                "outbound": "DIRECT",
-                "action": "route"
+                "outbound": "DIRECT"
               }
             ],
             "final": "DIRECT",
-            "auto_detect_interface": true,
-            "default_domain_resolver": "dns_resolver"
+            "auto_detect_interface": true
           }
         }
         """

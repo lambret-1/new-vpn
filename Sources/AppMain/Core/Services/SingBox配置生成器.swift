@@ -253,20 +253,16 @@ final class SingBox配置生成器 {
         )
     }
 
-    // MARK: - 生成路由配置（对齐官方客户端格式）
+    // MARK: - 生成路由配置（兼容当前 libbox 版本）
 
     /// 生成路由配置
     private func 生成路由配置(分流规则: [分流规则项], 节点: 节点模型?) -> SingBox路由配置 {
         var 规则列表: [SingBox路由规则] = []
 
-        // 第一条：TUN 入站启用嗅探（对齐官方客户端）
-        规则列表.append(SingBox路由规则(inbound: ["tun-in"], action: "sniff"))
-
         // 私有 IP 直连
         规则列表.append(SingBox路由规则(
             ipIsPrivate: true,
-            outbound: "DIRECT",
-            action: "route"
+            outbound: "DIRECT"
         ))
 
         // 局域网地址直连
@@ -280,8 +276,7 @@ final class SingBox配置生成器 {
                 "224.0.0.0/4",
                 "255.255.255.255/32"
             ],
-            outbound: "DIRECT",
-            action: "route"
+            outbound: "DIRECT"
         ))
 
         // 应用分流规则
@@ -294,7 +289,6 @@ final class SingBox配置生成器 {
         return SingBox路由配置(
             final: "proxy",
             autoDetectInterface: true,
-            defaultDomainResolver: "dns_resolver",
             rules: 规则列表
         )
     }
@@ -310,7 +304,7 @@ final class SingBox配置生成器 {
         case .放行: return nil // 放行不生成规则
         }
 
-        var 路由规则 = SingBox路由规则(outbound: 出站标签, action: "route")
+        var 路由规则 = SingBox路由规则(outbound: 出站标签)
 
         switch 规则.类型 {
         case .域名精确:

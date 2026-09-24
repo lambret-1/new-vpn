@@ -12,58 +12,58 @@ import Libbox
 // MARK: - 平台接口实现
 
 /// libbox 平台接口实现
-/// 继承 LibboxPlatformInterface 类，为 sing-box 提供平台相关功能
-final class Libbox平台接口: LibboxPlatformInterface {
+/// 实现 LibboxPlatformInterfaceProtocol 协议，为 sing-box 提供平台相关功能
+final class Libbox平台接口: NSObject, LibboxPlatformInterfaceProtocol {
     /// 日志回调
     var 日志回调: ((_ 级别: Int, _ 内容: String) -> Void)?
 
     /// TUN 文件描述符（由 PacketTunnelProvider 设置）
     var tun文件描述符: Int32 = -1
 
-    override func underNetworkExtension() -> Bool { true }
+    func underNetworkExtension() -> Bool { true }
 
-    override func writeLog(_ message: String?) {
+    func writeLog(_ message: String?) {
         guard let 消息 = message else { return }
         日志回调?(2, 消息)
     }
 
-    override func openTun(_ options: LibboxTunOptions?, ret0_: UnsafeMutablePointer<Int32>?, error: NSErrorPointer) -> Bool {
+    func openTun(_ options: LibboxTunOptions?, ret0_: UnsafeMutablePointer<Int32>?, error: NSErrorPointer) -> Bool {
         guard tun文件描述符 >= 0 else { return false }
         ret0_?.pointee = tun文件描述符
         return true
     }
 
-    override func usePlatformAutoDetectControl() -> Bool { false }
+    func usePlatformAutoDetectControl() -> Bool { false }
 
-    override func autoDetectInterfaceControl(_ fd: Int32, error: NSErrorPointer) -> Bool { true }
+    func autoDetectInterfaceControl(_ fd: Int32, error: NSErrorPointer) -> Bool { true }
 
-    override func clearDNSCache() {}
+    func clearDNSCache() {}
 
-    override func includeAllNetworks() -> Bool { true }
+    func includeAllNetworks() -> Bool { true }
 
-    override func useProcFS() -> Bool { false }
+    func useProcFS() -> Bool { false }
 
-    override func closeDefaultInterfaceMonitor(_ listener: LibboxInterfaceUpdateListener?, error: NSErrorPointer) -> Bool { true }
+    func closeDefaultInterfaceMonitor(_ listener: LibboxInterfaceUpdateListener?, error: NSErrorPointer) -> Bool { true }
 
-    override func startDefaultInterfaceMonitor(_ listener: LibboxInterfaceUpdateListener?, error: NSErrorPointer) -> Bool { true }
+    func startDefaultInterfaceMonitor(_ listener: LibboxInterfaceUpdateListener?, error: NSErrorPointer) -> Bool { true }
 
-    override func getInterfaces(_ error: NSErrorPointer) -> LibboxNetworkInterfaceIterator? { nil }
+    func getInterfaces(_ error: NSErrorPointer) -> LibboxNetworkInterfaceIterator? { nil }
 
-    override func findConnectionOwner(_ ipProtocol: Int32, sourceAddress: String?, sourcePort: Int32, destinationAddress: String?, destinationPort: Int32, ret0_: UnsafeMutablePointer<Int32>?, error: NSErrorPointer) -> Bool {
+    func findConnectionOwner(_ ipProtocol: Int32, sourceAddress: String?, sourcePort: Int32, destinationAddress: String?, destinationPort: Int32, ret0_: UnsafeMutablePointer<Int32>?, error: NSErrorPointer) -> Bool {
         ret0_?.pointee = -1
         return true
     }
 
-    override func packageName(byUid uid: Int32, error: NSErrorPointer) -> String { "" }
+    func packageName(byUid uid: Int32, error: NSErrorPointer) -> String { "" }
 
-    override func uid(byPackageName packageName: String?, ret0_: UnsafeMutablePointer<Int32>?, error: NSErrorPointer) -> Bool {
+    func uid(byPackageName packageName: String?, ret0_: UnsafeMutablePointer<Int32>?, error: NSErrorPointer) -> Bool {
         ret0_?.pointee = -1
         return true
     }
 
-    override func readWIFIState() -> LibboxWIFIState? { nil }
+    func readWIFIState() -> LibboxWIFIState? { nil }
 
-    override func sendNotification(_ notification: LibboxNotification?, error: NSErrorPointer) -> Bool { true }
+    func sendNotification(_ notification: LibboxNotification?, error: NSErrorPointer) -> Bool { true }
 }
 
 // MARK: - sing-box 内核桥接
@@ -140,7 +140,7 @@ final class SingBox内核桥接 {
 
         // 创建服务
         var 错误: NSError?
-        guard let 新服务 = LibboxNewService(配置内容, 平台接口 as? LibboxPlatformInterfaceProtocol, &错误) else {
+        guard let 新服务 = LibboxNewService(配置内容, 平台接口, &错误) else {
             日志回调?(4, "创建 sing-box 服务失败：\(错误?.localizedDescription ?? "未知错误")")
             return false
         }

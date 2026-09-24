@@ -12,8 +12,8 @@ import Libbox
 // MARK: - 平台接口实现
 
 /// libbox 平台接口实现
-/// 实现 LibboxPlatformInterfaceProtocol 协议，为 sing-box 提供平台相关功能
-final class Libbox平台接口: NSObject, LibboxPlatformInterfaceProtocol {
+/// 实现 LibboxPlatformInterface 协议，为 sing-box 提供平台相关功能
+final class Libbox平台接口: NSObject, LibboxPlatformInterface {
     /// 日志回调
     var 日志回调: ((_ 级别: Int, _ 内容: String) -> Void)?
 
@@ -33,7 +33,7 @@ final class Libbox平台接口: NSObject, LibboxPlatformInterfaceProtocol {
         return true
     }
 
-    func usePlatformAutoDetectControl() -> Bool { false }
+    func usePlatformAutoDetectInterfaceControl() -> Bool { false }
 
     func autoDetectInterfaceControl(_ fd: Int32, error: NSErrorPointer) -> Bool { true }
 
@@ -54,7 +54,7 @@ final class Libbox平台接口: NSObject, LibboxPlatformInterfaceProtocol {
         return true
     }
 
-    func packageName(byUid uid: Int32, error: NSErrorPointer) -> String { "" }
+    func packageName(byUid uid: Int32) throws -> String { "" }
 
     func uid(byPackageName packageName: String?, ret0_: UnsafeMutablePointer<Int32>?, error: NSErrorPointer) -> Bool {
         ret0_?.pointee = -1
@@ -147,16 +147,14 @@ final class SingBox内核桥接 {
 
         服务 = 新服务
 
-        // 启动服务
-        var 启动错误: NSError?
-        let 启动成功 = 新服务.start(&启动错误)
-
-        if 启动成功 {
+        // 启动服务（Swift 中 start 映射为 throws）
+        do {
+            try 新服务.start()
             是否运行中 = true
             日志回调?(2, "sing-box 内核启动成功")
             return true
-        } else {
-            日志回调?(4, "sing-box 内核启动失败：\(启动错误?.localizedDescription ?? "未知错误")")
+        } catch {
+            日志回调?(4, "sing-box 内核启动失败：\(error.localizedDescription)")
             服务 = nil
             return false
         }
@@ -170,7 +168,11 @@ final class SingBox内核桥接 {
 
         日志回调?(2, "正在停止 sing-box 内核")
 
-        _ = 服务.close()
+        do {
+            try 服务.close()
+        } catch {
+            日志回调?(4, "停止 sing-box 内核出错：\(error.localizedDescription)")
+        }
 
         self.服务 = nil
         是否运行中 = false

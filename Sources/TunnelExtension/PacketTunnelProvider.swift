@@ -243,7 +243,10 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         设置.ipv4Settings = IPv4设置
 
         // DNS 设置
-        let DNS设置 = NEDNSSettings(servers: ["8.8.8.8", "1.1.1.1"])
+        // 关键：DNS 服务器必须设为 VPN 接口地址，让所有 DNS 查询走 TUN 入站
+        // sing-box 通过 protocol=dns 路由规则拦截，交由内置 DNS 模块处理
+        // 避免客户端直接向 8.8.8.8 发查询导致 DNS 回环
+        let DNS设置 = NEDNSSettings(servers: ["10.0.0.2"])
         DNS设置.matchDomains = [""]
         设置.dnsSettings = DNS设置
 

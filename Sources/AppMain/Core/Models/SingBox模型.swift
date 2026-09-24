@@ -220,6 +220,12 @@ struct SingBox入站配置: Codable, Equatable {
     var stack: String?
     /// TUN 接口名
     var interfaceName: String?
+    /// 是否启用协议嗅探
+    var sniff: Bool?
+    /// 嗅探是否覆盖目标地址
+    var sniffOverrideDestination: Bool?
+    /// 嗅探超时
+    var sniffTimeout: String?
 
     /// 创建 TUN 入站
     static func tun入站(标签: String = "tun-in",
@@ -227,13 +233,17 @@ struct SingBox入站配置: Codable, Equatable {
                         MTU: Int = 1500,
                         自动路由: Bool = true,
                         严格路由: Bool = true,
-                        网络栈: String = "system") -> SingBox入站配置 {
+                        网络栈: String = "system",
+                        启用嗅探: Bool = true) -> SingBox入站配置 {
         var 配置 = SingBox入站配置(type: "tun", tag: 标签)
         配置.address = [地址]
         配置.mtu = MTU
         配置.autoRoute = 自动路由
         配置.strictRoute = 严格路由
         配置.stack = 网络栈
+        配置.sniff = 启用嗅探
+        配置.sniffOverrideDestination = false
+        配置.sniffTimeout = "300ms"
         return 配置
     }
 

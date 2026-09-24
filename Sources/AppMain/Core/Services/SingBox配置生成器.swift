@@ -288,7 +288,15 @@ final class SingBox配置生成器 {
     private func 生成路由配置(分流规则: [分流规则项], 节点: 节点模型?) -> SingBox路由配置 {
         var 规则列表: [SingBox路由规则] = []
 
-        // DNS 流量走 dns-out
+        // 关键：DNS 服务器上游查询直接走 proxy，避免被 protocol=dns 规则匹配走 dns-out 形成回环
+        // 此规则必须在 protocol=dns 规则之前
+        规则列表.append(SingBox路由规则(
+            ipCidr: ["8.8.8.8/32", "8.8.4.4/32", "1.1.1.1/32", "1.0.0.1/32"],
+            port: [53],
+            outbound: "proxy"
+        ))
+
+        // DNS 流量走 dns-out（由 sing-box DNS 模块处理）
         规则列表.append(SingBox路由规则(
             protocol_: ["dns"],
             outbound: "dns-out"

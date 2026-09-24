@@ -134,8 +134,16 @@ struct SingBoxDNS配置: Codable, Equatable {
 struct SingBoxDNS服务器: Codable, Equatable {
     /// 服务器标签
     var tag: String
-    /// 服务器地址
+    /// 服务器地址（旧格式，包含协议前缀如 tls://8.8.8.8）
     var address: String
+    /// DNS 协议类型（新格式：udp/tcp/tls/https/h3/fakeip）
+    var type: String?
+    /// 服务器地址（新格式，纯地址不含协议前缀）
+    var server: String?
+    /// 服务器端口（新格式）
+    var serverPort: Int?
+    /// 域名解析器标签（解析 DNS 服务器自身域名时使用，避免回环）
+    var domainResolver: String?
     /// 地址解析策略
     var addressResolver: String?
     /// 地址策略

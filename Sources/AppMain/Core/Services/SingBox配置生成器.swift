@@ -95,19 +95,33 @@ final class SingBox配置生成器 {
             }
         }
 
-        // 默认 DNS 服务器
+        // 默认 DNS 服务器（参考 sing-box 官方客户端配置）
         // TUN 入站 dns_address 直接拦截 DNS 查询交给 DNS 模块
-        // detour=proxy 让上游 DNS 查询通过代理出站发送
+        // dns_resolver: 国内直连 DNS，用于解析其他 DNS 服务器域名，避免回环
+        // dns_proxy: TLS 加密 DNS，走代理出站，用于普通域名解析
         if 服务器列表.isEmpty {
             服务器列表 = [
-                SingBoxDNS服务器(tag: "dns-google", address: "8.8.8.8", detour: "proxy"),
-                SingBoxDNS服务器(tag: "dns-cloudflare", address: "1.1.1.1", detour: "proxy")
+                SingBoxDNS服务器(
+                    tag: "dns_resolver",
+                    address: "223.5.5.5",
+                    type: "udp",
+                    server: "223.5.5.5",
+                    detour: "direct"
+                ),
+                SingBoxDNS服务器(
+                    tag: "dns_proxy",
+                    address: "tls://8.8.8.8",
+                    type: "tls",
+                    server: "8.8.8.8",
+                    detour: "proxy",
+                    domainResolver: "dns_resolver"
+                )
             ]
         }
 
         return SingBoxDNS配置(
             servers: 服务器列表,
-            final: 服务器列表.first?.tag ?? "dns-google",
+            final: 服务器列表.contains(where: { $0.tag == "dns_proxy" }) ? "dns_proxy" : (服务器列表.first?.tag ?? "dns_proxy"),
             strategy: "ipv4_only",
             disableCache: false
         )

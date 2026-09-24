@@ -79,12 +79,11 @@ final class SingBox配置生成器 {
 
         // DNS 规则：代理服务器域名用直连 DNS 解析，避免回环
         var DNS规则列表: [SingBoxDNS规则] = []
-        if let 节点服务器 = 节点?.服务器, !节点服务器.isEmpty {
-            // 判断是否为域名（不是 IP 地址）
-            let 是否域名 = !节点服务器.contains(where: { $0.isLetter || $0 == "-" }) == false ||
-                           (节点服务器.contains(".") && !节点服务器.allSatisfy({ $0.isNumber || $0 == "." }))
-            if 是否域名 {
-                DNS规则列表.append(SingBoxDNS规则(域名: [节点服务器], 服务器: "dns_resolver"))
+        if let 节点地址 = 节点?.地址, !节点地址.isEmpty {
+            // 判断是否为域名（不是纯 IP 地址）
+            let 是否IP地址 = 节点地址.allSatisfy({ $0.isNumber || $0 == "." })
+            if !是否IP地址 {
+                DNS规则列表.append(SingBoxDNS规则(域名: [节点地址], 服务器: "dns_resolver"))
             }
         }
 

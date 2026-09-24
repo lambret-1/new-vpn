@@ -6,19 +6,19 @@
 	<array>
 		<dict>
 			<key>PayloadDescription</key>
-			<string>配置 VPN 设置</string>
+			<string>Configures VPN settings</string>
 			<key>PayloadDisplayName</key>
-			<string>newVPN 隧道</string>
+			<string>newVPN</string>
 			<key>PayloadIdentifier</key>
-			<string>com.apple.vpn.managed.A1B2C3D4-E5F6-7890-ABCD-EF1234567890</string>
+			<string>com.newvpn.app.vpn.C8564363-46CE-4E25-AE6D-1CD546908C78</string>
 			<key>PayloadType</key>
 			<string>com.apple.vpn.managed</string>
 			<key>PayloadUUID</key>
-			<string>A1B2C3D4-E5F6-7890-ABCD-EF1234567890</string>
+			<string>C8564363-46CE-4E25-AE6D-1CD546908C78</string>
 			<key>PayloadVersion</key>
 			<integer>1</integer>
 			<key>UserDefinedName</key>
-			<string>newVPN 隧道</string>
+			<string>newVPN</string>
 			<key>VPN</key>
 			<dict>
 				<key>VPNType</key>
@@ -35,36 +35,22 @@
 				<string>Password</string>
 				<key>DisconnectOnIdle</key>
 				<integer>0</integer>
-				<key>DisconnectOnIdleTimer</key>
-				<integer>0</integer>
 				<key>IncludeAllNetworkTraffic</key>
 				<true/>
-				<key>OnDemandEnabled</key>
-				<integer>0</integer>
 				<key>ProviderConfiguration</key>
 				<dict>
 					<key>serverAddress</key>
 					<string>127.0.0.1</string>
 				</dict>
-				<key>DNSSettings</key>
-				<dict>
-					<key>DNSDomains</key>
-					<array/>
-					<key>DNSServerAddresses</key>
-					<array>
-						<string>8.8.8.8</string>
-						<string>1.1.1.1</string>
-					</array>
-				</dict>
 			</dict>
 		</dict>
 	</array>
 	<key>PayloadDescription</key>
-	<string>VPN 配置描述文件</string>
+	<string>VPN Configuration Profile</string>
 	<key>PayloadDisplayName</key>
-	<string>newVPN 隧道配置</string>
+	<string>newVPN Profile</string>
 	<key>PayloadIdentifier</key>
-	<string>com.newvpn.app.vpn.B2C3D4E5-F6A7-8901-BCDE-F12345678901</string>
+	<string>com.newvpn.app.profile.7FA16994-FC61-4713-8257-91F50762C7CF</string>
 	<key>PayloadOrganization</key>
 	<string>NewVPN</string>
 	<key>PayloadRemovalDisallowed</key>
@@ -72,7 +58,7 @@
 	<key>PayloadType</key>
 	<string>Configuration</string>
 	<key>PayloadUUID</key>
-	<string>B2C3D4E5-F6A7-8901-BCDE-F12345678901</string>
+	<string>7FA16994-FC61-4713-8257-91F50762C7CF</string>
 	<key>PayloadVersion</key>
 	<integer>1</integer>
 </dict>

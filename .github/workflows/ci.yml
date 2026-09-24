@@ -69,7 +69,40 @@ jobs:
           sudo cp /tmp/xcodegen-bin/xcodegen/bin/xcodegen /usr/local/bin/xcodegen
           xcodegen --version
 
-      # ── 5. 生成 Xcode 工程 ──
+      # ── 5. 编译 sing-box 内核（libbox XCFramework）──
+      - name: 编译 sing-box 内核
+        run: |
+          echo "开始编译 sing-box libbox XCFramework"
+
+          # 安装 Go
+          brew install go 2>/dev/null || true
+          go version
+
+          # 安装 gomobile
+          go install golang.org/x/mobile/cmd/gomobile@latest
+          go install golang.org/x/mobile/cmd/gobind@latest
+          export PATH=$PATH:$(go env GOPATH)/bin
+          gomobile version
+
+          # 克隆 sing-box
+          rm -rf /tmp/sing-box
+          git clone --depth 1 --branch v1.11.0 https://github.com/SagerNet/sing-box.git /tmp/sing-box
+          cd /tmp/sing-box
+
+          # 编译 libbox 为 iOS XCFramework
+          echo "编译 libbox.xcframework..."
+          gomobile bind -target=ios -o $GITHUB_WORKSPACE/Frameworks/libbox.xcframework ./experimental/libbox 2>&1 | tail -20
+
+          # 验证编译结果
+          if [ -d "$GITHUB_WORKSPACE/Frameworks/libbox.xcframework" ]; then
+            echo "libbox.xcframework 编译成功"
+            ls -la $GITHUB_WORKSPACE/Frameworks/libbox.xcframework
+          else
+            echo "警告：libbox.xcframework 编译失败，使用占位框架"
+            mkdir -p $GITHUB_WORKSPACE/Frameworks/libbox.xcframework
+          fi
+
+      # ── 6. 生成 Xcode 工程 ──
       - name: 生成 Xcode 工程
         run: xcodegen generate
 

@@ -44,6 +44,9 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     /// sing-box 内核是否运行中
     private var singBox运行中 = false
 
+    /// sing-box 内核桥接
+    private let singBox桥接 = SingBox内核桥接.共享
+
     /// sing-box 配置文件路径
     private var singBox配置路径: String? {
         guard let 容器URL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.com.newvpn.app") else {
@@ -88,6 +91,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             self.启动SingBox内核 { 内核启动成功 in
                 if 内核启动成功 {
                     self.日志.info("sing-box 内核启动成功")
+                    self.singBox运行中 = true
                 } else {
                     self.日志.error("sing-box 内核启动失败，继续使用基础隧道")
                 }
@@ -421,19 +425,28 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         日志.info("正在启动 sing-box 内核，配置：\(配置路径)")
         记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "正在启动内核...")
 
-        // TODO: 集成 sing-box Go 库后调用真实启动函数
-        // 示例代码：
-        // let 配置数据 = try? Data(contentsOf: URL(fileURLWithPath: 配置路径))
-        // let 结果 = singbox_start(配置数据, logCallback: { 级别, 内容 in
-        //     self.记录扩展日志(级别: 级别, 模块: "sing-box", 内容: 内容)
-        // })
-        // singBox运行中 = 结果 == 0
+        // 设置日志回调
+        singBox桥接.日志回调 = { [weak self] 级别, 内容 in
+            guard let self = self else { return }
+            let 级别字符串: String
+            switch 级别 {
+            case 0: 级别字符串 = "追踪"
+            case 1: 级别字符串 = "调试"
+            case 2: 级别字符串 = "信息"
+            case 3: 级别字符串 = "警告"
+            case 4: 级别字符串 = "错误"
+            case 5: 级别字符串 = "致命"
+            default: 级别字符串 = "未知"
+            }
+            self.记录扩展日志(级别: 级别字符串, 模块: "sing-box", 内容: 内容)
+        }
 
-        // 模拟启动成功（预留接口）
-        singBox运行中 = true
+        // 获取工作目录（App Group 容器目录）
+        let 工作目录 = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.com.newvpn.app")?.path ?? NSTemporaryDirectory()
 
-        记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "内核启动成功")
-        完成(true)
+        // 启动内核
+        let 成功 = singBox桥接.启动内核(配置路径: 配置路径, 工作目录: 工作目录)
+        完成(成功)
     }
 
     /// 停止 sing-box 内核
@@ -443,10 +456,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         日志.info("正在停止 sing-box 内核")
         记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "正在停止内核...")
 
-        // TODO: 集成 sing-box Go 库后调用真实停止函数
-        // 示例代码：
-        // singbox_stop()
-
+        singBox桥接.停止内核()
         singBox运行中 = false
 
         记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "内核已停止")
@@ -461,21 +471,15 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         日志.info("正在重新加载 sing-box 配置")
         记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "正在重新加载配置...")
 
-        // TODO: 集成 sing-box Go 库后调用真实重载函数
-        // 示例代码：
-        // let 配置数据 = try? Data(contentsOf: URL(fileURLWithPath: 配置路径))
-        // singbox_reload(配置数据)
-
-        记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "配置已重新加载")
+        _ = singBox桥接.重载配置(配置路径: 配置路径)
     }
 
     /// 获取 sing-box 内核统计
     private func 获取SingBox统计() -> [String: Any] {
-        // TODO: 集成 sing-box Go 库后从内核获取真实统计
-        return [
+        [
             "running": singBox运行中,
-            "uploadBytes": 上行字节,
-            "downloadBytes": 下行字节
+            "uploadBytes": singBox桥接.上行字节,
+            "downloadBytes": singBox桥接.下行字节
         ]
     }
 }

@@ -82,8 +82,17 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.newvpn.app.tunnel
         PRODUCT_NAME: NewVPN-Tunnel
         CODE_SIGN_ENTITLEMENTS: Sources/TunnelExtension/NewVPN-Tunnel.entitlements
+        # libbox 头文件搜索路径
+        HEADER_SEARCH_PATHS: $(SRCROOT)/Sources/TunnelExtension/include
+        # 桥接头文件
+        SWIFT_OBJC_BRIDGING_HEADER: Sources/TunnelExtension/NewVPN-Tunnel-Bridging-Header.h
+        # 框架搜索路径
+        FRAMEWORK_SEARCH_PATHS: $(SRCROOT)/Frameworks
+        # 链接 libbox 框架
+        OTHER_LDFLAGS: -framework libbox
     dependencies:
       - sdk: NetworkExtension.framework
+      - framework: Frameworks/libbox.xcframework
 
 # Scheme
 schemes:

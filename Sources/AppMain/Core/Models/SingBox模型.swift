@@ -593,6 +593,20 @@ struct SingBoxTLS配置: Codable, Equatable {
         )
         return 配置
     }
+
+    enum CodingKeys: String, CodingKey {
+        case enabled
+        case serverName = "server_name"
+        case insecure
+        case alpn
+        case minVersion = "min_version"
+        case maxVersion = "max_version"
+        case certificateFingerprint = "certificate_fingerprint"
+        case certificatePath = "certificate_path"
+        case ech
+        case utls
+        case reality
+    }
 }
 
 /// sing-box ECH 配置
@@ -683,6 +697,21 @@ struct SingBox传输配置: Codable, Equatable {
         配置.mode = 模式
         return 配置
     }
+
+    enum CodingKeys: String, CodingKey {
+        case type
+        case path
+        case host
+        case serviceName = "service_name"
+        case headers
+        case delayAccept = "delay_accept"
+        case earlyDataHeaderName = "early_data_header_name"
+        case maxEarlyData = "max_early_data"
+        case mode
+        case url
+        case padding
+        case mockXHR = "mock_xhr"
+    }
 }
 
 // MARK: - 多路复用配置
@@ -735,6 +764,17 @@ struct SingBox拨号器配置: Codable, Equatable {
     var tcpFastOpen: Bool?
     /// TCP 多路径
     var tcpMultiPath: Bool?
+
+    enum CodingKeys: String, CodingKey {
+        case interfaceName = "interface_name"
+        case routingMark = "routing_mark"
+        case connectTimeout = "connect_timeout"
+        case domainStrategy = "domain_strategy"
+        case domainResolver = "domain_resolver"
+        case independentStack = "independent_stack"
+        case tcpFastOpen = "tcp_fast_open"
+        case tcpMultiPath = "tcp_multi_path"
+    }
 }
 
 // MARK: - 路由配置
@@ -911,6 +951,16 @@ struct SingBox规则集: Codable, Equatable {
     var updateInterval: String?
     /// 下载拨号器
     var downloadDialer: String?
+
+    enum CodingKeys: String, CodingKey {
+        case tag
+        case type
+        case format
+        case url
+        case path
+        case updateInterval = "update_interval"
+        case downloadDialer = "download_dialer"
+    }
 }
 
 // MARK: - 实验配置
@@ -923,6 +973,12 @@ struct SingBox实验配置: Codable, Equatable {
     var clashApi: SingBoxClashAPI配置?
     /// V2Ray API 配置
     var v2rayApi: SingBoxV2RayAPI配置?
+
+    enum CodingKeys: String, CodingKey {
+        case cacheFile = "cache_file"
+        case clashApi = "clash_api"
+        case v2rayApi = "v2ray_api"
+    }
 }
 
 /// sing-box 缓存文件配置
@@ -942,6 +998,17 @@ struct SingBox缓存文件配置: Codable, Equatable {
     /// 假 IP 前缀
     var fakeipInet4Range: String?
     var fakeipInet6Range: String?
+
+    enum CodingKeys: String, CodingKey {
+        case enabled
+        case path
+        case cacheId = "cache_id"
+        case storeFakeip = "store_fakeip"
+        case fakeipName = "fakeip_name"
+        case fakeipServer = "fakeip_server"
+        case fakeipInet4Range = "fakeip_inet4_range"
+        case fakeipInet6Range = "fakeip_inet6_range"
+    }
 }
 
 /// sing-box Clash API 配置

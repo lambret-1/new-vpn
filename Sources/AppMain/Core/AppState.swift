@@ -249,10 +249,56 @@ final class AppState: ObservableObject {
     /// Mock 数据刷新定时器
     private var 模拟定时器: Timer?
 
-    /// 私有初始化，加载 Mock 数据
+    /// 私有初始化，加载 Mock 数据和持久化的订阅节点
     private init() {
         加载模拟数据()
         加载订阅列表()
+        加载持久化节点()
+    }
+
+    // MARK: - 节点持久化
+
+    /// 节点持久化文件路径
+    private var 节点持久化路径: URL? {
+        guard let 容器URL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.com.newvpn.app") else {
+            return FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first?.appendingPathComponent("订阅节点.json")
+        }
+        return 容器URL.appendingPathComponent("订阅节点.json")
+    }
+
+    /// 保存订阅节点到本地
+    private func 保存持久化节点() {
+        guard let 路径 = 节点持久化路径 else { return }
+        // 只保存订阅导入的节点
+        let 订阅节点 = 节点列表.filter { $0.来源类型 == "订阅导入" }
+        do {
+            let 数据 = try JSONEncoder().encode(订阅节点)
+            try 数据.write(to: 路径, options: .atomic)
+        } catch {
+            print("保存订阅节点失败：\(error.localizedDescription)")
+        }
+    }
+
+    /// 从本地加载订阅节点
+    private func 加载持久化节点() {
+        guard let 路径 = 节点持久化路径,
+              FileManager.default.fileExists(atPath: 路径.path),
+              let 数据 = try? Data(contentsOf: 路径),
+              let 订阅节点 = try? JSONDecoder().decode([节点模型].self, from: 数据) else {
+            return
+        }
+
+        // 移除 Mock 数据中可能存在的订阅导入节点，添加真实节点
+        节点列表.removeAll { $0.来源类型 == "订阅导入" }
+        节点列表.append(contentsOf: 订阅节点)
+
+        // 重新生成分组
+        节点分组列表 = Mock数据.生成节点分组(节点列表: 节点列表)
+
+        // 如果当前没有选中节点，选中第一个
+        if 当前节点ID == nil {
+            当前节点ID = 节点列表.first?.id
+        }
     }
 
     // MARK: - 当前节点便捷属性
@@ -386,6 +432,11 @@ final class AppState: ObservableObject {
         远程订阅列表.removeAll { $0.id == 订阅.id }
         订阅下载服务.共享.删除本地配置(订阅ID: 订阅.id)
         保存订阅列表()
+
+        // 移除该订阅的节点
+        节点列表.removeAll { $0.来源类型 == "订阅导入" && $0.分组 == 订阅.名称 }
+        节点分组列表 = Mock数据.生成节点分组(节点列表: 节点列表)
+        保存持久化节点()
     }
 
     /// 保存订阅列表到本地
@@ -438,6 +489,9 @@ final class AppState: ObservableObject {
 
         // 重新生成分组
         节点分组列表 = Mock数据.生成节点分组(节点列表: 节点列表)
+
+        // 持久化保存
+        保存持久化节点()
     }
 
     /// 获取指定订阅解析出的节点

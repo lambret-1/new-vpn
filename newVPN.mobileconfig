@@ -21,10 +21,6 @@
             <string>newVPN 隧道</string>
             <key>VPN</key>
             <dict>
-                <key>AuthName</key>
-                <string></string>
-                <key>AuthenticationMethod</key>
-                <string>Password</string>
                 <key>DisconnectOnIdle</key>
                 <integer>0</integer>
                 <key>DisconnectOnIdleTimer</key>
@@ -33,28 +29,17 @@
                 <true/>
                 <key>OnDemandEnabled</key>
                 <integer>0</integer>
-                <key>OnDemandRules</key>
-                <array>
-                    <dict>
-                        <key>Action</key>
-                        <string>Connect</string>
-                    </dict>
-                </array>
                 <key>ProviderBundleIdentifier</key>
                 <string>com.newvpn.app.tunnel</string>
                 <key>ProviderConfiguration</key>
                 <dict>
                     <key>serverAddress</key>
-                    <string>newVPN</string>
-                    <key>bundleIdentifier</key>
-                    <string>com.newvpn.app.tunnel</string>
+                    <string>127.0.0.1</string>
                 </dict>
                 <key>ProviderType</key>
                 <string>packet-tunnel</string>
                 <key>RemoteAddress</key>
-                <string>newVPN</string>
-                <key>SendAllTraffic</key>
-                <true/>
+                <string>127.0.0.1</string>
                 <key>DNSSettings</key>
                 <dict>
                     <key>DNSDomains</key>

@@ -35,11 +35,12 @@ final class VPN描述文件服务 {
     /// 生成 PacketTunnel 类型的 .mobileconfig 描述文件
     func 生成PacketTunnel描述文件(_ 描述文件: VPN描述文件模型) -> String? {
         let UUID字符串 = UUID().uuidString
+        // 服务器地址为空时使用 127.0.0.1 作为默认值
+        let 服务器地址 = 描述文件.服务器地址.isEmpty ? "127.0.0.1" : 描述文件.服务器地址
 
-        // 生成 ProviderConfiguration
+        // 生成 ProviderConfiguration（不包含 bundleIdentifier，系统字段扩展可直接获取）
         var 提供者配置: [String: Any] = [
-            "serverAddress": 描述文件.服务器地址,
-            "bundleIdentifier": 描述文件.扩展BundleID
+            "serverAddress": 服务器地址
         ]
 
         if let 节点ID = 描述文件.关联节点ID {
@@ -51,6 +52,17 @@ final class VPN描述文件服务 {
 
         // 转换为 XML 兼容的字典
         let 提供者配置XML = 字典转XML(提供者配置)
+
+        // 按需连接规则（仅在启用时生成）
+        let 按需规则XML = 描述文件.按需连接 ? """
+                        <key>OnDemandRules</key>
+                        <array>
+                            <dict>
+                                <key>Action</key>
+                                <string>Connect</string>
+                            </dict>
+                        </array>
+        """ : ""
 
         let mobileconfig = """
         <?xml version="1.0" encoding="UTF-8"?>
@@ -76,10 +88,6 @@ final class VPN描述文件服务 {
                     <string>\(描述文件.名称)</string>
                     <key>VPN</key>
                     <dict>
-                        <key>AuthName</key>
-                        <string>\(描述文件.用户名 ?? "")</string>
-                        <key>AuthenticationMethod</key>
-                        <string>Password</string>
                         <key>DisconnectOnIdle</key>
                         <integer>\(描述文件.断开时保持连接 ? 0 : 1)</integer>
                         <key>DisconnectOnIdleTimer</key>
@@ -88,13 +96,7 @@ final class VPN描述文件服务 {
                         <\(描述文件.包含所有流量 ? "true" : "false")/>
                         <key>OnDemandEnabled</key>
                         <integer>\(描述文件.按需连接 ? 1 : 0)</integer>
-                        <key>OnDemandRules</key>
-                        <array>
-                            <dict>
-                                <key>Action</key>
-                                <string>Connect</string>
-                            </dict>
-                        </array>
+        \(按需规则XML)
                         <key>ProviderBundleIdentifier</key>
                         <string>\(描述文件.扩展BundleID)</string>
                         <key>ProviderConfiguration</key>
@@ -102,9 +104,7 @@ final class VPN描述文件服务 {
                         <key>ProviderType</key>
                         <string>packet-tunnel</string>
                         <key>RemoteAddress</key>
-                        <string>\(描述文件.服务器地址)</string>
-                        <key>SendAllTraffic</key>
-                        <\(描述文件.包含所有流量 ? "true" : "false")/>
+                        <string>\(服务器地址)</string>
                         <key>DNSSettings</key>
                         <dict>
                             <key>DNSDomains</key>

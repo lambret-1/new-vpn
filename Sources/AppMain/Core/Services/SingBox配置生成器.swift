@@ -116,12 +116,15 @@ final class SingBox配置生成器 {
     private func 生成入站配置() -> [SingBox入站配置] {
         [
             // TUN 入站（iOS 隧道使用）
+            // 注意：Network Extension 中必须用 gvisor 栈，system 栈需要 root 权限
+            // auto_route/strict_route 由系统 NEPacketTunnelNetworkSettings 控制，不需 sing-box 管理
             SingBox入站配置.tun入站(
                 标签: "tun-in",
-                地址: "172.19.0.1/30",
-                MTU: 1500,
-                自动路由: true,
-                严格路由: true
+                地址: "10.0.0.2/24",
+                MTU: 4064,
+                自动路由: false,
+                严格路由: false,
+                网络栈: "gvisor"
             ),
             // Mixed 入站（HTTP+SOCKS5，用于本地应用）
             SingBox入站配置.mixed入站(

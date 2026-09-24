@@ -209,8 +209,8 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         DNS设置.matchDomains = [""]
         设置.dnsSettings = DNS设置
 
-        // MTU
-        设置.mtu = 1500
+        // MTU（sing-box Network Extension 推荐 4064）
+        设置.mtu = 4064
 
         // 代理设置（可选）
         if let 代理配置 = 隧道配置["proxy"] as? [String: Any],
@@ -458,21 +458,25 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         // 获取 packetFlow 的文件描述符（通过 KVC 获取私有属性）
         guard let tun文件描述符 = packetFlow.value(forKey: "fileDescriptor") as? Int32 else {
             日志.error("无法获取 packetFlow 文件描述符")
-            记录扩展日志(级别: "错误", 模块: "sing-box", 内容: "无法获取 TUN 文件描述符")
+            记录扩展日志(级别: "错误", 模块: "sing-box", 内容: "无法获取 TUN 文件描述符，KVC 获取 fileDescriptor 失败")
             完成(false)
             return
         }
 
         日志.info("TUN 文件描述符：\(tun文件描述符)")
+        记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "获取到 TUN 文件描述符：\(tun文件描述符)")
+
+        // 记录配置大小用于调试
+        记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "配置大小：\(配置内容.utf8.count) 字节")
 
         // 启动内核
         let 成功 = singBox桥接.启动内核(配置内容: 配置内容, tun文件描述符: tun文件描述符)
 
         if 成功 {
             singBox运行中 = true
-            记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "内核启动成功")
+            记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "内核启动成功，TUN 由 sing-box 接管")
         } else {
-            记录扩展日志(级别: "错误", 模块: "sing-box", 内容: "内核启动失败")
+            记录扩展日志(级别: "错误", 模块: "sing-box", 内容: "内核启动失败，请查看上方 sing-box 错误日志")
         }
 
         完成(成功)

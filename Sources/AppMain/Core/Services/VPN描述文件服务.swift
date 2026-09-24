@@ -38,50 +38,50 @@ final class VPN描述文件服务 {
         // 服务器地址为空时使用 127.0.0.1 作为默认值
         let 服务器地址 = 描述文件.服务器地址.isEmpty ? "127.0.0.1" : 描述文件.服务器地址
 
-        // 生成 ProviderConfiguration（不包含 bundleIdentifier，系统字段扩展可直接获取）
-        var 提供者配置: [String: Any] = [
+        // 生成 VendorConfig（自定义参数，由 Packet Tunnel Provider 代码解析）
+        var 厂商配置: [String: Any] = [
             "serverAddress": 服务器地址
         ]
 
         if let 节点ID = 描述文件.关联节点ID {
-            提供者配置["nodeId"] = 节点ID.uuidString
+            厂商配置["nodeId"] = 节点ID.uuidString
         }
         if let 节点名称 = 描述文件.关联节点名称 {
-            提供者配置["nodeName"] = 节点名称
+            厂商配置["nodeName"] = 节点名称
         }
 
         // 转换为 XML 兼容的字典
-        let 提供者配置XML = 字典转XML(提供者配置)
+        let 厂商配置XML = 字典转XML(厂商配置)
 
-        // 按需连接规则（仅在启用时生成）
-        let 按需规则XML = 描述文件.按需连接 ? """
-                        <key>OnDemandRules</key>
-                        <array>
-                            <dict>
-                                <key>Action</key>
-                                <string>Connect</string>
-                            </dict>
-                        </array>
-        """ : ""
+        // 主 App Bundle ID（去掉最后一个组件）
+        let 主AppBundleID = 描述文件.扩展BundleID.components(separatedBy: ".").dropLast().joined(separator: ".")
 
         let mobileconfig = """
         <?xml version="1.0" encoding="UTF-8"?>
         <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
         <plist version="1.0">
         <dict>
+            <key>PayloadDisplayName</key>
+            <string>\(描述文件.名称)</string>
+            <key>PayloadIdentifier</key>
+            <string>com.newvpn.app.config</string>
+            <key>PayloadUUID</key>
+            <string>\(UUID().uuidString)</string>
+            <key>PayloadType</key>
+            <string>Configuration</string>
+            <key>PayloadVersion</key>
+            <integer>1</integer>
             <key>PayloadContent</key>
             <array>
                 <dict>
-                    <key>PayloadDescription</key>
-                    <string>配置 VPN 设置</string>
                     <key>PayloadDisplayName</key>
                     <string>\(描述文件.名称)</string>
                     <key>PayloadIdentifier</key>
-                    <string>com.newvpn.vpn.\(UUID字符串)</string>
-                    <key>PayloadType</key>
-                    <string>com.apple.vpn.managed</string>
+                    <string>com.newvpn.app.config.vpn</string>
                     <key>PayloadUUID</key>
                     <string>\(UUID字符串)</string>
+                    <key>PayloadType</key>
+                    <string>com.apple.vpn.managed</string>
                     <key>PayloadVersion</key>
                     <integer>1</integer>
                     <key>UserDefinedName</key>
@@ -90,41 +90,14 @@ final class VPN描述文件服务 {
                     <string>VPN</string>
                     <key>VPNSubType</key>
                     <string>\(描述文件.扩展BundleID)</string>
-                    <key>ProviderType</key>
-                    <string>packet-tunnel</string>
                     <key>ProviderBundleIdentifier</key>
-                    <string>\(描述文件.扩展BundleID)</string>
-                    <key>RemoteAddress</key>
-                    <string>\(服务器地址)</string>
-                    <key>VPN</key>
-                    <dict>
-                        <key>AuthenticationMethod</key>
-                        <string>Password</string>
-                        <key>DisconnectOnIdle</key>
-                        <integer>\(描述文件.断开时保持连接 ? 0 : 1)</integer>
-                        <key>IncludeAllNetworkTraffic</key>
-                        <\(描述文件.包含所有流量 ? "true" : "false")/>
-                        <key>ProviderConfiguration</key>
-                        \(提供者配置XML)
-                    </dict>
+                    <string>\(主AppBundleID)</string>
+                    <key>VendorConfig</key>
+                    \(厂商配置XML)
+                    <key>OnDemandEnabled</key>
+                    <integer>\(描述文件.按需连接 ? 1 : 0)</integer>
                 </dict>
             </array>
-            <key>PayloadDescription</key>
-            <string>VPN 配置描述文件</string>
-            <key>PayloadDisplayName</key>
-            <string>\(描述文件.名称)</string>
-            <key>PayloadIdentifier</key>
-            <string>com.newvpn.profile.\(UUID().uuidString)</string>
-            <key>PayloadOrganization</key>
-            <string>NewVPN</string>
-            <key>PayloadRemovalDisallowed</key>
-            <false/>
-            <key>PayloadType</key>
-            <string>Configuration</string>
-            <key>PayloadUUID</key>
-            <string>\(UUID().uuidString)</string>
-            <key>PayloadVersion</key>
-            <integer>1</integer>
         </dict>
         </plist>
         """

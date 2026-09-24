@@ -1,65 +1,54 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>PayloadContent</key>
-	<array>
-		<dict>
-			<key>PayloadDescription</key>
-			<string>newVPN</string>
-			<key>PayloadDisplayName</key>
-			<string>newVPN</string>
-			<key>PayloadIdentifier</key>
-			<string>com.newvpn.vpn.75EE6C69-9A58-4128-A6BD-0BE0EF44733F</string>
-			<key>PayloadType</key>
-			<string>com.apple.vpn.managed</string>
-			<key>PayloadUUID</key>
-			<string>75EE6C69-9A58-4128-A6BD-0BE0EF44733F</string>
-			<key>PayloadVersion</key>
-			<integer>1</integer>
-			<key>UserDefinedName</key>
-			<string>newVPN</string>
-			<key>VPNType</key>
-			<string>VPN</string>
-			<key>VPNSubType</key>
-			<string>com.newvpn.app.tunnel</string>
-			<key>ProviderType</key>
-			<string>packet-tunnel</string>
-			<key>ProviderBundleIdentifier</key>
-			<string>com.newvpn.app.tunnel</string>
-			<key>RemoteAddress</key>
-			<string>127.0.0.1</string>
-			<key>VPN</key>
-			<dict>
-				<key>AuthenticationMethod</key>
-				<string>Password</string>
-				<key>DisconnectOnIdle</key>
-				<integer>0</integer>
-				<key>IncludeAllNetworkTraffic</key>
-				<true/>
-				<key>ProviderConfiguration</key>
-				<dict>
-					<key>serverAddress</key>
-					<string>127.0.0.1</string>
-				</dict>
-			</dict>
-		</dict>
-	</array>
-	<key>PayloadDescription</key>
-	<string>newVPN Profile</string>
-	<key>PayloadDisplayName</key>
-	<string>newVPN</string>
-	<key>PayloadIdentifier</key>
-	<string>com.newvpn.profile.DE3AA882-AA6D-4F37-95FB-09586C015747</string>
-	<key>PayloadOrganization</key>
-	<string>NewVPN</string>
-	<key>PayloadRemovalDisallowed</key>
-	<false/>
-	<key>PayloadType</key>
-	<string>Configuration</string>
-	<key>PayloadUUID</key>
-	<string>DE3AA882-AA6D-4F37-95FB-09586C015747</string>
-	<key>PayloadVersion</key>
-	<integer>1</integer>
+    <key>PayloadDisplayName</key>
+    <string>newVPN 配置</string>
+    <key>PayloadIdentifier</key>
+    <string>com.newvpn.app.config</string>
+    <key>PayloadUUID</key>
+    <string>11111111-2222-3333-4444-555555555555</string>
+    <key>PayloadType</key>
+    <string>Configuration</string>
+    <key>PayloadVersion</key>
+    <integer>1</integer>
+
+    <key>PayloadContent</key>
+    <array>
+        <dict>
+            <key>PayloadDisplayName</key>
+            <string>newVPN</string>
+            <key>PayloadIdentifier</key>
+            <string>com.newvpn.app.config.vpn</string>
+            <key>PayloadUUID</key>
+            <string>66666666-7777-8888-9999-000000000000</string>
+            <key>PayloadType</key>
+            <string>com.apple.vpn.managed</string>
+            <key>PayloadVersion</key>
+            <integer>1</integer>
+
+            <key>UserDefinedName</key>
+            <string>newVPN</string>
+
+            <key>VPNType</key>
+            <string>VPN</string>
+
+            <key>VPNSubType</key>
+            <string>com.newvpn.app.tunnel</string>
+
+            <key>ProviderBundleIdentifier</key>
+            <string>com.newvpn.app</string>
+
+            <key>VendorConfig</key>
+            <dict>
+                <key>serverAddress</key>
+                <string>127.0.0.1</string>
+            </dict>
+
+            <key>OnDemandEnabled</key>
+            <integer>0</integer>
+        </dict>
+    </array>
 </dict>
 </plist>

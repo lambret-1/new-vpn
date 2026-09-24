@@ -56,6 +56,16 @@
     return NO;
 }
 
+/// 启动默认接口监视器（iOS 由系统管理，返回 YES 表示成功但不实际操作）
+- (BOOL)startDefaultInterfaceMonitor:(id<LibboxInterfaceUpdateListener> _Nullable)listener error:(NSError * _Nullable * _Nullable)error {
+    return YES;
+}
+
+/// 关闭默认接口监视器（iOS 由系统管理，返回 YES 表示成功但不实际操作）
+- (BOOL)closeDefaultInterfaceMonitor:(id<LibboxInterfaceUpdateListener> _Nullable)listener error:(NSError * _Nullable * _Nullable)error {
+    return YES;
+}
+
 /// 获取网络接口列表（iOS 返回空，由系统管理）
 - (id<LibboxNetworkInterfaceIterator> _Nullable)getInterfaces:(NSError * _Nullable * _Nullable)error {
     return nil;

@@ -88,6 +88,18 @@ final class VPN描述文件服务 {
                     <string>\(描述文件.名称)</string>
                     <key>VPN</key>
                     <dict>
+                        <key>VPNSubType</key>
+                        <string>\(描述文件.扩展BundleID)</string>
+                        <key>VPNType</key>
+                        <string>VPN</string>
+                        <key>ProviderBundleIdentifier</key>
+                        <string>\(描述文件.扩展BundleID)</string>
+                        <key>ProviderType</key>
+                        <string>packet-tunnel</string>
+                        <key>RemoteAddress</key>
+                        <string>\(服务器地址)</string>
+                        <key>AuthenticationMethod</key>
+                        <string>Password</string>
                         <key>DisconnectOnIdle</key>
                         <integer>\(描述文件.断开时保持连接 ? 0 : 1)</integer>
                         <key>DisconnectOnIdleTimer</key>
@@ -97,30 +109,18 @@ final class VPN描述文件服务 {
                         <key>OnDemandEnabled</key>
                         <integer>\(描述文件.按需连接 ? 1 : 0)</integer>
         \(按需规则XML)
-                        <key>ProviderBundleIdentifier</key>
-                        <string>\(描述文件.扩展BundleID)</string>
                         <key>ProviderConfiguration</key>
                         \(提供者配置XML)
-                        <key>ProviderType</key>
-                        <string>packet-tunnel</string>
-                        <key>RemoteAddress</key>
-                        <string>\(服务器地址)</string>
                         <key>DNSSettings</key>
                         <dict>
                             <key>DNSDomains</key>
-                            <array>
-                                \(描述文件.搜索域.isEmpty ? "" : 描述文件.搜索域.map { "<string>\($0)</string>" }.joined(separator: "\n                                "))
-                            </array>
+                            <array/>
                             <key>DNSServerAddresses</key>
                             <array>
                                 \(描述文件.DNS服务器.map { "<string>\($0)</string>" }.joined(separator: "\n                                "))
                             </array>
                         </dict>
                     </dict>
-                    <key>VPNType</key>
-                    <string>VPN</string>
-                    <key>VPNSubType</key>
-                    <string>\(描述文件.扩展BundleID)</string>
                 </dict>
             </array>
             <key>PayloadDescription</key>

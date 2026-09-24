@@ -34,9 +34,11 @@ jobs:
       - name: 选择 Xcode 15.4
         run: sudo xcode-select -s /Applications/Xcode_15.4.app
 
-      - name: 安装 Go
+      - name: 安装 Go 1.23
         run: |
-          brew install go
+          brew install go@1.23
+          echo 'export PATH="/opt/homebrew/opt/go@1.23/bin:$PATH"' >> $GITHUB_ENV
+          export PATH="/opt/homebrew/opt/go@1.23/bin:$PATH"
           go version
           echo "export PATH=\$PATH:$(go env GOPATH)/bin" >> $GITHUB_ENV
 
@@ -67,23 +69,11 @@ jobs:
           # 添加依赖（gomobile bind 需要）
           echo "添加依赖..."
           go get -tool golang.org/x/mobile/cmd/gobind
-          go get golang.org/x/net@latest
           go mod download
           go mod tidy
 
-          # 补丁：强制引用 golang.org/x/net/http2
-          echo "添加链接补丁..."
-          echo 'package libbox' > /tmp/sing-box/experimental/libbox/linkfix.go
-          echo '' >> /tmp/sing-box/experimental/libbox/linkfix.go
-          echo 'import (' >> /tmp/sing-box/experimental/libbox/linkfix.go
-          echo '	"golang.org/x/net/http2"' >> /tmp/sing-box/experimental/libbox/linkfix.go
-          echo ')' >> /tmp/sing-box/experimental/libbox/linkfix.go
-          echo '' >> /tmp/sing-box/experimental/libbox/linkfix.go
-          echo 'var _ = &http2.Transport{}' >> /tmp/sing-box/experimental/libbox/linkfix.go
-          echo 'var _ = (*http2.Transport).RoundTrip' >> /tmp/sing-box/experimental/libbox/linkfix.go
-
-          echo "开始编译 libbox.xcframework（仅arm64设备架构）..."
-          GOFLAGS=-mod=mod gomobile bind -target=ios/arm64 -trimpath=false -o $GITHUB_WORKSPACE/Frameworks/libbox.xcframework ./experimental/libbox 2>&1 | tail -50
+          echo "开始编译 libbox.xcframework..."
+          gomobile bind -target=ios/arm64 -o $GITHUB_WORKSPACE/Frameworks/libbox.xcframework ./experimental/libbox 2>&1 | tail -50
 
           if [ -d "$GITHUB_WORKSPACE/Frameworks/libbox.xcframework" ]; then
             echo "编译成功"

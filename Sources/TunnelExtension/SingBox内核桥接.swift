@@ -65,6 +65,24 @@ final class SingBox内核桥接 {
 
     // MARK: - 启动内核
 
+    /// 测试用：用 nil 平台接口创建服务（排查平台接口是否导致崩溃）
+    /// - Parameter 配置内容: 配置文件内容
+    /// - Returns: 是否创建成功
+    func 测试创建服务无平台接口(配置内容: String) -> Bool {
+        日志回调?(2, "桥接层：测试 nil 平台接口创建服务...")
+        var 错误: NSError?
+        let 服务 = LibboxNewService(配置内容, nil, &错误)
+        if 服务 != nil {
+            日志回调?(2, "桥接层：nil 平台接口创建成功")
+            // 立即关闭，不保留
+            服务?.close()
+            return true
+        } else {
+            日志回调?(4, "桥接层：nil 平台接口创建失败，错误：\(错误?.localizedDescription ?? "未知")")
+            return false
+        }
+    }
+
     /// 启动 sing-box 内核
     /// - Parameters:
     ///   - 配置内容: 配置文件内容（JSON 字符串）

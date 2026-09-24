@@ -94,7 +94,10 @@ private struct 顶部状态区: View {
             // 右侧：电源开关
             Toggle("", isOn: Binding(
                 get: { 隧道管理.当前状态.是否活动 },
-                set: { _ in 隧道管理.切换连接() }
+                set: { _ in
+                    let 当前节点 = 状态.当前节点
+                    隧道管理.切换连接(节点ID: 当前节点?.id, 节点名称: 当前节点?.名称)
+                }
             ))
             .labelsHidden()
             .toggleStyle(SwitchToggleStyle(tint: .成功色))

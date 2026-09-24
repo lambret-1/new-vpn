@@ -83,9 +83,23 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         if let 选项 = options {
             节点ID = 选项["nodeId"] as? String
             节点名称 = 选项["nodeName"] as? String
-            日志.info("节点：\(self.节点名称 ?? "未知")")
-            记录扩展日志(级别: "信息", 模块: "隧道", 内容: "启动节点：\(self.节点名称 ?? "未知")")
         }
+
+        // 如果节点名称为空，尝试从 sing-box 配置文件解析
+        if 节点名称 == nil || 节点名称?.isEmpty == true {
+            if let 配置路径 = singBox配置路径,
+               let 配置数据 = try? Data(contentsOf: URL(fileURLWithPath: 配置路径)),
+               let 配置JSON = try? JSONSerialization.jsonObject(with: 配置数据) as? [String: Any],
+               let 出站列表 = 配置JSON["outbounds"] as? [[String: Any]],
+               let 第一个出站 = 出站列表.first,
+               let 标签 = 第一个出站["tag"] as? String {
+                节点名称 = 标签
+            }
+        }
+
+        let 显示节点名 = 节点名称?.isEmpty == false ? 节点名称! : "未指定"
+        日志.info("节点：\(显示节点名)")
+        记录扩展日志(级别: "信息", 模块: "隧道", 内容: "启动节点：\(显示节点名)")
 
         // 加载配置
         加载隧道配置()
@@ -506,15 +520,26 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         转发端fd = socketPair[1]
         记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "socketpair 创建成功，sing-box端=\(singBox端fd)，转发端=\(转发端fd)")
 
-        // 启动内核（将 sing-box 端的 fd 传给 openTun）
-        // 先用最小配置测试 LibboxNewService 是否能成功
+        // 第一步：用 nil 平台接口测试（排查平台接口是否导致崩溃）
         let 最小配置 = """
         {
           "inbounds": [{"type": "mixed", "tag": "mixed-in", "listen": "127.0.0.1", "listen_port": 7890}],
           "outbounds": [{"type": "direct", "tag": "direct"}]
         }
         """
-        记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "先用最小配置测试 LibboxNewService...")
+        记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "第一步：nil 平台接口测试...")
+        let nil接口成功 = singBox桥接.测试创建服务无平台接口(配置内容: 最小配置)
+        记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "nil 平台接口测试结果：\(nil接口成功 ? "成功" : "失败")")
+
+        if !nil接口成功 {
+            记录扩展日志(级别: "错误", 模块: "sing-box", 内容: "nil 平台接口也崩溃，问题出在libbox框架或配置")
+            关闭SocketPair()
+            完成(false)
+            return
+        }
+
+        // 第二步：用平台接口 + 最小配置测试
+        记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "第二步：平台接口 + 最小配置测试...")
         let 最小配置成功 = singBox桥接.启动内核(配置内容: 最小配置, tun文件描述符: singBox端fd)
         记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "最小配置测试结果：\(最小配置成功 ? "成功" : "失败")")
 
@@ -534,7 +559,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             }
             完成(成功)
         } else {
-            记录扩展日志(级别: "错误", 模块: "sing-box", 内容: "最小配置也失败，问题出在平台接口或libbox框架")
+            记录扩展日志(级别: "错误", 模块: "sing-box", 内容: "平台接口导致崩溃，问题出在平台接口实现")
             关闭SocketPair()
             完成(false)
         }

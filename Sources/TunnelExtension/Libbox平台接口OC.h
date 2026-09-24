@@ -12,8 +12,8 @@
 NS_ASSUME_NONNULL_BEGIN
 
 /// libbox 平台接口 OC 实现
-/// 继承 LibboxPlatformInterface，重写 openTun 返回 packetFlow 文件描述符
-@interface Libbox平台接口OC : LibboxPlatformInterface
+/// 直接实现 LibboxPlatformInterface 协议（不继承 gobind 生成的类，避免引用计数崩溃）
+@interface Libbox平台接口OC : NSObject <LibboxPlatformInterface>
 
 /// TUN 文件描述符（由 PacketTunnelProvider 设置）
 @property (nonatomic, assign) int32_t tun文件描述符;

@@ -34,6 +34,36 @@
 - (void)clearDNSCache {
 }
 
+/// 自动检测接口控制（iOS 不使用，返回 NO）
+- (BOOL)autoDetectInterfaceControl:(int32_t)fd error:(NSError * _Nullable * _Nullable)error {
+    return NO;
+}
+
+/// 查找连接所有者（iOS 不支持，返回 -1）
+- (int32_t)findConnectionOwner:(int32_t)ipProtocol sourceAddress:(NSString * _Nullable)sourceAddress sourcePort:(int32_t)sourcePort destinationAddress:(NSString * _Nullable)destinationAddress destinationPort:(int32_t)destinationPort error:(NSError * _Nullable * _Nullable)error {
+    return -1;
+}
+
+/// 根据 UID 获取包名（iOS 不支持，返回 nil）
+- (NSString * _Nullable)packageNameByUid:(int32_t)uid {
+    return nil;
+}
+
+/// 获取网络接口列表（iOS 返回空，由系统管理）
+- (id<LibboxNetworkInterfaceIterator> _Nullable)getInterfaces:(NSError * _Nullable * _Nullable)error {
+    return nil;
+}
+
+/// 读取 WIFI 状态（iOS 不使用，返回 nil）
+- (id<LibboxWIFIState> _Nullable)readWIFIState {
+    return nil;
+}
+
+/// 发送通知（iOS 不使用，返回 NO）
+- (BOOL)sendNotification:(id<LibboxNotification> _Nullable)notification error:(NSError * _Nullable * _Nullable)error {
+    return NO;
+}
+
 - (void)writeLog:(NSString * _Nullable)message {
     if (message && self.日志回调) {
         self.日志回调(2, message);

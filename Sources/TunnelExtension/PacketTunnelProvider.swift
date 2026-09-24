@@ -425,6 +425,21 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         日志.info("正在启动 sing-box 内核，配置：\(配置路径)")
         记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "正在启动内核...")
 
+        // 读取配置文件内容
+        guard let 配置数据 = try? Data(contentsOf: URL(fileURLWithPath: 配置路径)),
+              let 配置内容 = String(data: 配置数据, encoding: .utf8) else {
+            日志.error("读取 sing-box 配置文件失败")
+            记录扩展日志(级别: "错误", 模块: "sing-box", 内容: "读取配置文件失败")
+            完成(false)
+            return
+        }
+
+        // 获取工作目录（App Group 容器目录）
+        let 工作目录 = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.com.newvpn.app")?.path ?? NSTemporaryDirectory()
+
+        // 初始化 libbox
+        singBox桥接.初始化(工作目录: 工作目录)
+
         // 设置日志回调
         singBox桥接.日志回调 = { [weak self] 级别, 内容 in
             guard let self = self else { return }
@@ -441,11 +456,26 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             self.记录扩展日志(级别: 级别字符串, 模块: "sing-box", 内容: 内容)
         }
 
-        // 获取工作目录（App Group 容器目录）
-        let 工作目录 = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.com.newvpn.app")?.path ?? NSTemporaryDirectory()
+        // 获取 packetFlow 的文件描述符（通过 KVC 获取私有属性）
+        guard let tun文件描述符 = packetFlow.value(forKey: "fileDescriptor") as? Int32 else {
+            日志.error("无法获取 packetFlow 文件描述符")
+            记录扩展日志(级别: "错误", 模块: "sing-box", 内容: "无法获取 TUN 文件描述符")
+            完成(false)
+            return
+        }
+
+        日志.info("TUN 文件描述符：\(tun文件描述符)")
 
         // 启动内核
-        let 成功 = singBox桥接.启动内核(配置路径: 配置路径, 工作目录: 工作目录)
+        let 成功 = singBox桥接.启动内核(配置内容: 配置内容, tun文件描述符: tun文件描述符)
+
+        if 成功 {
+            singBox运行中 = true
+            记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "内核启动成功")
+        } else {
+            记录扩展日志(级别: "错误", 模块: "sing-box", 内容: "内核启动失败")
+        }
+
         完成(成功)
     }
 
@@ -466,12 +496,17 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     private func 重载SingBox配置() {
         guard singBox运行中 else { return }
 
-        guard let 配置路径 = singBox配置路径 else { return }
+        guard let 配置路径 = singBox配置路径,
+              let 配置数据 = try? Data(contentsOf: URL(fileURLWithPath: 配置路径)),
+              let 配置内容 = String(data: 配置数据, encoding: .utf8) else {
+            记录扩展日志(级别: "错误", 模块: "sing-box", 内容: "读取配置文件失败，无法重载")
+            return
+        }
 
         日志.info("正在重新加载 sing-box 配置")
         记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "正在重新加载配置...")
 
-        _ = singBox桥接.重载配置(配置路径: 配置路径)
+        _ = singBox桥接.重载配置(配置内容: 配置内容)
     }
 
     /// 获取 sing-box 内核统计

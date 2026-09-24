@@ -69,7 +69,21 @@ jobs:
           sudo cp /tmp/xcodegen-bin/xcodegen/bin/xcodegen /usr/local/bin/xcodegen
           xcodegen --version
 
-      # ── 5. 生成 Xcode 工程 ──
+      # ── 5. 下载预编译的 libbox.xcframework ──
+      - name: 下载 libbox 框架
+        run: |
+          mkdir -p Frameworks
+          echo "下载 sing-box libbox v1.11.0..."
+          gh release download singbox-v1.11.0 -p "libbox-ios-v1.11.0.zip" -D /tmp/ --repo lambret-1/new-vpn 2>&1 || {
+            echo "下载失败，尝试使用 curl..."
+            curl -L -o /tmp/libbox-ios-v1.11.0.zip \
+              "https://github.com/lambret-1/new-vpn/releases/download/singbox-v1.11.0/libbox-ios-v1.11.0.zip"
+          }
+          unzip -o /tmp/libbox-ios-v1.11.0.zip -d Frameworks/
+          echo "libbox.xcframework 下载完成"
+          ls -la Frameworks/libbox.xcframework
+
+      # ── 6. 生成 Xcode 工程 ──
       - name: 生成 Xcode 工程
         run: xcodegen generate
 

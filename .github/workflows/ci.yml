@@ -201,6 +201,30 @@ jobs:
           fi
           echo "找到应用: $APP_PATH"
 
+          # 安装 ldid 用于嵌入 entitlements（未签名构建需要手动嵌入）
+          brew install ldid 2>/dev/null || true
+
+          # 嵌入主 App entitlements
+          if [ -f "Sources/AppMain/NewVPN.entitlements" ]; then
+            echo "嵌入主 App entitlements..."
+            ldid -S"Sources/AppMain/NewVPN.entitlements" "$APP_PATH/${{ env.PROJECT_NAME }}"
+          fi
+
+          # 嵌入 Tunnel Extension entitlements
+          PLUGINS_PATH="$APP_PATH/PlugIns"
+          if [ -d "$PLUGINS_PATH" ]; then
+            for EXTENSION in "$PLUGINS_PATH"/*.appex; do
+              if [ -d "$EXTENSION" ]; then
+                EXT_NAME=$(basename "$EXTENSION" .appex)
+                EXT_BINARY="$EXTENSION/$EXT_NAME"
+                if [ -f "Sources/TunnelExtension/NewVPN-Tunnel.entitlements" ] && [ -f "$EXT_BINARY" ]; then
+                  echo "嵌入 $EXT_NAME entitlements..."
+                  ldid -S"Sources/TunnelExtension/NewVPN-Tunnel.entitlements" "$EXT_BINARY"
+                fi
+              fi
+            done
+          fi
+
           # 创建 IPA 目录结构
           mkdir -p ${{ env.BUILD_DIR }}/ipa/Payload
           cp -R "$APP_PATH" ${{ env.BUILD_DIR }}/ipa/Payload/

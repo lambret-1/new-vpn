@@ -12,59 +12,28 @@ import Libbox
 // MARK: - 平台接口实现
 
 /// libbox 平台接口实现
-/// 直接实现 LibboxPlatformInterfaceProtocol 协议，完全控制所有方法
-final class Libbox平台接口: NSObject, LibboxPlatformInterfaceProtocol {
+/// 继承 LibboxPlatformInterface 类，重写关键方法，其他使用默认实现
+final class Libbox平台接口: LibboxPlatformInterface {
     /// 日志回调
     var 日志回调: ((_ 级别: Int, _ 内容: String) -> Void)?
 
     /// TUN 文件描述符（由 PacketTunnelProvider 设置）
     var tun文件描述符: Int32 = -1
 
-    func underNetworkExtension() -> Bool { true }
+    override func underNetworkExtension() -> Bool { true }
 
-    func writeLog(_ message: String?) {
+    override func writeLog(_ message: String?) {
         guard let 消息 = message else { return }
         日志回调?(2, 消息)
     }
 
-    /// 打开 TUN 接口，返回 packetFlow 的文件描述符
-    func openTun(_ options: LibboxTunOptions?, ret0_: UnsafeMutablePointer<Int32>?, error: NSErrorPointer) -> Bool {
-        guard tun文件描述符 >= 0 else { return false }
-        ret0_?.pointee = tun文件描述符
-        return true
-    }
+    override func includeAllNetworks() -> Bool { true }
 
-    func includeAllNetworks() -> Bool { true }
+    override func useProcFS() -> Bool { false }
 
-    func useProcFS() -> Bool { false }
+    override func usePlatformAutoDetectControl() -> Bool { false }
 
-    func usePlatformAutoDetectControl() -> Bool { false }
-
-    func autoDetectInterfaceControl(_ fd: Int32, error: NSErrorPointer) -> Bool { true }
-
-    func clearDNSCache() {}
-
-    func closeDefaultInterfaceMonitor(_ listener: LibboxInterfaceUpdateListener?, error: NSErrorPointer) -> Bool { true }
-
-    func startDefaultInterfaceMonitor(_ listener: LibboxInterfaceUpdateListener?, error: NSErrorPointer) -> Bool { true }
-
-    func getInterfaces(_ error: NSErrorPointer) -> LibboxNetworkInterfaceIterator? { nil }
-
-    func findConnectionOwner(_ ipProtocol: Int32, sourceAddress: String?, sourcePort: Int32, destinationAddress: String?, destinationPort: Int32, ret0_: UnsafeMutablePointer<Int32>?, error: NSErrorPointer) -> Bool {
-        ret0_?.pointee = -1
-        return true
-    }
-
-    func packageName(byUid uid: Int32) throws -> String { "" }
-
-    func uid(byPackageName packageName: String?, ret0_: UnsafeMutablePointer<Int32>?, error: NSErrorPointer) -> Bool {
-        ret0_?.pointee = -1
-        return true
-    }
-
-    func readWIFIState() -> LibboxWIFIState? { nil }
-
-    func sendNotification(_ notification: LibboxNotification?, error: NSErrorPointer) -> Bool { true }
+    override func clearDNSCache() {}
 }
 
 // MARK: - sing-box 内核桥接

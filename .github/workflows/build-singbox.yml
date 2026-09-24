@@ -70,25 +70,20 @@ jobs:
           go get golang.org/x/net@latest
           go mod download
           go mod tidy
-          go mod vendor
 
-          # 补丁：在 vendor 的 http2 包中添加导出函数，强制保留 connPool 符号
-          echo "添加 http2 符号保留补丁..."
-          echo '' >> /tmp/sing-box/vendor/golang.org/x/net/http2/transport.go
-          echo '// 导出函数：强制保留 connPool 字段符号，解决 c-archive 链接错误' >> /tmp/sing-box/vendor/golang.org/x/net/http2/transport.go
-          echo 'func ExportConnPool(t *Transport) interface{} { return t.connPool }' >> /tmp/sing-box/vendor/golang.org/x/net/http2/transport.go
-
-          # 补丁：在 libbox 包中引用导出函数
+          # 补丁：强制引用 golang.org/x/net/http2
+          echo "添加链接补丁..."
           echo 'package libbox' > /tmp/sing-box/experimental/libbox/linkfix.go
           echo '' >> /tmp/sing-box/experimental/libbox/linkfix.go
           echo 'import (' >> /tmp/sing-box/experimental/libbox/linkfix.go
           echo '	"golang.org/x/net/http2"' >> /tmp/sing-box/experimental/libbox/linkfix.go
           echo ')' >> /tmp/sing-box/experimental/libbox/linkfix.go
           echo '' >> /tmp/sing-box/experimental/libbox/linkfix.go
-          echo 'var _ = http2.ExportConnPool' >> /tmp/sing-box/experimental/libbox/linkfix.go
+          echo 'var _ = &http2.Transport{}' >> /tmp/sing-box/experimental/libbox/linkfix.go
+          echo 'var _ = (*http2.Transport).RoundTrip' >> /tmp/sing-box/experimental/libbox/linkfix.go
 
           echo "开始编译 libbox.xcframework..."
-          gomobile bind -target=ios -o $GITHUB_WORKSPACE/Frameworks/libbox.xcframework ./experimental/libbox 2>&1 | tail -50
+          GOFLAGS=-mod=mod gomobile bind -target=ios -trimpath=false -o $GITHUB_WORKSPACE/Frameworks/libbox.xcframework ./experimental/libbox 2>&1 | tail -50
 
           if [ -d "$GITHUB_WORKSPACE/Frameworks/libbox.xcframework" ]; then
             echo "编译成功"

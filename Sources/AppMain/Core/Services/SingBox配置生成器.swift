@@ -89,7 +89,9 @@ final class SingBox配置生成器 {
 
         return SingBoxDNS配置(
             servers: 默认服务器,
-            final: "dns_proxy",
+            // 默认使用国内直连 DNS，确保代理不通时也能解析域名
+            // 代理域名通过 DNS 规则指定走 dns_resolver 直连解析
+            final: "dns_resolver",
             strategy: "ipv4_only",
             disableCache: false,
             rules: DNS规则列表.isEmpty ? nil : DNS规则列表

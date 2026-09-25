@@ -219,9 +219,10 @@ final class SingBox配置生成器 {
         }
 
         // Direct 出站（标签大写参考官方客户端）
-        // 不设置 bind_interface：iOS Network Extension 进程流量由系统自动排除在 VPN 路由之外，
-        // 手动绑定物理网卡会导致不对称路由（请求从物理网卡出，响应被路由到 TUN），触发 connection refused
-        出站列表.append(SingBox出站配置.direct出站(标签: "DIRECT", 绑定接口: nil))
+        // 动态检测当前活动物理网卡并绑定，避免直连流量回环到 TUN 导致 connection refused
+        let 活动接口 = 检测当前活动物理网卡()
+        NSLog("[SingBox配置] DIRECT 出站绑定物理网卡：%@", 活动接口)
+        出站列表.append(SingBox出站配置.direct出站(标签: "DIRECT", 绑定接口: 活动接口))
 
         // Block 出站
         出站列表.append(SingBox出站配置.block出站(标签: "REJECT"))
@@ -408,10 +409,9 @@ final class SingBox配置生成器 {
 
         return SingBox路由配置(
             final: 最终出站,
-            // 启用 auto_detect_interface：sing-box 通过 getInterfaces 获取物理网卡，用 SO_BOUND_IF 绑定出站 socket，
-            // 避免直连流量被路由回 TUN 形成回环（回环会导致 connection refused）
-            // startDefaultInterfaceMonitor 已简化为仅保存监听器，不会触发运行时探测崩溃
-            autoDetectInterface: true,
+            // 关闭 auto_detect_interface：iOS libbox 的 getInterfaces 返回对象属性不匹配导致 "no available network interface"
+            // 改用 DIRECT 出站的 bind_interface 直接绑定物理网卡
+            autoDetectInterface: false,
             rules: 规则列表
         )
     }

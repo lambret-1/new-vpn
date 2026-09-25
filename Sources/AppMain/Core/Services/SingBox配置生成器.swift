@@ -89,15 +89,15 @@ final class SingBox配置生成器 {
 
         switch 运行模式 {
         case .全局直连:
-            // 纯直连模式：DoH 走 TCP 解决 UDP 回包问题，UDP 服务器仅用于 bootstrap 解析 DoH 域名
+            // 纯直连模式：DoH 直接用 IP，走 TCP 解决 iOS NE 下 UDP 绑接口回包失败
+            // 地址用 IP 不用域名，省去 address_resolver/bootstrap
             默认服务器 = [
-                .udp服务器(标签: "dns_bootstrap", 地址: "223.5.5.5", 出站: "DIRECT"),
-                .https服务器(标签: "dns_resolver", 地址: "dns.alidns.com", 出站: "DIRECT")
+                .https服务器(标签: "dns_resolver", 地址: "223.5.5.5", 出站: "DIRECT")
             ]
             默认DNS服务器 = "dns_resolver"
 
         case .规则分流, .全局代理:
-            // 代理模式：恢复 UDP dns_resolver，保证代理服务器域名解析可靠
+            // 代理模式：保持原配置不变
             默认服务器 = [
                 .udp服务器(标签: "dns_resolver", 地址: "223.5.5.5", 出站: "DIRECT"),
                 .https服务器(标签: "dns_proxy", 地址: "1.1.1.1", 出站: "proxy")

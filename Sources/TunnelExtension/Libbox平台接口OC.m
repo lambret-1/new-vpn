@@ -105,57 +105,10 @@
 /// 默认接口更新监听器（保存引用，网络切换时通知 sing-box）
 static id<LibboxInterfaceUpdateListener> _默认接口监听器 = nil;
 
-/// 通过运行时探测协议方法并调用默认接口更新
-static void 通知默认接口更新(id<LibboxInterfaceUpdateListener> listener, int32_t 接口索引) {
-    if (!listener) return;
-
-    // 枚举协议方法，找到接受单个 int 参数的方法并调用
-    unsigned int 方法数量 = 0;
-    struct objc_method_description *方法列表 = protocol_copyMethodDescriptionList(@protocol(LibboxInterfaceUpdateListener), YES, YES, &方法数量);
-    for (unsigned int i = 0; i < 方法数量; i++) {
-        SEL 方法名 = 方法列表[i].name;
-        NSString *方法名字符串 = NSStringFromSelector(方法名);
-        // 查找包含 "interface" 或 "default" 的方法
-        if ([方法名字符串.lowercaseString containsString:@"interface"] ||
-            [方法名字符串.lowercaseString containsString:@"default"]) {
-            if ([listener respondsToSelector:方法名]) {
-                // 尝试调用单个 int 参数的方法
-                typedef void (*函数指针类型)(id, SEL, int32_t);
-                函数指针类型 函数指针 = (函数指针类型)[listener methodForSelector:方法名];
-                函数指针(listener, 方法名, 接口索引);
-                break;
-            }
-        }
-    }
-    free(方法列表);
-}
-
-/// 启动默认接口监视器
+/// 启动默认接口监视器（仅保存监听器引用，不做运行时探测避免 Go 回调上下文中内存损坏）
+/// sing-box 会通过 getInterfaces 自行获取接口列表并选择默认接口
 - (BOOL)startDefaultInterfaceMonitor:(id<LibboxInterfaceUpdateListener> _Nullable)listener error:(NSError * _Nullable * _Nullable)error {
     _默认接口监听器 = listener;
-
-    // 立即通知当前默认接口（通过 getInterfaces 获取第一个可用接口）
-    if (listener) {
-        NSError *接口错误 = nil;
-        id<LibboxNetworkInterfaceIterator> 迭代器 = [self getInterfaces:&接口错误];
-        if (迭代器) {
-            LibboxNetworkInterface *第一个接口 = [迭代器 next];
-            if (第一个接口) {
-                通知默认接口更新(listener, 第一个接口.index);
-                if (self.日志回调) {
-                    self.日志回调(2, [NSString stringWithFormat:@"默认接口监视器已启动，当前默认接口 index=%d name=%@", 第一个接口.index, 第一个接口.name]);
-                }
-            } else {
-                if (self.日志回调) {
-                    self.日志回调(3, @"默认接口监视器启动：getInterfaces 返回空列表");
-                }
-            }
-        } else {
-            if (self.日志回调) {
-                self.日志回调(4, [NSString stringWithFormat:@"默认接口监视器启动：getInterfaces 失败 - %@", 接口错误.localizedDescription]);
-            }
-        }
-    }
     return YES;
 }
 

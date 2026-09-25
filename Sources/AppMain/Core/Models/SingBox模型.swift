@@ -580,7 +580,7 @@ struct SingBoxTLS配置: Codable, Equatable {
         var 配置 = SingBoxTLS配置(enabled: true)
         配置.serverName = SNI
         配置.insecure = 跳过验证
-        配置.minVersion = "1.3"
+        配置.minVersion = "1.2"
         // uTLS 指纹伪装，模拟 Chrome 浏览器 TLS 握手
         配置.utls = SingBoxUTLS配置(enabled: true, fingerprint: "chrome")
         return 配置

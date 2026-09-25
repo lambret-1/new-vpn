@@ -266,6 +266,13 @@ final class DNS管理器: ObservableObject {
     func 清除查询记录() {
         查询记录列表.removeAll()
         UserDefaults.standard.removeObject(forKey: 记录存储键)
+
+        // 关键修复：同时清除 App Group 共享存储中的扩展端 DNS 记录
+        // 否则定时器每2秒同步扩展记录时，旧记录会被重新拉回，导致"删不掉反复出现"
+        if let 共享默认 = UserDefaults(suiteName: AppGroup标识) {
+            共享默认.removeObject(forKey: "dnsQueryRecords")
+            共享默认.synchronize()
+        }
     }
 
     /// 保存查询记录

@@ -26,12 +26,14 @@ final class SingBox配置生成器 {
     ///   - 节点列表: 所有可用节点（用于 urltest/selector）
     ///   - 分流规则: 分流规则列表
     ///   - DNS配置: DNS 配置
+    ///   - 运行模式: 隧道运行模式（规则分流/全局代理/全局直连）
     ///   - 日志级别: 日志级别
     /// - Returns: sing-box 配置
     func 生成配置(节点: 节点模型?,
                   节点列表: [节点模型] = [],
                   分流规则: [分流规则项] = [],
                   DNS配置: DNS配置模型? = nil,
+                  运行模式: 隧道运行模式 = .规则分流,
                   日志级别: String = "debug") -> SingBox配置 {
         var 配置 = SingBox配置()
 
@@ -42,7 +44,7 @@ final class SingBox配置生成器 {
         )
 
         // DNS 配置
-        配置.dns = 生成DNS配置(DNS配置, 节点: 节点)
+        配置.dns = 生成DNS配置(DNS配置, 节点: 节点, 运行模式: 运行模式)
 
         // 入站配置
         配置.inbounds = 生成入站配置()
@@ -51,7 +53,7 @@ final class SingBox配置生成器 {
         配置.outbounds = 生成出站配置(节点: 节点, 节点列表: 节点列表)
 
         // 路由配置
-        配置.route = 生成路由配置(分流规则: 分流规则, 节点: 节点)
+        配置.route = 生成路由配置(分流规则: 分流规则, 节点: 节点, 运行模式: 运行模式)
 
         // 实验配置（缓存文件）
         配置.experimental = SingBox实验配置(
@@ -68,10 +70,14 @@ final class SingBox配置生成器 {
     // MARK: - 生成 DNS 配置（旧格式 address，兼容当前 libbox 版本）
 
     /// 生成 DNS 配置
-    private func 生成DNS配置(_ DNS配置: DNS配置模型?, 节点: 节点模型?) -> SingBoxDNS配置 {
+    /// - Parameters:
+    ///   - DNS配置: 用户自定义 DNS 配置
+    ///   - 节点: 当前节点（用于提取代理服务器域名，避免 DNS 回环）
+    ///   - 运行模式: 隧道运行模式
+    private func 生成DNS配置(_ DNS配置: DNS配置模型?, 节点: 节点模型?, 运行模式: 隧道运行模式) -> SingBoxDNS配置 {
         // DNS 分流策略：
-        // dns_resolver: 阿里云 DNS（223.5.5.5），走 DIRECT，用于国内域名
-        // dns_proxy: Cloudflare DNS（tls://1.1.1.1），走 proxy，用于国外域名
+        // dns_resolver: 阿里云 DNS（223.5.5.5），走 DIRECT，用于国内域名和代理服务器域名解析
+        // dns_proxy: Cloudflare DNS（tls://1.1.1.1），走 proxy，用于国外域名（仅代理模式下使用）
         let 默认服务器 = [
             SingBoxDNS服务器.udp服务器(标签: "dns_resolver", 地址: "223.5.5.5", 出站: "DIRECT"),
             SingBoxDNS服务器.tls服务器(标签: "dns_proxy", 地址: "1.1.1.1", 出站: "proxy")
@@ -108,18 +114,29 @@ final class SingBox配置生成器 {
         ]
         DNS规则列表.append(SingBoxDNS规则(域名后缀: 国内域名后缀, 服务器: "dns_resolver"))
 
-        // 代理服务器域名用直连 DNS 解析，避免回环
+        // 关键修复：代理服务器域名强制走直连 DNS 解析，彻底避免 DNS 回环死锁
+        // 无论运行模式如何，代理服务器的域名解析都不能走代理通道
         if let 节点地址 = 节点?.地址, !节点地址.isEmpty {
-            let 是否IP地址 = 节点地址.allSatisfy({ $0.isNumber || $0 == "." })
+            let 是否IP地址 = 节点地址.allSatisfy({ $0.isNumber || $0 == "." || $0 == ":" })
             if !是否IP地址 {
                 DNS规则列表.append(SingBoxDNS规则(域名: [节点地址], 服务器: "dns_resolver"))
             }
         }
 
+        // 根据运行模式决定默认 DNS 服务器
+        // 全局直连模式：所有域名都走国内直连 DNS，避免依赖代理通道
+        // 规则分流/全局代理：未匹配的域名走代理 DNS（通过隧道查询，避免 DNS 污染）
+        let 默认DNS服务器: String
+        switch 运行模式 {
+        case .全局直连:
+            默认DNS服务器 = "dns_resolver"
+        case .规则分流, .全局代理:
+            默认DNS服务器 = "dns_proxy"
+        }
+
         return SingBoxDNS配置(
             servers: 默认服务器,
-            // 默认走 Cloudflare DNS（代理），国内域名通过规则走阿里云
-            final: "dns_proxy",
+            final: 默认DNS服务器,
             strategy: "ipv4_only",
             disableCache: false,
             rules: DNS规则列表
@@ -134,13 +151,15 @@ final class SingBox配置生成器 {
             // TUN 入站（iOS 隧道使用）
             // 注意：Network Extension 中必须用 gvisor 栈，system 栈需要 root 权限
             // auto_route/strict_route 由系统 NEPacketTunnelNetworkSettings 控制，不需 sing-box 管理
+            // 启用协议嗅探（sniff）：从 TLS Client Hello 中提取 SNI 域名，提升分流精度
             SingBox入站配置.tun入站(
                 标签: "tun-in",
                 地址: "10.0.0.2/24",
                 MTU: 1500,
                 自动路由: false,
                 严格路由: false,
-                网络栈: "gvisor"
+                网络栈: "gvisor",
+                启用嗅探: true
             ),
             // Mixed 入站（HTTP+SOCKS5，用于本地应用）
             SingBox入站配置.mixed入站(
@@ -303,7 +322,11 @@ final class SingBox配置生成器 {
     // MARK: - 生成路由配置（兼容当前 libbox 版本）
 
     /// 生成路由配置
-    private func 生成路由配置(分流规则: [分流规则项], 节点: 节点模型?) -> SingBox路由配置 {
+    /// - Parameters:
+    ///   - 分流规则: 用户自定义分流规则
+    ///   - 节点: 当前节点（用于代理服务器 IP 直连）
+    ///   - 运行模式: 隧道运行模式，决定最终出站
+    private func 生成路由配置(分流规则: [分流规则项], 节点: 节点模型?, 运行模式: 隧道运行模式) -> SingBox路由配置 {
         var 规则列表: [SingBox路由规则] = []
 
         // 私有 IP 直连
@@ -332,16 +355,47 @@ final class SingBox配置生成器 {
             outbound: "DIRECT"
         ))
 
-        // 应用分流规则
-        for 规则 in 分流规则 where 规则.启用 {
-            if let 路由规则 = 分流规则转换为路由规则(规则) {
-                规则列表.append(路由规则)
+        // 关键修复：代理服务器地址直连，避免代理流量自身被路由到代理导致回环
+        // 无论运行模式如何，到代理服务器的连接必须直接发出
+        if let 节点地址 = 节点?.地址, !节点地址.isEmpty {
+            let 是否IP地址 = 节点地址.allSatisfy({ $0.isNumber || $0 == "." })
+            if 是否IP地址 {
+                规则列表.append(SingBox路由规则(
+                    ipCidr: ["\(节点地址)/32"],
+                    outbound: "DIRECT"
+                ))
+            } else {
+                规则列表.append(SingBox路由规则(
+                    domain: [节点地址],
+                    outbound: "DIRECT"
+                ))
             }
         }
 
+        // 应用分流规则（仅在规则分流模式下生效）
+        if 运行模式 == .规则分流 {
+            for 规则 in 分流规则 where 规则.启用 {
+                if let 路由规则 = 分流规则转换为路由规则(规则) {
+                    规则列表.append(路由规则)
+                }
+            }
+        }
+
+        // 根据运行模式决定最终出站
+        // 全局直连：所有未匹配流量直接连接
+        // 规则分流/全局代理：所有未匹配流量走代理
+        let 最终出站: String
+        switch 运行模式 {
+        case .全局直连:
+            最终出站 = "DIRECT"
+        case .规则分流, .全局代理:
+            最终出站 = "proxy"
+        }
+
         return SingBox路由配置(
-            final: "proxy",
-            autoDetectInterface: false,
+            final: 最终出站,
+            // 启用自动检测出站网卡，确保 WiFi/蜂窝切换时正确选择物理接口
+            autoDetectInterface: true,
             rules: 规则列表
         )
     }

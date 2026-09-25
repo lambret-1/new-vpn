@@ -523,7 +523,8 @@ final class 隧道管理器: NSObject, ObservableObject {
             节点: 使用节点,
             节点列表: 所有节点,
             分流规则: [],
-            DNS配置: nil
+            DNS配置: nil,
+            运行模式: 配置.运行模式
         )
 
         // 保存配置到 App Group 共享目录（必须使用完整路径）

@@ -9,6 +9,7 @@ Sources/
 │   ├── ContentView.swift         # 旧三栏主界面（已弃用，保留参考）
 │   ├── Pages/                    # 页面视图
 │   │   ├── DashboardView.swift   # 主控首页 Dashboard
+│   │   ├── 编辑配置文件页面.swift  # 配置文件编辑页
 │   │   └── 内容区/                # 顶部卡片对应内容区
 │   │       ├── 节点内容区.swift       # 节点分组列表 + 展开节点
 │   │       ├── 网络活动内容区.swift   # TCP/UDP统计 + 连接记录
@@ -19,7 +20,39 @@ Sources/
 │   │   ├── 数据模型.swift          # 全部数据模型定义
 │   │   ├── UpdateModel.swift     # 更新数据模型 + 状态枚举
 │   │   ├── AppUpdateManager.swift # 更新检测管理器
-│   │   └── AppDownloadManager.swift # IPA下载管理器
+│   │   ├── AppDownloadManager.swift # IPA下载管理器
+│   │   ├── Models/               # 数据模型目录
+│   │   │   ├── DNS模型.swift        # DNS 配置/记录/服务器模型
+│   │   │   ├── SingBox模型.swift    # sing-box 完整配置模型
+│   │   │   ├── 分流规则项.swift      # 分流规则数据模型
+│   │   │   ├── 测速模型.swift        # 测速结果模型
+│   │   │   ├── 解析结果模型.swift    # 节点链接解析结果
+│   │   │   ├── 订阅模型.swift        # 订阅源/流量信息模型
+│   │   │   ├── 证书与描述文件模型.swift # 证书/描述文件模型
+│   │   │   ├── 配置描述文件模型.swift  # 配置描述文件模型
+│   │   │   └── 隧道模型.swift        # 隧道状态/配置/统计/错误模型
+│   │   └── Services/             # 业务服务目录
+│   │       ├── SingBox配置生成器.swift   # sing-box JSON 配置生成
+│   │       ├── SingBox内核管理器.swift   # sing-box 内核生命周期管理
+│   │       ├── SingBox解释器.swift       # sing-box 配置解释
+│   │       ├── 隧道管理器.swift          # VPN 隧道启停/配置/统计
+│   │       ├── DNS管理器.swift           # DNS 配置/查询/测速/泄漏检测
+│   │       ├── DNS服务.swift             # DNS 解析底层服务
+│   │       ├── 分流规则管理器.swift      # 分流规则增删改查
+│   │       ├── 分流规则服务.swift        # 分流规则匹配服务
+│   │       ├── 测速管理器.swift          # 节点延迟/抖动/丢包测速
+│   │       ├── 测速服务.swift            # 测速底层实现
+│   │       ├── 节点链接解析器.swift      # vmess/vless/trojan/ss 链接解析
+│   │       ├── 订阅下载服务.swift        # 订阅拉取/下载
+│   │       ├── 订阅解释器.swift          # 订阅内容解析
+│   │       ├── Clash解释器.swift         # Clash 订阅格式解析
+│   │       ├── 网络活动管理器.swift      # TCP/UDP 连接监控
+│   │       ├── CA证书服务.swift          # MITM 根证书管理
+│   │       ├── VPN描述文件服务.swift     # VPN 描述文件生成
+│   │       ├── 证书与描述文件管理器.swift # 证书/描述文件统一管理
+│   │       ├── 配置描述文件服务.swift    # 配置描述文件读写
+│   │       ├── 配置描述文件管理器.swift  # 配置描述文件管理
+│   │       └── 调试日志管理器.swift      # 分级日志/环形缓冲/落盘
 │   └── UI/
 │       └── Components/           # 基础组件库
 │           ├── AppCard.swift            # 卡片容器
@@ -33,10 +66,58 @@ Sources/
 │           ├── 底部工具栏.swift          # 底部5图标工具栏
 │           ├── 底部弹窗容器.swift        # 95%高度底部弹窗
 │           ├── AppUpdateAlert.swift     # 检查更新多状态弹窗
-│           └── 下载进度视图.swift        # 下载进度圆环+进度条
-└── TunnelExtension/              # VPN 隧道扩展
-    └── PacketTunnelProvider.swift
+│           ├── 下载进度视图.swift        # 下载进度圆环+进度条
+│           ├── DNS组件.swift            # DNS 页面组件
+│           ├── SingBox组件.swift        # sing-box 配置组件
+│           ├── 分流规则组件.swift        # 分流规则组件
+│           ├── 测速组件.swift            # 测速组件
+│           ├── 订阅管理视图.swift        # 订阅管理
+│           ├── 订阅解释器视图.swift      # 订阅解释
+│           ├── 证书与描述文件组件.swift  # 证书/描述文件组件
+│           ├── 调试日志组件.swift        # 调试日志组件
+│           ├── 配置描述文件组件.swift    # 配置描述文件组件
+│           └── 隧道组件.swift            # 隧道状态组件
+└── TunnelExtension/              # VPN 隧道扩展（独立进程）
+    ├── PacketTunnelProvider.swift     # NEPacketTunnelProvider 入口
+    ├── SingBox内核桥接.swift           # libbox Swift 桥接层
+    ├── Libbox平台接口OC.h             # libbox 平台接口 OC 声明
+    ├── Libbox平台接口OC.m             # libbox 平台接口 OC 实现（openTun/接口枚举）
+    └── NewVPN-Tunnel-Bridging-Header.h # OC-Swift 桥接头
 ```
+
+## 出站链路修复说明（v0.1.1）
+
+本次修复针对 VPN 出站链路中导致"直连模式网页断网、代理模式完全没网"的核心问题：
+
+### 1. TUN 文件描述符获取方式修复
+- **问题**：原代码使用 `LibboxGetTunnelFileDescriptor()` 全局函数获取 TUN fd，在 iOS Network Extension 中返回值不可靠，导致 sing-box 内核无法读写数据包。
+- **修复**：改用 `Libbox平台接口OC.安全获取文件描述符(packetFlow)`，通过运行时反射从 `NEPacketTunnelFlow` 对象中枚举属性和方法，提取真实的 socket 文件描述符。
+
+### 2. 隧道运行模式
+- **新增**：`隧道运行模式` 枚举，支持三种模式：
+  - **规则分流**：按分流规则匹配，国内直连、国外代理（默认）
+  - **全局代理**：所有流量全部走代理服务器
+  - **全局直连**：所有流量直接连接，不经过代理
+- **影响**：DNS 默认服务器和路由最终出站根据模式自动切换。
+
+### 3. DNS 配置防死锁
+- **问题**：原配置中所有未匹配国内规则的域名都走 `dns_proxy`（通过代理隧道查询），当代理通道不通时 DNS 全部超时，导致网页打不开。
+- **修复**：
+  - 全局直连模式下，所有域名走国内直连 DNS（`dns_resolver`），不依赖代理通道。
+  - 代理服务器域名强制走直连 DNS 解析，无论运行模式如何，彻底避免"连代理要先查域名、查域名要先走代理"的死锁。
+  - IP 地址判断增加对 IPv6 冒号的识别。
+
+### 4. TUN 入站启用协议嗅探
+- **修复**：TUN 入站启用 `sniff`，从 TLS Client Hello 中提取 SNI 域名，提升分流规则匹配精度，不再仅依赖 IP 地址判断。
+
+### 5. 路由配置修复
+- **修复**：启用 `auto_detect_interface`，确保 WiFi/蜂窝网络切换时 sing-box 正确选择物理出站网卡。
+- **修复**：代理服务器地址（域名或 IP）强制加入直连路由规则，避免代理流量自身被路由回代理导致回环。
+- **修复**：全局直连模式下路由最终出站设为 `DIRECT`，真正实现纯直连。
+
+### 6. 流量统计接入
+- **修复**：桥接层增加 `更新统计()` 方法，通过 KVC 探测 libbox 服务对象的统计属性，同步真实上下行字节数。
+- **修复**：PacketTunnelProvider 统计定时器在保存前先从内核同步统计数据。
 
 ## 一期第二次交付内容（Dashboard 重构）
 

@@ -347,6 +347,13 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     private func 保存统计数据() {
         guard let 共享默认 = 共享默认 else { return }
 
+        // 如果 sing-box 内核运行中，从内核同步真实流量统计
+        if singBox运行中 {
+            singBox桥接.更新统计()
+            上行字节 = singBox桥接.上行字节
+            下行字节 = singBox桥接.下行字节
+        }
+
         共享默认.set(上行字节, forKey: "uploadBytes")
         共享默认.set(下行字节, forKey: "downloadBytes")
         共享默认.set(是否运行中, forKey: "tunnelRunning")
@@ -528,12 +535,18 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         }
         记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "日志回调已设置")
 
-        // 使用 libbox 提供的函数获取 TUN 文件描述符（这是 iOS Network Extension 的正确方式）
-        let tun文件描述符 = LibboxGetTunnelFileDescriptor()
-        记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "LibboxGetTunnelFileDescriptor 返回 fd=\(tun文件描述符)")
+        // 从 packetFlow 中安全提取 TUN 文件描述符（通过运行时反射枚举属性/方法，兼容各 iOS 版本）
+        // 不使用 LibboxGetTunnelFileDescriptor() 全局函数，该函数在 iOS Network Extension 中返回值不可靠
+        var 获取错误: NSError?
+        let tun文件描述符 = Libbox平台接口OC.安全获取文件描述符(packetFlow, error: &获取错误)
+        记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "从 packetFlow 提取 TUN fd=\(tun文件描述符)")
+
+        if let 错误 = 获取错误 {
+            记录扩展日志(级别: "警告", 模块: "sing-box", 内容: "TUN fd 提取详情：\(错误.localizedDescription)")
+        }
 
         guard tun文件描述符 >= 0 else {
-            记录扩展日志(级别: "错误", 模块: "sing-box", 内容: "TUN 文件描述符无效：\(tun文件描述符)")
+            记录扩展日志(级别: "错误", 模块: "sing-box", 内容: "TUN 文件描述符无效：\(tun文件描述符)，sing-box 无法接管流量")
             完成(false)
             return
         }

@@ -173,8 +173,8 @@ private struct 分组行视图: View {
 
     /// 生成分组内所有节点的 sing-box 出站配置 JSON 字符串
     private func 生成分组JSON() -> String {
-        let 出站列表 = 分组.节点列表.enumerated().compactMap { 索引, 节点 in
-            SingBox配置生成器.共享.节点转换为出站(节点, 标签: "node-\(索引)")
+        let 出站列表 = 分组.节点列表.compactMap { 节点 in
+            SingBox配置生成器.共享.节点转换为出站(节点, 标签: 节点.名称)
         }
         let 编码器 = JSONEncoder()
         编码器.keyEncodingStrategy = .convertToSnakeCase

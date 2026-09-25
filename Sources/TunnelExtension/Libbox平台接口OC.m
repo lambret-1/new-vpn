@@ -11,6 +11,7 @@
 #include <net/if.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <sys/socket.h>
 
 #pragma mark - 网络接口迭代器
 
@@ -50,6 +51,8 @@
 @interface Libbox平台接口OC ()
 /// 创建 LibboxNetworkInterface 对象
 - (LibboxNetworkInterface *)创建接口对象:(NSDictionary *)信息;
+/// 获取默认物理网卡接口索引
+- (int)获取默认接口索引;
 @end
 
 @implementation Libbox平台接口OC
@@ -69,18 +72,72 @@
     return NO;
 }
 
-/// 不使用平台自动检测接口控制
+/// 使用平台自动检测接口控制（将出站 socket 绑定到物理网卡，排除 VPN 路由）
 - (BOOL)usePlatformAutoDetectInterfaceControl {
-    return NO;
+    return YES;
 }
 
 /// 清空 DNS 缓存（iOS 由系统管理，空实现）
 - (void)clearDNSCache {
 }
 
-/// 自动检测接口控制（iOS 不使用，返回 NO）
+/// 自动检测接口控制：将出站 socket 绑定到物理网卡，避免被 VPN 路由回环
+/// 这是 iOS Network Extension 中直连流量能正常发出的关键
 - (BOOL)autoDetectInterfaceControl:(int32_t)fd error:(NSError * _Nullable * _Nullable)error {
-    return NO;
+    if (fd < 0) {
+        if (error) {
+            *error = [NSError errorWithDomain:@"com.newvpn.tunnel" code:-1
+                                     userInfo:@{NSLocalizedDescriptionKey: @"socket 文件描述符无效"}];
+        }
+        return NO;
+    }
+
+    // 获取默认物理网卡接口索引（优先 WiFi，其次蜂窝）
+    int 接口索引 = [self 获取默认接口索引];
+    if (接口索引 <= 0) {
+        if (error) {
+            *error = [NSError errorWithDomain:@"com.newvpn.tunnel" code:-2
+                                     userInfo:@{NSLocalizedDescriptionKey: @"未找到可用物理网卡接口"}];
+        }
+        return NO;
+    }
+
+    // 绑定 socket 到物理网卡（IPv4）
+    int 结果 = setsockopt(fd, IPPROTO_IP, IP_BOUND_IF, &接口索引, sizeof(接口索引));
+    if (结果 != 0) {
+        // 绑定 IPv4 失败，尝试 IPv6
+        结果 = setsockopt(fd, IPPROTO_IPV6, IPV6_BOUND_IF, &接口索引, sizeof(接口索引));
+    }
+
+    if (结果 != 0) {
+        if (error) {
+            *error = [NSError errorWithDomain:@"com.newvpn.tunnel" code:errno
+                                     userInfo:@{NSLocalizedDescriptionKey: [NSString stringWithFormat:@"setsockopt 绑定接口失败: %s", strerror(errno)]}];
+        }
+        return NO;
+    }
+
+    if (self.日志回调) {
+        self.日志回调(1, [NSString stringWithFormat:@"socket fd=%d 已绑定到物理接口 index=%d", fd, 接口索引]);
+    }
+    return YES;
+}
+
+/// 获取默认物理网卡接口索引（缓存结果，避免每次都遍历接口列表）
+- (int)获取默认接口索引 {
+    static int 缓存索引 = 0;
+    static dispatch_once_t 一次令牌;
+    dispatch_once(&一次令牌, ^{
+        NSError *错误 = nil;
+        id<LibboxNetworkInterfaceIterator> 迭代器 = [self getInterfaces:&错误];
+        if (迭代器) {
+            LibboxNetworkInterface *第一个接口 = [迭代器 next];
+            if (第一个接口 && 第一个接口.index > 0) {
+                缓存索引 = (int)第一个接口.index;
+            }
+        }
+    });
+    return 缓存索引;
 }
 
 /// 查找连接所有者（iOS 不支持，返回 -1）

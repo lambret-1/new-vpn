@@ -75,11 +75,12 @@ final class DNS管理器: ObservableObject {
                   let 记录类型字符串 = 字典["记录类型"] as? String else {
                 return nil
             }
-            let 记录类型 = DNS记录类型(rawValue: 记录类型字符串) ?? .A
+            let 记录类型 = DNS记录类型(rawValue: 记录类型字符串.uppercased()) ?? .A
             let 解析结果 = 字典["解析结果"] as? [String] ?? []
             let TTL = 字典["TTL"] as? Int ?? 300
             let 时间戳 = 字典["查询时间"] as? TimeInterval ?? Date().timeIntervalSince1970
-            let 响应时间 = 字典["响应时间"] as? Int ?? 0
+            // 响应时间可能不存在（扩展端未追踪到开始时间），为 nil 时不显示 0ms
+            let 响应时间 = 字典["响应时间"] as? Int
             let DNS服务器 = 字典["DNS服务器"] as? String ?? "sing-box"
             let 来源字符串 = 字典["来源"] as? String ?? "远程"
             let 来源 = DNS来源(rawValue: 来源字符串) ?? .远程

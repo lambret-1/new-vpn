@@ -41,6 +41,9 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     /// 是否正在运行
     private var 是否运行中 = false
 
+    /// DNS 查询开始时间追踪（域名: 开始时间），用于计算响应耗时
+    private var DNS查询开始时间: [String: Date] = [:]
+
     /// sing-box 内核是否运行中
     private var singBox运行中 = false
 
@@ -366,10 +369,26 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     /// 支持格式：
     /// - dns: exchanged example.com. 300 IN A 1.2.3.4（成功解析）
     /// - dns: exchanged example.com. NXDOMAIN 300（域名不存在）
-    /// - dns: lookup failed: example.com: timeout（查询失败）
+    /// - dns: lookup failed for example.com: timeout（查询失败）
+    /// - dns: lookup example.com（查询开始，用于记录开始时间计算耗时）
     private func 解析并记录DNS查询(_ 日志内容: String) {
         // 只处理 DNS 相关日志
         guard 日志内容.contains("dns:") else { return }
+
+        // 格式0：查询开始 dns: lookup example.com（记录开始时间，用于计算响应耗时）
+        if 日志内容.contains("lookup "),
+           !日志内容.contains("lookup failed"),
+           !日志内容.contains("exchanged"),
+           let 范围 = 日志内容.range(of: "lookup ") {
+            let 剩余部分 = String(日志内容[范围.upperBound...])
+                .trimmingCharacters(in: .whitespaces)
+            // 提取域名（去掉可能的端口、错误信息等）
+            let 域名 = 剩余部分.components(separatedBy: .whitespaces).first ?? 剩余部分
+            if !域名.isEmpty {
+                DNS查询开始时间[域名] = Date()
+            }
+            return
+        }
 
         // 格式1：成功解析 dns: exchanged example.com. 300 IN A 1.2.3.4
         if 日志内容.contains("exchanged"),
@@ -381,47 +400,63 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             let 原始域名 = 部分[0]
             let 域名 = 原始域名.hasSuffix(".") ? String(原始域名.dropLast()) : 原始域名
 
+            // 计算响应耗时
+            let 响应时间 = 计算DNS响应时间(域名: 域名)
+
             // 判断是否 NXDOMAIN
             if 部分.count >= 2 && 部分[1].uppercased() == "NXDOMAIN" {
                 let TTL = 部分.count > 2 ? (Int(部分[2]) ?? 60) : 60
-                保存DNS记录(域名: 域名, 记录类型: "A", 解析结果: [], TTL: TTL, DNS服务器: "sing-box", 来源: "远程", 是否失败: true)
+                保存DNS记录(域名: 域名, 记录类型: "A", 解析结果: [], TTL: TTL, DNS服务器: "sing-box", 来源: "远程", 是否失败: true, 响应时间: 响应时间)
                 return
             }
 
             // 正常解析结果
             guard 部分.count >= 4 else { return }
             let TTL = Int(部分[1]) ?? 300
-            let 记录类型字符串 = 部分[3]
+            // 记录类型转大写，修复 a/aaaa 等小写无法映射的问题
+            let 记录类型字符串 = 部分[3].uppercased()
             let 解析结果 = 部分.count > 4 ? Array(部分[4...]) : []
-            保存DNS记录(域名: 域名, 记录类型: 记录类型字符串, 解析结果: 解析结果, TTL: TTL, DNS服务器: "sing-box", 来源: "远程", 是否失败: false)
+            保存DNS记录(域名: 域名, 记录类型: 记录类型字符串, 解析结果: 解析结果, TTL: TTL, DNS服务器: "sing-box", 来源: "远程", 是否失败: false, 响应时间: 响应时间)
             return
         }
 
-        // 格式2：查询失败 dns: lookup failed: example.com: timeout
+        // 格式2：查询失败 dns: lookup failed for example.com: timeout
         if 日志内容.contains("lookup failed"),
-           let 范围 = 日志内容.range(of: "lookup failed: ") {
+           let 范围 = 日志内容.range(of: "lookup failed for ") {
             let 剩余部分 = String(日志内容[范围.upperBound...])
             // 格式：域名: 错误信息
             let 部分 = 剩余部分.components(separatedBy: ": ")
             guard !部分.isEmpty else { return }
             let 域名 = 部分[0].trimmingCharacters(in: .whitespaces)
-            保存DNS记录(域名: 域名, 记录类型: "A", 解析结果: [], TTL: 0, DNS服务器: "sing-box", 来源: "远程", 是否失败: true)
+            let 响应时间 = 计算DNS响应时间(域名: 域名)
+            保存DNS记录(域名: 域名, 记录类型: "A", 解析结果: [], TTL: 0, DNS服务器: "sing-box", 来源: "远程", 是否失败: true, 响应时间: 响应时间)
         }
     }
 
+    /// 计算 DNS 响应耗时（毫秒），查找不到开始时间则返回 nil
+    private func 计算DNS响应时间(域名: String) -> Int? {
+        guard let 开始时间 = DNS查询开始时间[域名] else { return nil }
+        DNS查询开始时间.removeValue(forKey: 域名)
+        let 耗时 = Int(Date().timeIntervalSince(开始时间) * 1000)
+        return 耗时 > 0 ? 耗时 : nil
+    }
+
     /// 保存 DNS 记录到共享 UserDefaults
-    private func 保存DNS记录(域名: String, 记录类型: String, 解析结果: [String], TTL: Int, DNS服务器: String, 来源: String, 是否失败: Bool) {
-        let DNS记录: [String: Any] = [
+    private func 保存DNS记录(域名: String, 记录类型: String, 解析结果: [String], TTL: Int, DNS服务器: String, 来源: String, 是否失败: Bool, 响应时间: Int?) {
+        var DNS记录: [String: Any] = [
             "域名": 域名,
             "记录类型": 记录类型,
             "解析结果": 解析结果,
             "TTL": TTL,
             "查询时间": Date().timeIntervalSince1970,
-            "响应时间": 0,
             "DNS服务器": DNS服务器,
             "来源": 来源,
             "是否失败": 是否失败
         ]
+        // 响应时间为 nil 时不写入，避免显示 0ms
+        if let 耗时 = 响应时间 {
+            DNS记录["响应时间"] = 耗时
+        }
 
         DispatchQueue.main.async {
             guard let 共享默认 = self.共享默认 else { return }

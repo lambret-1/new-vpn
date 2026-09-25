@@ -256,7 +256,9 @@ final class SingBox配置生成器 {
         switch 节点.传输类型 {
         case .ws:
             let 路径 = 节点.ws路径 ?? "/"
-            let 主机 = 节点.ws主机 ?? 节点.服务器名称
+            // Host 头回退链：ws主机 → 服务器名称(SNI) → 节点地址
+            // 确保 WebSocket 握手时 Host 头始终有值，避免服务端因 Host 缺失而拒绝连接
+            let 主机 = 节点.ws主机 ?? 节点.服务器名称 ?? 节点.地址
             return SingBox传输配置.ws传输(路径: 路径, 主机: 主机)
         case .grpc:
             return SingBox传输配置.grpc传输(服务名: "GunService")

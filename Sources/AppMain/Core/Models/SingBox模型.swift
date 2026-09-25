@@ -678,7 +678,12 @@ struct SingBox传输配置: Codable, Equatable {
     var mockXHR: Bool?
 
     /// 创建 WebSocket 传输
-    static func ws传输(路径: String = "/", 主机: String? = nil, 头部: [String: String]? = nil) -> SingBox传输配置 {
+    /// - Parameters:
+    ///   - 路径: WebSocket 路径
+    ///   - 主机: WebSocket Host 头
+    ///   - 头部: 自定义头部
+    ///   - 禁用早期数据: 是否禁用 early_data（默认禁用，提升服务端兼容性）
+    static func ws传输(路径: String = "/", 主机: String? = nil, 头部: [String: String]? = nil, 禁用早期数据: Bool = true) -> SingBox传输配置 {
         var 配置 = SingBox传输配置(type: "ws")
         配置.path = 路径
         // host 必须放在 headers 中，sing-box 不认识 transport.host 字段
@@ -688,6 +693,11 @@ struct SingBox传输配置: Codable, Equatable {
             配置.headers = 合并头部
         } else {
             配置.headers = 头部
+        }
+        // 禁用 early_data：部分服务端（Xray/V2Ray 旧版本）不支持 early_data，
+        // 启用后会导致服务端直接断开连接（ws closed: 1005）
+        if 禁用早期数据 {
+            配置.maxEarlyData = 0
         }
         return 配置
     }

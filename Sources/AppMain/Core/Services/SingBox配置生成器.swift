@@ -405,9 +405,10 @@ final class SingBox配置生成器 {
 
         return SingBox路由配置(
             final: 最终出站,
-            // 启用自动检测出站接口：sing-box 通过平台接口 getInterfaces 获取物理网卡（en0/pdp_ip0），
-            // 将 DIRECT 出站 socket 绑定到物理网卡，避免 VPN 激活时直连流量被路由回 TUN 形成回环
-            autoDetectInterface: true,
+            // 关闭 auto_detect_interface：平台接口 usePlatformAutoDetectInterfaceControl=YES
+            // 已通过 autoDetectInterfaceControl 将每个出站 socket 绑定到物理网卡，
+            // 两者同时启用会导致 sing-box 内部双重接口管理冲突，触发 Go runtime panic 崩溃
+            autoDetectInterface: false,
             rules: 规则列表
         )
     }

@@ -3,7 +3,7 @@
 //  NewVPN
 //
 //  节点卡片对应的内容区：分组列表 + 展开节点详情
-//  集成真实测速功能：单节点测速、分组批量测速
+//  右滑卡片露出测速按钮
 //
 
 import SwiftUI
@@ -17,11 +17,6 @@ struct 节点内容区: View {
 
     var body: some View {
         VStack(spacing: 10) {
-            // 批量测速进度条
-            批量测速进度条 {
-                测速管理器.取消测速()
-            }
-
             if 状态.节点分组列表.isEmpty {
                 // 空状态：无节点时提示添加远程订阅
                 VStack(spacing: 16) {
@@ -116,7 +111,7 @@ private struct 分组行视图: View {
             if 分组.是否展开 {
                 VStack(spacing: 8) {
                     ForEach(分组.节点列表) { 节点 in
-                        节点行视图(节点: 节点)
+                        可滑动节点行视图(节点: 节点)
                     }
                 }
                 .padding(.top, 8)
@@ -162,10 +157,10 @@ private struct 分组行视图: View {
     }
 }
 
-// MARK: - 节点行视图
+// MARK: - 可滑动节点行视图
 
-/// 单个节点行视图
-private struct 节点行视图: View {
+/// 可滑动节点行视图（右滑露出测速按钮）
+private struct 可滑动节点行视图: View {
     /// 节点数据
     let 节点: 节点模型
     /// 全局状态
@@ -173,10 +168,118 @@ private struct 节点行视图: View {
     /// 测速管理器
     @EnvironmentObject private var 测速管理器: 测速管理器
 
+    /// 滑动偏移量
+    @State private var 偏移量: CGFloat = 0
+    /// 是否已展开
+    @State private var 已展开 = false
+    /// 拖拽起始位置
+    @State private var 拖拽起始: CGFloat?
+
+    /// 展开宽度（测速按钮宽度）
+    private let 展开宽度: CGFloat = 70
+
     /// 是否为当前选中节点
     private var 是否选中: Bool {
         状态.当前节点ID == 节点.id
     }
+
+    var body: some View {
+        ZStack(alignment: .leading) {
+            // 底层：测速按钮（左滑露出）
+            HStack(spacing: 0) {
+                Button {
+                    测速管理器.测速节点(节点) { _ in }
+                    // 测速后自动收起
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        偏移量 = 0
+                        已展开 = false
+                    }
+                } label: {
+                    VStack(spacing: 4) {
+                        if 测速管理器.节点测速状态[节点.id]?.是否测速中 == true {
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                .scaleEffect(0.8)
+                        } else {
+                            Image(systemName: "gauge")
+                                .font(.system(size: 18, weight: .medium))
+                        }
+                        Text("测速")
+                            .font(.system(size: 11, weight: .medium))
+                    }
+                    .foregroundColor(.white)
+                    .frame(width: 展开宽度, height: 60)
+                    .background(Color.主题色)
+                }
+                .buttonStyle(PlainButtonStyle())
+
+                Spacer()
+            }
+            .frame(maxWidth: .infinity)
+            .background(Color.主题色.opacity(0.3))
+            .cornerRadius(12)
+
+            // 上层：节点卡片内容
+            节点卡片内容(节点: 节点, 是否选中: 是否选中)
+                .offset(x: 偏移量)
+                .gesture(
+                    DragGesture()
+                        .onChanged { 值 in
+                            if 拖拽起始 == nil {
+                                拖拽起始 = 偏移量
+                            }
+                            let 拖动距离 = 值.translation.width + (拖拽起始 ?? 0)
+                            // 限制滑动范围
+                            偏移量 = max(0, min(拖动距离, 展开宽度))
+                        }
+                        .onEnded { _ in
+                            拖拽起始 = nil
+                            // 超过一半则展开，否则收起
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                if 偏移量 > 展开宽度 / 2 {
+                                    偏移量 = 展开宽度
+                                    已展开 = true
+                                } else {
+                                    偏移量 = 0
+                                    已展开 = false
+                                }
+                            }
+                        }
+                )
+                .onTapGesture {
+                    if 已展开 {
+                        // 已展开时点击收起
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            偏移量 = 0
+                            已展开 = false
+                        }
+                    } else {
+                        选中节点()
+                    }
+                }
+        }
+        .frame(height: 60)
+        .clipped()
+    }
+
+    /// 选中节点
+    private func 选中节点() {
+        withAnimation(.easeInOut(duration: 0.2)) {
+            状态.当前节点ID = 节点.id
+        }
+    }
+}
+
+// MARK: - 节点卡片内容
+
+/// 节点卡片内容
+private struct 节点卡片内容: View {
+    /// 节点数据
+    let 节点: 节点模型
+    /// 是否选中
+    let 是否选中: Bool
+    /// 测速管理器
+    @EnvironmentObject private var 测速管理器: 测速管理器
 
     var body: some View {
         HStack(spacing: 10) {
@@ -208,7 +311,7 @@ private struct 节点行视图: View {
 
             Spacer()
 
-            // 右侧：测速按钮 + 测速结果
+            // 右侧：选中标记 + 测速结果
             HStack(spacing: 8) {
                 // 选中标记
                 if 是否选中 {
@@ -219,32 +322,17 @@ private struct 节点行视图: View {
 
                 // 测速结果展示
                 测速结果展示(节点ID: 节点.id)
-
-                // 测速按钮
-                测速按钮(节点ID: 节点.id) {
-                    测速管理器.测速节点(节点) { _ in }
-                }
             }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
+        .frame(height: 60)
         .background(是否选中 ? Color.主题色.opacity(0.12) : Color.卡片背景)
         .cornerRadius(12)
         .overlay(
             RoundedRectangle(cornerRadius: 12)
                 .stroke(是否选中 ? Color.主题色.opacity(0.5) : Color.clear, lineWidth: 1)
         )
-        .contentShape(Rectangle())
-        .onTapGesture {
-            选中节点()
-        }
-    }
-
-    /// 选中节点
-    private func 选中节点() {
-        withAnimation(.easeInOut(duration: 0.2)) {
-            状态.当前节点ID = 节点.id
-        }
     }
 }
 

@@ -84,56 +84,6 @@ struct 测速结果展示: View {
     }
 }
 
-// MARK: - 批量测速进度条
-
-/// 批量测速进度条组件
-struct 批量测速进度条: View {
-    /// 测速管理器
-    @EnvironmentObject private var 测速管理器: 测速管理器
-    /// 取消回调
-    let 取消: () -> Void
-
-    var body: some View {
-        if let 进度 = 测速管理器.批量进度 {
-            VStack(spacing: 8) {
-                HStack {
-                    Image(systemName: "gauge")
-                        .font(.system(size: 14))
-                        .foregroundColor(.主题色)
-                    Text("正在测速")
-                        .font(.system(size: 14, weight: .medium))
-                    if let 当前 = 进度.当前节点名称 {
-                        Text(当前)
-                            .font(.system(size: 12))
-                            .foregroundColor(.secondary)
-                            .lineLimit(1)
-                    }
-                    Spacer()
-                    Text(进度.进度显示)
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(.主题色)
-                    Button {
-                        取消()
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 16))
-                            .foregroundColor(.secondary)
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                }
-
-                ProgressView(value: 进度.进度百分比)
-                    .progressViewStyle(LinearProgressViewStyle(tint: .主题色))
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .background(Color.卡片背景)
-            .cornerRadius(12)
-            .padding(.horizontal, 15)
-        }
-    }
-}
-
 // MARK: - 测速历史记录视图
 
 /// 测速历史记录列表

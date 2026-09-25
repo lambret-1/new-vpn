@@ -430,9 +430,9 @@ struct SingBox出站配置: Codable, Equatable {
         配置.serverPort = 端口
         配置.uuid = UUID
         配置.flow = 流控
-        配置.packetEncoding = "xudp"
         // 注意：VLESS 出站没有 security 字段，那是 VMess 的字段
         // security 字段会导致 sing-box 解析配置失败
+        // packet_encoding 不手动设置，使用 sing-box 默认值
         配置.tls = TLS
         配置.transport = 传输
         return 配置
@@ -580,7 +580,7 @@ struct SingBoxTLS配置: Codable, Equatable {
         var 配置 = SingBoxTLS配置(enabled: true)
         配置.serverName = SNI
         配置.insecure = 跳过验证
-        配置.alpn = ["http/1.1"]
+        // 注意：WebSocket over TLS 不手动设置 ALPN，使用系统默认协商
         return 配置
     }
 

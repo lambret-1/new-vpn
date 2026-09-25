@@ -196,7 +196,7 @@ final class SingBox配置生成器 {
         guard 节点.启用TLS else { return nil }
         return SingBoxTLS配置.标准TLS(
             SNI: 节点.服务器名称 ?? 节点.地址,
-            跳过验证: true
+            跳过验证: false
         )
     }
 

@@ -360,6 +360,64 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         共享默认.set(Date(), forKey: "lastStatsUpdate")
     }
 
+    // MARK: - DNS 查询记录
+
+    /// 解析 sing-box DNS 日志并记录到共享 UserDefaults
+    /// 日志格式：dns: exchanged <domain>. <ttl> IN <type> <ip>
+    private func 解析并记录DNS查询(_ 日志内容: String) {
+        // 只处理 DNS 相关日志
+        guard 日志内容.contains("dns:") else { return }
+
+        // 解析成功的 DNS 查询：dns: exchanged example.com. 300 IN A 1.2.3.4
+        if 日志内容.contains("exchanged"),
+           let 范围 = 日志内容.range(of: "exchanged ") {
+            let 剩余部分 = String(日志内容[范围.upperBound...])
+            let 部分 = 剩余部分.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
+
+            guard 部分.count >= 4 else { return }
+
+            let 域名 = String(部分[0].hasSuffix(".") ? 部分[0].dropLast() : 部分[0])
+            let TTL = Int(部分[1]) ?? 300
+            let 记录类型字符串 = 部分.count > 3 ? 部分[3] : "A"
+            let 解析结果 = 部分.count > 4 ? Array(部分[4...]) : []
+
+            // 转换记录类型
+            let 记录类型: String
+            switch 记录类型字符串.uppercased() {
+            case "A": 记录类型 = "A"
+            case "AAAA": 记录类型 = "AAAA"
+            case "CNAME": 记录类型 = "CNAME"
+            case "MX": 记录类型 = "MX"
+            case "TXT": 记录类型 = "TXT"
+            default: 记录类型 = 记录类型字符串
+            }
+
+            // 构造 DNS 记录字典
+            let DNS记录: [String: Any] = [
+                "域名": 域名,
+                "记录类型": 记录类型,
+                "解析结果": 解析结果,
+                "TTL": TTL,
+                "查询时间": Date().timeIntervalSince1970,
+                "响应时间": 0,
+                "DNS服务器": "sing-box",
+                "来源": "远程"
+            ]
+
+            // 保存到共享 UserDefaults
+            DispatchQueue.main.async {
+                guard let 共享默认 = self.共享默认 else { return }
+                var 记录列表 = 共享默认.array(forKey: "dnsQueryRecords") as? [[String: Any]] ?? []
+                记录列表.insert(DNS记录, at: 0)
+                // 最多保留 200 条
+                if 记录列表.count > 200 {
+                    记录列表 = Array(记录列表.prefix(200))
+                }
+                共享默认.set(记录列表, forKey: "dnsQueryRecords")
+            }
+        }
+    }
+
     // MARK: - 配置管理
 
     /// 加载隧道配置
@@ -532,6 +590,8 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             default: 级别字符串 = "未知"
             }
             self.记录扩展日志(级别: 级别字符串, 模块: "sing-box内核", 内容: 内容)
+            // 解析 DNS 查询日志并记录
+            self.解析并记录DNS查询(内容)
         }
         记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "日志回调已设置")
 

@@ -41,11 +41,71 @@ final class DNS管理器: ObservableObject {
     private let 配置存储键 = "DNS配置"
     /// 记录存储键
     private let 记录存储键 = "DNS查询记录"
+    /// App Group 标识
+    private let AppGroup标识 = "group.com.newvpn.app"
+    /// 刷新定时器
+    private var 刷新定时器: Timer?
 
     /// 私有初始化
     private init() {
         加载配置()
         加载查询记录()
+        启动扩展记录同步()
+    }
+
+    // MARK: - 扩展 DNS 记录同步
+
+    /// 启动定时同步扩展进程的 DNS 查询记录
+    private func 启动扩展记录同步() {
+        刷新定时器 = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
+            self?.同步扩展DNS记录()
+        }
+        同步扩展DNS记录()
+    }
+
+    /// 从 App Group 同步扩展进程的 DNS 查询记录
+    func 同步扩展DNS记录() {
+        guard let 共享默认 = UserDefaults(suiteName: AppGroup标识),
+              let 记录列表 = 共享默认.array(forKey: "dnsQueryRecords") as? [[String: Any]] else {
+            return
+        }
+
+        let 新记录 = 记录列表.compactMap { 字典 -> DNS记录模型? in
+            guard let 域名 = 字典["域名"] as? String,
+                  let 记录类型字符串 = 字典["记录类型"] as? String else {
+                return nil
+            }
+            let 记录类型 = DNS记录类型(rawValue: 记录类型字符串) ?? .A
+            let 解析结果 = 字典["解析结果"] as? [String] ?? []
+            let TTL = 字典["TTL"] as? Int ?? 300
+            let 时间戳 = 字典["查询时间"] as? TimeInterval ?? Date().timeIntervalSince1970
+            let 响应时间 = 字典["响应时间"] as? Int ?? 0
+            let DNS服务器 = 字典["DNS服务器"] as? String ?? "sing-box"
+            let 来源字符串 = 字典["来源"] as? String ?? "远程"
+            let 来源 = DNS来源(rawValue: 来源字符串) ?? .远程
+
+            return DNS记录模型(
+                域名: 域名,
+                记录类型: 记录类型,
+                解析结果: 解析结果,
+                TTL: TTL,
+                查询时间: Date(timeIntervalSince1970: 时间戳),
+                响应时间: 响应时间,
+                DNS服务器: DNS服务器,
+                来源: 来源
+            )
+        }
+
+        // 合并去重（按域名+查询时间）
+        let 现有域名时间 = Set(查询记录列表.map { "\($0.域名)_\($0.查询时间.timeIntervalSince1970)" })
+        let 去重新记录 = 新记录.filter { 记录 in
+            !现有域名时间.contains("\(记录.域名)_\(记录.查询时间.timeIntervalSince1970)")
+        }
+
+        if !去重新记录.isEmpty {
+            查询记录列表 = (去重新记录 + 查询记录列表).prefix(200).map { $0 }
+            保存查询记录()
+        }
     }
 
     // MARK: - 配置管理

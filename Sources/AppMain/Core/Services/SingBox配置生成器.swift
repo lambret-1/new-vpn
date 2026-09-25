@@ -218,9 +218,9 @@ final class SingBox配置生成器 {
         }
 
         // Direct 出站（标签大写参考官方客户端）
-        // 动态检测当前活动物理网卡（WiFi=en0 / 蜂窝=pdp_ip0），避免硬编码 en0 导致蜂窝用户 connection refused
-        let 活动接口 = 检测当前活动物理网卡()
-        出站列表.append(SingBox出站配置.direct出站(标签: "DIRECT", 绑定接口: 活动接口))
+        // 不设置 bind_interface：iOS Network Extension 进程流量由系统自动排除在 VPN 路由之外，
+        // 手动绑定物理网卡会导致不对称路由（请求从物理网卡出，响应被路由到 TUN），触发 connection refused
+        出站列表.append(SingBox出站配置.direct出站(标签: "DIRECT", 绑定接口: nil))
 
         // Block 出站
         出站列表.append(SingBox出站配置.block出站(标签: "REJECT"))

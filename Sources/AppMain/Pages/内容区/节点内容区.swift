@@ -171,10 +171,8 @@ private struct 可滑动节点行视图: View {
 
     /// 滑动偏移量
     @State private var 偏移量: CGFloat = 0
-    /// 是否已展开
-    @State private var 已展开 = false
-    /// 拖拽起始位置
-    @State private var 拖拽起始: CGFloat?
+    /// 拖拽起始偏移量
+    @State private var 拖拽起始偏移: CGFloat = 0
 
     /// 展开宽度（测速按钮宽度）
     private let 展开宽度: CGFloat = 70
@@ -186,28 +184,27 @@ private struct 可滑动节点行视图: View {
 
     var body: some View {
         ZStack(alignment: .leading) {
-            // 底层：测速按钮（左滑露出）
+            // 底层：测速按钮（仅在滑动时显示，避免幻影）
             HStack(spacing: 0) {
                 Button {
                     测速管理器.测速节点(节点) { _ in }
                     // 测速后自动收起
-                    withAnimation(.easeInOut(duration: 0.2)) {
+                    withAnimation(.easeOut(duration: 0.2)) {
                         偏移量 = 0
-                        已展开 = false
                     }
                 } label: {
                     VStack(spacing: 4) {
                         if 测速管理器.节点测速状态[节点.id]?.是否测速中 == true {
                             ProgressView()
-                                .progressViewStyle(CircularProgressViewStyle(tint: .绿色文字))
+                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
                                 .scaleEffect(0.8)
                         }
                         Text("测速")
                             .font(.system(size: 13, weight: .medium))
                     }
-                    .foregroundColor(.绿色文字)
+                    .foregroundColor(.white)
                     .frame(width: 展开宽度, height: 60)
-                    .background(Color.浅绿色背景)
+                    .background(Color.测速绿色)
                     .cornerRadius(12)
                 }
                 .buttonStyle(PlainButtonStyle())
@@ -215,40 +212,45 @@ private struct 可滑动节点行视图: View {
                 Spacer()
             }
             .frame(maxWidth: .infinity)
+            .opacity(偏移量 > 5 ? 1 : 0)
+            .animation(.easeOut(duration: 0.15), value: 偏移量)
 
             // 上层：节点卡片内容
             节点卡片内容(节点: 节点, 是否选中: 是否选中)
                 .offset(x: 偏移量)
                 .gesture(
-                    DragGesture()
+                    DragGesture(minimumDistance: 10, coordinateSpace: .local)
                         .onChanged { 值 in
-                            if 拖拽起始 == nil {
-                                拖拽起始 = 偏移量
+                            if 拖拽起始偏移 == 0 {
+                                拖拽起始偏移 = 偏移量
                             }
-                            let 拖动距离 = 值.translation.width + (拖拽起始 ?? 0)
-                            // 限制滑动范围
-                            偏移量 = max(0, min(拖动距离, 展开宽度))
+                            let 目标偏移 = 拖拽起始偏移 + 值.translation.width
+                            // 限制滑动范围，添加阻尼效果
+                            if 目标偏移 < 0 {
+                                偏移量 = 目标偏移 * 0.3
+                            } else if 目标偏移 > 展开宽度 {
+                                偏移量 = 展开宽度 + (目标偏移 - 展开宽度) * 0.3
+                            } else {
+                                偏移量 = 目标偏移
+                            }
                         }
-                        .onEnded { _ in
-                            拖拽起始 = nil
-                            // 超过一半则展开，否则收起
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                if 偏移量 > 展开宽度 / 2 {
+                        .onEnded { 值 in
+                            let 最终速度 = 值.predictedEndTranslation.width - 值.translation.width
+                            withAnimation(.easeOut(duration: 0.25)) {
+                                if 偏移量 > 展开宽度 / 2 || 最终速度 > 50 {
                                     偏移量 = 展开宽度
-                                    已展开 = true
                                 } else {
                                     偏移量 = 0
-                                    已展开 = false
                                 }
                             }
+                            拖拽起始偏移 = 0
                         }
                 )
                 .onTapGesture {
-                    if 已展开 {
+                    if 偏移量 > 0 {
                         // 已展开时点击收起
-                        withAnimation(.easeInOut(duration: 0.2)) {
+                        withAnimation(.easeOut(duration: 0.2)) {
                             偏移量 = 0
-                            已展开 = false
                         }
                     } else {
                         选中节点()

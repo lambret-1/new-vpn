@@ -69,6 +69,12 @@ extension Color {
               dark: Color(red: 0.50, green: 0.90, blue: 0.60))
     }
 
+    /// 测速绿色：右滑测速按钮背景（小火箭风格）
+    static var 测速绿色: Color {
+        Color(light: Color(red: 0.20, green: 0.78, blue: 0.35),
+              dark: Color(red: 0.30, green: 0.85, blue: 0.45))
+    }
+
     /// 警告：即将过期、需要注意
     static var 警告色: Color {
         Color(light: Color(red: 1.0, green: 0.62, blue: 0.0),

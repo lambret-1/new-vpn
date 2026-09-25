@@ -204,7 +204,9 @@ final class SingBox配置生成器 {
     private func 生成传输配置(_ 节点: 节点模型) -> SingBox传输配置? {
         switch 节点.传输类型 {
         case .ws:
-            return SingBox传输配置.ws传输(路径: "/", 主机: 节点.服务器名称)
+            let 路径 = 节点.ws路径 ?? "/"
+            let 主机 = 节点.ws主机 ?? 节点.服务器名称
+            return SingBox传输配置.ws传输(路径: 路径, 主机: 主机)
         case .grpc:
             return SingBox传输配置.grpc传输(服务名: "GunService")
         case .quic:

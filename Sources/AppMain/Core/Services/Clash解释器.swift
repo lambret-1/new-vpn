@@ -256,9 +256,16 @@ final class Clash解释器 {
         // TLS
         let 启用TLS = (代理["tls"] as? Bool) ?? false
         var 服务器名称 = 代理["servername"] as? String
-        if 服务器名称 == nil, let wsOpts = 代理["ws-opts"] as? [String: Any],
-           let headers = wsOpts["headers"] as? [String: Any] {
-            服务器名称 = headers["Host"] as? String
+        var ws路径: String? = nil
+        var ws主机: String? = nil
+        if 传输类型 == .ws, let wsOpts = 代理["ws-opts"] as? [String: Any] {
+            ws路径 = wsOpts["path"] as? String
+            if let headers = wsOpts["headers"] as? [String: Any] {
+                ws主机 = headers["Host"] as? String
+            }
+        }
+        if 服务器名称 == nil {
+            服务器名称 = ws主机
         }
 
         let 节点 = 解析节点模型(
@@ -270,6 +277,8 @@ final class Clash解释器 {
             传输类型: 传输类型,
             启用TLS: 启用TLS,
             服务器名称: 服务器名称,
+            ws路径: ws路径,
+            ws主机: ws主机,
             分组: "",
             标签: ["VMess", "Clash"],
             原始数据: "\(代理)"
@@ -296,6 +305,16 @@ final class Clash解释器 {
         let 启用TLS = (代理["tls"] as? Bool) ?? false
         let 服务器名称 = 代理["servername"] as? String
 
+        // WebSocket 路径和主机
+        var ws路径: String? = nil
+        var ws主机: String? = nil
+        if 传输类型 == .ws, let wsOpts = 代理["ws-opts"] as? [String: Any] {
+            ws路径 = wsOpts["path"] as? String
+            if let headers = wsOpts["headers"] as? [String: Any] {
+                ws主机 = headers["Host"] as? String
+            }
+        }
+
         let 节点 = 解析节点模型(
             名称: 名称,
             协议: .vless,
@@ -305,6 +324,8 @@ final class Clash解释器 {
             传输类型: 传输类型,
             启用TLS: 启用TLS,
             服务器名称: 服务器名称,
+            ws路径: ws路径,
+            ws主机: ws主机,
             分组: "",
             标签: ["VLESS", "Clash"],
             原始数据: "\(代理)"

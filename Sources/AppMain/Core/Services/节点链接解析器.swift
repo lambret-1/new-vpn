@@ -114,6 +114,18 @@ final class 节点链接解析器 {
             服务器名称 = sni
         }
 
+        // WebSocket 路径和主机
+        var ws路径: String? = nil
+        var ws主机: String? = nil
+        if 传输类型 == .ws {
+            if let path = 参数["path"], !path.isEmpty {
+                ws路径 = path.removingPercentEncoding ?? path
+            }
+            if let host = 参数["host"], !host.isEmpty {
+                ws主机 = host.removingPercentEncoding ?? host
+            }
+        }
+
         // 备注（fragment）
         let 名称 = url.fragment?.removingPercentEncoding ?? "\(host):\(port)"
 
@@ -126,6 +138,8 @@ final class 节点链接解析器 {
             传输类型: 传输类型,
             启用TLS: 启用TLS,
             服务器名称: 服务器名称,
+            ws路径: ws路径,
+            ws主机: ws主机,
             分组: "",
             标签: ["VLESS"],
             原始数据: 链接

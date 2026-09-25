@@ -48,6 +48,10 @@ struct 解析节点模型: Identifiable, Hashable {
     var 启用TLS: Bool
     /// SNI 服务器名称
     var 服务器名称: String?
+    /// WebSocket 路径
+    var ws路径: String? = nil
+    /// WebSocket 主机（Host 头）
+    var ws主机: String? = nil
     /// 所属分组（从订阅中解析）
     var 分组: String
     /// 标签
@@ -69,6 +73,8 @@ struct 解析节点模型: Identifiable, Hashable {
             传输类型: 传输类型,
             启用TLS: 启用TLS,
             服务器名称: 服务器名称,
+            ws路径: ws路径,
+            ws主机: ws主机,
             分组: 分组,
             标签: 标签,
             备注: nil,

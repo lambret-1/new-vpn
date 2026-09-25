@@ -123,6 +123,16 @@ final class SingBox解释器 {
             服务器名称 = tls["server_name"] as? String
         }
 
+        // WebSocket 路径和主机
+        var ws路径: String? = nil
+        var ws主机: String? = nil
+        if 传输类型 == .ws, let transport = outbound["transport"] as? [String: Any] {
+            ws路径 = transport["path"] as? String
+            if let headers = transport["headers"] as? [String: Any] {
+                ws主机 = headers["Host"] as? String
+            }
+        }
+
         let 节点 = 解析节点模型(
             名称: 标签,
             协议: .vless,
@@ -132,6 +142,8 @@ final class SingBox解释器 {
             传输类型: 传输类型,
             启用TLS: 启用TLS,
             服务器名称: 服务器名称,
+            ws路径: ws路径,
+            ws主机: ws主机,
             分组: "",
             标签: ["VLESS", "sing-box"],
             原始数据: "\(outbound)"
@@ -165,6 +177,16 @@ final class SingBox解释器 {
             服务器名称 = tls["server_name"] as? String
         }
 
+        // WebSocket 路径和主机
+        var ws路径: String? = nil
+        var ws主机: String? = nil
+        if 传输类型 == .ws, let transport = outbound["transport"] as? [String: Any] {
+            ws路径 = transport["path"] as? String
+            if let headers = transport["headers"] as? [String: Any] {
+                ws主机 = headers["Host"] as? String
+            }
+        }
+
         let 节点 = 解析节点模型(
             名称: 标签,
             协议: .vmess,
@@ -174,6 +196,8 @@ final class SingBox解释器 {
             传输类型: 传输类型,
             启用TLS: 启用TLS,
             服务器名称: 服务器名称,
+            ws路径: ws路径,
+            ws主机: ws主机,
             分组: "",
             标签: ["VMess", "sing-box"],
             原始数据: "\(outbound)"

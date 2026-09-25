@@ -70,6 +70,10 @@ struct 节点模型: Identifiable, Codable, Hashable {
     var 启用TLS: Bool
     /// SNI 服务器名称
     var 服务器名称: String?
+    /// WebSocket 路径
+    var ws路径: String? = nil
+    /// WebSocket 主机（Host 头）
+    var ws主机: String? = nil
     /// 所属分组
     var 分组: String
     /// 标签

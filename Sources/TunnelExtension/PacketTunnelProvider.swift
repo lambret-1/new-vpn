@@ -363,59 +363,74 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     // MARK: - DNS 查询记录
 
     /// 解析 sing-box DNS 日志并记录到共享 UserDefaults
-    /// 日志格式：dns: exchanged <domain>. <ttl> IN <type> <ip>
+    /// 支持格式：
+    /// - dns: exchanged example.com. 300 IN A 1.2.3.4（成功解析）
+    /// - dns: exchanged example.com. NXDOMAIN 300（域名不存在）
+    /// - dns: lookup failed: example.com: timeout（查询失败）
     private func 解析并记录DNS查询(_ 日志内容: String) {
         // 只处理 DNS 相关日志
         guard 日志内容.contains("dns:") else { return }
 
-        // 解析成功的 DNS 查询：dns: exchanged example.com. 300 IN A 1.2.3.4
+        // 格式1：成功解析 dns: exchanged example.com. 300 IN A 1.2.3.4
         if 日志内容.contains("exchanged"),
            let 范围 = 日志内容.range(of: "exchanged ") {
             let 剩余部分 = String(日志内容[范围.upperBound...])
             let 部分 = 剩余部分.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
-
-            guard 部分.count >= 4 else { return }
+            guard 部分.count >= 2 else { return }
 
             let 原始域名 = 部分[0]
             let 域名 = 原始域名.hasSuffix(".") ? String(原始域名.dropLast()) : 原始域名
+
+            // 判断是否 NXDOMAIN
+            if 部分.count >= 2 && 部分[1].uppercased() == "NXDOMAIN" {
+                let TTL = 部分.count > 2 ? (Int(部分[2]) ?? 60) : 60
+                保存DNS记录(域名: 域名, 记录类型: "A", 解析结果: [], TTL: TTL, DNS服务器: "sing-box", 来源: "远程", 是否失败: true)
+                return
+            }
+
+            // 正常解析结果
+            guard 部分.count >= 4 else { return }
             let TTL = Int(部分[1]) ?? 300
-            let 记录类型字符串 = 部分.count > 3 ? 部分[3] : "A"
+            let 记录类型字符串 = 部分[3]
             let 解析结果 = 部分.count > 4 ? Array(部分[4...]) : []
+            保存DNS记录(域名: 域名, 记录类型: 记录类型字符串, 解析结果: 解析结果, TTL: TTL, DNS服务器: "sing-box", 来源: "远程", 是否失败: false)
+            return
+        }
 
-            // 转换记录类型
-            let 记录类型: String
-            switch 记录类型字符串.uppercased() {
-            case "A": 记录类型 = "A"
-            case "AAAA": 记录类型 = "AAAA"
-            case "CNAME": 记录类型 = "CNAME"
-            case "MX": 记录类型 = "MX"
-            case "TXT": 记录类型 = "TXT"
-            default: 记录类型 = 记录类型字符串
+        // 格式2：查询失败 dns: lookup failed: example.com: timeout
+        if 日志内容.contains("lookup failed"),
+           let 范围 = 日志内容.range(of: "lookup failed: ") {
+            let 剩余部分 = String(日志内容[范围.upperBound...])
+            // 格式：域名: 错误信息
+            let 部分 = 剩余部分.components(separatedBy: ": ")
+            guard !部分.isEmpty else { return }
+            let 域名 = 部分[0].trimmingCharacters(in: .whitespaces)
+            保存DNS记录(域名: 域名, 记录类型: "A", 解析结果: [], TTL: 0, DNS服务器: "sing-box", 来源: "远程", 是否失败: true)
+        }
+    }
+
+    /// 保存 DNS 记录到共享 UserDefaults
+    private func 保存DNS记录(域名: String, 记录类型: String, 解析结果: [String], TTL: Int, DNS服务器: String, 来源: String, 是否失败: Bool) {
+        let DNS记录: [String: Any] = [
+            "域名": 域名,
+            "记录类型": 记录类型,
+            "解析结果": 解析结果,
+            "TTL": TTL,
+            "查询时间": Date().timeIntervalSince1970,
+            "响应时间": 0,
+            "DNS服务器": DNS服务器,
+            "来源": 来源,
+            "是否失败": 是否失败
+        ]
+
+        DispatchQueue.main.async {
+            guard let 共享默认 = self.共享默认 else { return }
+            var 记录列表 = 共享默认.array(forKey: "dnsQueryRecords") as? [[String: Any]] ?? []
+            记录列表.insert(DNS记录, at: 0)
+            if 记录列表.count > 200 {
+                记录列表 = Array(记录列表.prefix(200))
             }
-
-            // 构造 DNS 记录字典
-            let DNS记录: [String: Any] = [
-                "域名": 域名,
-                "记录类型": 记录类型,
-                "解析结果": 解析结果,
-                "TTL": TTL,
-                "查询时间": Date().timeIntervalSince1970,
-                "响应时间": 0,
-                "DNS服务器": "sing-box",
-                "来源": "远程"
-            ]
-
-            // 保存到共享 UserDefaults
-            DispatchQueue.main.async {
-                guard let 共享默认 = self.共享默认 else { return }
-                var 记录列表 = 共享默认.array(forKey: "dnsQueryRecords") as? [[String: Any]] ?? []
-                记录列表.insert(DNS记录, at: 0)
-                // 最多保留 200 条
-                if 记录列表.count > 200 {
-                    记录列表 = Array(记录列表.prefix(200))
-                }
-                共享默认.set(记录列表, forKey: "dnsQueryRecords")
-            }
+            共享默认.set(记录列表, forKey: "dnsQueryRecords")
         }
     }
 

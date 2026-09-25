@@ -83,6 +83,7 @@ final class DNS管理器: ObservableObject {
             let DNS服务器 = 字典["DNS服务器"] as? String ?? "sing-box"
             let 来源字符串 = 字典["来源"] as? String ?? "远程"
             let 来源 = DNS来源(rawValue: 来源字符串) ?? .远程
+            let 是否失败 = 字典["是否失败"] as? Bool ?? false
 
             return DNS记录模型(
                 域名: 域名,
@@ -92,7 +93,9 @@ final class DNS管理器: ObservableObject {
                 查询时间: Date(timeIntervalSince1970: 时间戳),
                 响应时间: 响应时间,
                 DNS服务器: DNS服务器,
-                来源: 来源
+                来源: 来源,
+                是否被拦截: 是否失败,
+                拦截规则: 是否失败 ? "解析失败" : nil
             )
         }
 

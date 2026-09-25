@@ -41,7 +41,7 @@ struct DNS记录页面: View {
                 EmptyStateView(
                     图标: "network",
                     标题: "暂无 DNS 查询记录",
-                    说明: "启用 DNS 查询日志后，解析记录会显示在这里"
+                    说明: "VPN 连接后，域名解析记录会实时显示在这里"
                 )
             } else {
                 List {
@@ -54,11 +54,31 @@ struct DNS记录页面: View {
                 }
                 .listStyle(.plain)
                 .refreshable {
-                    // 下拉刷新不做操作，记录是实时的
+                    DNS管理.同步扩展DNS记录()
                 }
             }
         }
         .background(Color.页面背景)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                HStack(spacing: 16) {
+                    Button {
+                        DNS管理.同步扩展DNS记录()
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 16, weight: .medium))
+                    }
+
+                    Button {
+                        DNS管理.清除查询记录()
+                    } label: {
+                        Image(systemName: "trash")
+                            .font(.system(size: 16, weight: .medium))
+                    }
+                    .disabled(DNS管理.查询记录列表.isEmpty)
+                }
+            }
+        }
     }
 
     /// 筛选后的记录

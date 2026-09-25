@@ -580,6 +580,7 @@ struct SingBoxTLS配置: Codable, Equatable {
         var 配置 = SingBoxTLS配置(enabled: true)
         配置.serverName = SNI
         配置.insecure = 跳过验证
+        配置.minVersion = "1.3"
         // 注意：WebSocket over TLS 不手动设置 ALPN，使用系统默认协商
         return 配置
     }

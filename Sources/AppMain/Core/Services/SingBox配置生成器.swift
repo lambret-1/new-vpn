@@ -230,9 +230,8 @@ final class SingBox配置生成器 {
 
         // DNS 出站：将目标端口 53 的流量交给 sing-box DNS 模块处理
         // libbox v1.11.0 不支持 TUN 入站的 dns_address 字段，改用路由规则 + dns-out 方式拦截 DNS
-        var DNS出站 = SingBox出站配置(type: "dns", tag: "dns-out")
-        DNS出站.noDrop = false
-        出站列表.append(DNS出站)
+        // dns 出站只需 type 和 tag，不支持 no_drop 字段
+        出站列表.append(SingBox出站配置(type: "dns", tag: "dns-out"))
 
         return 出站列表
     }

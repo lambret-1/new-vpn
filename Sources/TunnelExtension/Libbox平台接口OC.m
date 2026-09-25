@@ -163,8 +163,8 @@ static id<LibboxInterfaceUpdateListener> _默认接口监听器 = nil;
         // 跳过全零地址（但保留链路本地地址 fe80::，iOS 物理网卡可能只有链路本地地址）
         if ([IP字符串 isEqualToString:@"0.0.0.0"] || [IP字符串 isEqualToString:@"::"]) continue;
 
-        // 只处理已启用且运行中的接口（IFF_UP | IFF_RUNNING）
-        if (!(当前->ifa_flags & IFF_UP) || !(当前->ifa_flags & IFF_RUNNING)) continue;
+        // 只处理已启用的接口（IFF_UP），不要求 IFF_RUNNING（iOS 扩展进程中物理网卡可能没有 RUNNING 标志）
+        if (!(当前->ifa_flags & IFF_UP)) continue;
 
         // 获取或创建接口信息
         NSMutableDictionary *接口信息 = 接口字典[接口名];
@@ -204,12 +204,19 @@ static id<LibboxInterfaceUpdateListener> _默认接口监听器 = nil;
 
     freeifaddrs(接口链表);
 
+    // 如果未找到任何物理接口，构造一个默认接口（en0，索引1），避免 sing-box 报 "no available network interface"
     if (接口字典.count == 0) {
-        if (error) {
-            *error = [NSError errorWithDomain:@"com.newvpn.tunnel" code:-2
-                                     userInfo:@{NSLocalizedDescriptionKey: @"未找到可用的物理网络接口"}];
+        if (self.日志回调) {
+            self.日志回调(3, @"getInterfaces：未找到物理接口，使用默认 en0 接口");
         }
-        return nil;
+        接口字典[@"en0"] = @{
+            @"name": @"en0",
+            @"index": @(1),
+            @"mtu": @(1500),
+            @"flags": @(IFF_UP | IFF_RUNNING),
+            @"type": @(1),
+            @"addresses": @[@"192.168.1.100"]
+        };
     }
 
     // 转换为 LibboxNetworkInterface 列表，优先 WiFi（en），其次蜂窝（pdp_ip）

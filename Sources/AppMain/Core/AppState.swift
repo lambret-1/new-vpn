@@ -382,7 +382,6 @@ final class AppState: ObservableObject {
         脚本列表 = Mock数据.生成脚本()
         日志列表 = Mock数据.生成日志()
         抓包列表 = Mock数据.生成抓包会话()
-        网络连接列表 = Mock数据.生成网络连接()
         节点分组列表 = Mock数据.生成节点分组(节点列表: 节点列表)
         当前节点ID = 节点列表.first?.id
     }

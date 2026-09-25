@@ -320,6 +320,16 @@ struct SingBox入站配置: Codable, Equatable {
         return 配置
     }
 
+    /// 创建 API 入站（用于查询连接列表、统计信息等）
+    static func api入站(标签: String = "api",
+                        地址: String = "127.0.0.1",
+                        端口: Int = 9090) -> SingBox入站配置 {
+        var 配置 = SingBox入站配置(type: "api", tag: 标签)
+        配置.listen = 地址
+        配置.listenPort = 端口
+        return 配置
+    }
+
     enum CodingKeys: String, CodingKey {
         case type
         case tag

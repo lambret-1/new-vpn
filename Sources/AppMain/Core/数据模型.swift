@@ -368,4 +368,8 @@ struct 网络连接模型: Identifiable, Codable, Hashable {
     var 上行字节: Int64
     /// 下行字节
     var 下行字节: Int64
+    /// HTTP 状态码（预留，MITM 模块接入后填充）
+    var 状态码: Int?
+    /// 匹配规则
+    var 匹配规则: String?
 }

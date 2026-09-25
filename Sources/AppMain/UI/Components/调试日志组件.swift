@@ -222,14 +222,28 @@ struct 调试日志内容区: View {
     private var 日志列表: some View {
         ScrollViewReader { 代理 in
             ScrollView {
-                LazyVStack(spacing: 日志管理.简洁模式 ? 2 : 4, pinnedViews: []) {
-                    ForEach(日志管理.筛选后的日志列表) { 日志 in
-                        日志行(
-                            日志: 日志,
+                LazyVStack(spacing: 8, pinnedViews: []) {
+                    // 错误/警告/调试分组（可折叠）
+                    ForEach(日志管理.分组后的日志列表) { 分组 in
+                        日志分组视图(
+                            分组: 分组,
                             简洁模式: 日志管理.简洁模式,
-                            复制回调: { 复制单条日志(日志) }
+                            复制回调: { 日志 in 复制单条日志(日志) }
                         )
-                        .id(日志.id)
+                    }
+
+                    // 信息平铺显示（无分组）
+                    if !日志管理.未分组日志列表.isEmpty {
+                        LazyVStack(spacing: 日志管理.简洁模式 ? 2 : 4) {
+                            ForEach(日志管理.未分组日志列表) { 日志 in
+                                日志行(
+                                    日志: 日志,
+                                    简洁模式: 日志管理.简洁模式,
+                                    复制回调: { 复制单条日志(日志) }
+                                )
+                                .id(日志.id)
+                            }
+                        }
                     }
                 }
                 .padding(.horizontal, 15)
@@ -261,6 +275,8 @@ struct 调试日志内容区: View {
             switch 分组.分组名 {
             case "错误日志": return .危险色
             case "警告日志": return .警告色
+            case "调试日志": return .蓝色
+            case "追踪日志": return .purple
             default: return .secondary
             }
         }

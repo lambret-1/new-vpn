@@ -57,6 +57,18 @@ extension Color {
               dark: Color(red: 0.30, green: 0.85, blue: 0.45))
     }
 
+    /// 浅绿色背景：测速按钮等操作背景
+    static var 浅绿色背景: Color {
+        Color(light: Color(red: 0.85, green: 0.95, blue: 0.86),
+              dark: Color(red: 0.15, green: 0.30, blue: 0.18))
+    }
+
+    /// 绿色文字：浅绿色背景上的文字
+    static var 绿色文字: Color {
+        Color(light: Color(red: 0.15, green: 0.55, blue: 0.25),
+              dark: Color(red: 0.50, green: 0.90, blue: 0.60))
+    }
+
     /// 警告：即将过期、需要注意
     static var 警告色: Color {
         Color(light: Color(red: 1.0, green: 0.62, blue: 0.0),

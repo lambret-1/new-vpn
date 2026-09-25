@@ -199,18 +199,15 @@ private struct 可滑动节点行视图: View {
                     VStack(spacing: 4) {
                         if 测速管理器.节点测速状态[节点.id]?.是否测速中 == true {
                             ProgressView()
-                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                .progressViewStyle(CircularProgressViewStyle(tint: .绿色文字))
                                 .scaleEffect(0.8)
-                        } else {
-                            Image(systemName: "gauge")
-                                .font(.system(size: 18, weight: .medium))
                         }
                         Text("测速")
-                            .font(.system(size: 11, weight: .medium))
+                            .font(.system(size: 13, weight: .medium))
                     }
-                    .foregroundColor(.white)
+                    .foregroundColor(.绿色文字)
                     .frame(width: 展开宽度, height: 60)
-                    .background(Color.主题色)
+                    .background(Color.浅绿色背景)
                     .cornerRadius(12)
                 }
                 .buttonStyle(PlainButtonStyle())

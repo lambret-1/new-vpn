@@ -80,23 +80,6 @@ struct 测速结果展示: View {
                 }
             }
             .frame(width: 50)
-
-            // 下载速度
-            VStack(alignment: .trailing, spacing: 2) {
-                if let 结果 = 结果, 结果.成功, let 下载 = 结果.下载速率Mbps {
-                    Text(String(format: "%.0f", 下载))
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.成功色)
-                    Text("Mbps")
-                        .font(.system(size: 10))
-                        .foregroundColor(.secondary)
-                } else {
-                    Text("-")
-                        .font(.system(size: 14))
-                        .foregroundColor(.secondary)
-                }
-            }
-            .frame(width: 50)
         }
     }
 }
@@ -151,23 +134,6 @@ struct 批量测速进度条: View {
     }
 }
 
-// MARK: - 测速类型选择器
-
-/// 测速类型选择器
-struct 测速类型选择器: View {
-    /// 绑定选中类型
-    @Binding var 选中类型: 测速类型
-
-    var body: some View {
-        Picker("测速类型", selection: $选中类型) {
-            ForEach(测速类型.allCases, id: \.self) { 类型 in
-                Text(类型.rawValue).tag(类型)
-            }
-        }
-        .pickerStyle(.segmented)
-    }
-}
-
 // MARK: - 测速历史记录视图
 
 /// 测速历史记录列表
@@ -189,22 +155,15 @@ struct 测速历史记录视图: View {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(格式化时间(记录.时间))
                                 .font(.system(size: 14, weight: .medium))
-                            Text("\(记录.节点数)个节点 · \(记录.类型.rawValue)")
+                            Text("\(记录.节点数)个节点")
                                 .font(.system(size: 12))
                                 .foregroundColor(.secondary)
                         }
                         Spacer()
-                        VStack(alignment: .trailing, spacing: 4) {
-                            if let 延迟 = 记录.平均延迟 {
-                                Text("平均 \(延迟)ms")
-                                    .font(.system(size: 13, weight: .medium))
-                                    .foregroundColor(.主题色)
-                            }
-                            if let 下载 = 记录.平均下载 {
-                                Text(String(format: "%.1fMbps", 下载))
-                                    .font(.system(size: 12))
-                                    .foregroundColor(.成功色)
-                            }
+                        if let 延迟 = 记录.平均延迟 {
+                            Text("平均 \(延迟)ms")
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundColor(.主题色)
                         }
                     }
                     .padding(.vertical, 4)

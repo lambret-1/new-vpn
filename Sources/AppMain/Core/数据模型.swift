@@ -38,10 +38,6 @@ struct 测速结果: Codable, Hashable {
     var 抖动毫秒: Int?
     /// 丢包率（百分比）
     var 丢包率: Double?
-    /// 下载速度（Mbps）
-    var 下载速率: Double?
-    /// 上传速度（Mbps）
-    var 上传速率: Double?
     /// 测速时间
     var 测速时间: Date?
     /// 是否测速成功

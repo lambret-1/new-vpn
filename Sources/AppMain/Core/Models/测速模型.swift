@@ -3,6 +3,7 @@
 //  NewVPN
 //
 //  测速模块数据模型定义
+//  仅支持 TCP 连接延迟测试
 //
 
 import Foundation
@@ -38,40 +39,16 @@ enum 测速状态: Equatable {
     }
 }
 
-// MARK: - 测速类型
-
-/// 测速类型
-enum 测速类型: String, CaseIterable {
-    /// 仅延迟测试（TCP连接延迟）
-    case 仅延迟 = "仅延迟"
-    /// 延迟+下载速度
-    case 延迟和下载 = "延迟+下载"
-    /// 完整测试（延迟+下载+上传）
-    case 完整测试 = "完整测试"
-}
-
 // MARK: - 测速配置
 
 /// 测速配置
 struct 测速配置 {
-    /// 测速类型
-    var 类型: 测速类型 = .仅延迟
     /// 延迟测试超时（秒）
     var 延迟超时: TimeInterval = 5.0
     /// 延迟测试次数（取平均值）
     var 延迟测试次数: Int = 3
-    /// 下载测试超时（秒）
-    var 下载超时: TimeInterval = 10.0
-    /// 下载测试数据量上限（字节，0表示不限制）
-    var 下载数据上限: Int64 = 10 * 1024 * 1024 // 10MB
-    /// 下载测试时长上限（秒）
-    var 下载时长上限: TimeInterval = 8.0
     /// 批量测速并发数
     var 并发数: Int = 3
-    /// 测试服务器地址（用于HTTP延迟和下载测试）
-    var 测试服务器地址: String = "https://www.gstatic.com/generate_204"
-    /// 下载测试文件地址
-    var 下载测试文件地址: String = "https://speed.cloudflare.com/__down?bytes=10000000"
 
     /// 默认配置
     static let 默认 = 测速配置()
@@ -91,10 +68,6 @@ struct 测速结果模型: Equatable {
     var 抖动毫秒: Int?
     /// 丢包率（百分比）
     var 丢包率: Double?
-    /// 下载速度（Mbps）
-    var 下载速率Mbps: Double?
-    /// 上传速度（Mbps）
-    var 上传速率Mbps: Double?
     /// 是否成功
     var 成功: Bool
     /// 错误信息
@@ -104,12 +77,6 @@ struct 测速结果模型: Equatable {
     var 延迟显示: String {
         guard let 延迟 = 延迟毫秒 else { return "-" }
         return "\(延迟)ms"
-    }
-
-    /// 下载速度显示文字
-    var 下载显示: String {
-        guard let 下载 = 下载速率Mbps else { return "-" }
-        return String(format: "%.1fMbps", 下载)
     }
 
     /// 延迟颜色（根据延迟值）
@@ -130,8 +97,6 @@ struct 测速结果模型: Equatable {
             延迟毫秒: nil,
             抖动毫秒: nil,
             丢包率: nil,
-            下载速率Mbps: nil,
-            上传速率Mbps: nil,
             成功: false,
             错误信息: nil
         )
@@ -172,8 +137,4 @@ struct 测速历史记录: Identifiable {
     let 节点数: Int
     /// 平均延迟
     let 平均延迟: Int?
-    /// 平均下载速度
-    let 平均下载: Double?
-    /// 测速类型
-    let 类型: 测速类型
 }

@@ -388,28 +388,37 @@ final class AppState: ObservableObject {
 
     // MARK: - 分组测速
 
-    /// 对指定分组内所有节点执行模拟测速
+    /// 对指定分组内所有节点执行延迟测速
     func 执行分组测速(分组ID: UUID) {
         guard let 索引 = 节点分组列表.firstIndex(where: { $0.id == 分组ID }) else { return }
         节点分组列表[索引].测速中 = true
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+        let 节点列表 = 节点分组列表[索引].节点列表
+
+        测速管理器.共享.批量测速(节点列表) { [weak self] 节点, 结果 in
             guard let self = self else { return }
-            // 模拟更新每个节点的测速数据
-            for (节点索引, _) in self.节点分组列表[索引].节点列表.enumerated() {
-                let 延迟 = Int.random(in: 50...300)
-                let 下载 = Double.random(in: 50...300)
-                self.节点分组列表[索引].节点列表[节点索引].测速数据 = 测速结果(
-                    延迟毫秒: 延迟,
-                    抖动毫秒: Int.random(in: 1...20),
-                    丢包率: Double.random(in: 0...2),
-                    下载速率: 下载,
-                    上传速率: Double.random(in: 10...80),
-                    测速时间: Date(),
-                    成功: true
+            // 更新节点测速数据
+            if let 分组索引 = self.节点分组列表.firstIndex(where: { $0.id == 分组ID }),
+               let 节点索引 = self.节点分组列表[分组索引].节点列表.firstIndex(where: { $0.id == 节点.id }) {
+                self.节点分组列表[分组索引].节点列表[节点索引].测速数据 = 测速结果(
+                    延迟毫秒: 结果.延迟毫秒,
+                    抖动毫秒: 结果.抖动毫秒,
+                    丢包率: 结果.丢包率,
+                    测速时间: 结果.测速时间,
+                    成功: 结果.成功
                 )
             }
-            self.节点分组列表[索引].测速中 = false
+        } 全部完成: { [weak self] _ in
+            guard let self = self else { return }
+            if let 分组索引 = self.节点分组列表.firstIndex(where: { $0.id == 分组ID }) {
+                self.节点分组列表[分组索引].测速中 = false
+                // 按延迟排序
+                self.节点分组列表[分组索引].节点列表.sort { 节点1, 节点2 in
+                    let 延迟1 = 节点1.测速数据?.延迟毫秒 ?? Int.max
+                    let 延迟2 = 节点2.测速数据?.延迟毫秒 ?? Int.max
+                    return 延迟1 < 延迟2
+                }
+            }
         }
     }
 

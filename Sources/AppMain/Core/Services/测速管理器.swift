@@ -3,7 +3,7 @@
 //  NewVPN
 //
 //  测速任务管理器
-//  管理单节点测速、分组批量测速、全部节点测速、任务队列、取消
+//  管理单节点延迟测速、分组批量测速、全部节点测速、任务队列、取消
 //
 
 import Foundation
@@ -75,10 +75,9 @@ final class 测速管理器: ObservableObject {
     /// 批量测速多个节点
     /// - Parameters:
     ///   - 节点列表: 节点列表
-    ///   - 类型: 测速类型
     ///   - 节点更新: 单个节点测速完成回调
     ///   - 全部完成: 全部完成回调
-    func 批量测速(_ 节点列表: [节点模型], 类型: 测速类型 = .仅延迟, 节点更新: ((节点模型, 测速结果模型) -> Void)? = nil, 全部完成: (([UUID: 测速结果模型]) -> Void)? = nil) {
+    func 批量测速(_ 节点列表: [节点模型], 节点更新: ((节点模型, 测速结果模型) -> Void)? = nil, 全部完成: (([UUID: 测速结果模型]) -> Void)? = nil) {
         guard !是否测速中 else { return }
         guard !节点列表.isEmpty else {
             全部完成?([:])
@@ -141,14 +140,11 @@ final class 测速管理器: ObservableObject {
                 // 保存历史记录
                 let 成功结果 = 本次结果.values.filter { $0.成功 }
                 let 平均延迟 = 成功结果.compactMap { $0.延迟毫秒 }.reduce(0, +) / max(1, 成功结果.count)
-                let 平均下载 = 成功结果.compactMap { $0.下载速率Mbps }.reduce(0, +) / Double(max(1, 成功结果.count))
 
                 let 历史 = 测速历史记录(
                     时间: Date(),
                     节点数: 本次结果.count,
-                    平均延迟: 成功结果.isEmpty ? nil : 平均延迟,
-                    平均下载: 成功结果.compactMap { $0.下载速率Mbps }.isEmpty ? nil : 平均下载,
-                    类型: 类型
+                    平均延迟: 成功结果.isEmpty ? nil : 平均延迟
                 )
                 self.历史记录.insert(历史, at: 0)
                 if self.历史记录.count > 50 {
@@ -198,15 +194,6 @@ final class 测速管理器: ObservableObject {
             let 延迟1 = 测速结果缓存[节点1.id]?.延迟毫秒 ?? Int.max
             let 延迟2 = 测速结果缓存[节点2.id]?.延迟毫秒 ?? Int.max
             return 延迟1 < 延迟2
-        }
-    }
-
-    /// 按下载速度排序节点列表
-    func 按下载速度排序(_ 节点列表: [节点模型]) -> [节点模型] {
-        节点列表.sorted { 节点1, 节点2 in
-            let 速度1 = 测速结果缓存[节点1.id]?.下载速率Mbps ?? 0
-            let 速度2 = 测速结果缓存[节点2.id]?.下载速率Mbps ?? 0
-            return 速度1 > 速度2
         }
     }
 }

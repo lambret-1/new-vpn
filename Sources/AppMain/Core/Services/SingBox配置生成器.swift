@@ -269,11 +269,19 @@ final class SingBox配置生成器 {
         }
     }
 
+    /// 生成通用拨号器配置
+    /// TCP keepalive 每 30 秒发送心跳包，防止 CDN/反向代理 2 分钟空闲超时断开 WebSocket
+    private func 生成拨号器配置() -> SingBox拨号器配置 {
+        var 配置 = SingBox拨号器配置()
+        配置.connectTimeout = "10s"
+        配置.tcpKeepAliveInterval = "30s"
+        配置.tcpNoDelay = true
+        return 配置
+    }
+
     /// 生成 VLESS 出站
     private func 生成VLESS出站(_ 节点: 节点模型, 标签: String) -> SingBox出站配置 {
-        // 注意：libbox v1.11.0 不识别 dialer_options 字段，会导致配置解析失败
-        // TCP keep-alive 由系统默认处理，不手动设置
-        SingBox出站配置.vless出站(
+        var 配置 = SingBox出站配置.vless出站(
             标签: 标签,
             服务器: 节点.地址,
             端口: 节点.端口,
@@ -283,11 +291,13 @@ final class SingBox配置生成器 {
             TLS: 生成TLS配置(节点),
             传输: 生成传输配置(节点)
         )
+        配置.dialerOptions = 生成拨号器配置()
+        return 配置
     }
 
     /// 生成 VMess 出站
     private func 生成VMess出站(_ 节点: 节点模型, 标签: String) -> SingBox出站配置 {
-        SingBox出站配置.vmess出站(
+        var 配置 = SingBox出站配置.vmess出站(
             标签: 标签,
             服务器: 节点.地址,
             端口: 节点.端口,
@@ -296,11 +306,13 @@ final class SingBox配置生成器 {
             TLS: 生成TLS配置(节点),
             传输: 生成传输配置(节点)
         )
+        配置.dialerOptions = 生成拨号器配置()
+        return 配置
     }
 
     /// 生成 Trojan 出站
     private func 生成Trojan出站(_ 节点: 节点模型, 标签: String) -> SingBox出站配置 {
-        SingBox出站配置.trojan出站(
+        var 配置 = SingBox出站配置.trojan出站(
             标签: 标签,
             服务器: 节点.地址,
             端口: 节点.端口,
@@ -308,17 +320,21 @@ final class SingBox配置生成器 {
             TLS: 生成TLS配置(节点),
             传输: 生成传输配置(节点)
         )
+        配置.dialerOptions = 生成拨号器配置()
+        return 配置
     }
 
     /// 生成 Shadowsocks 出站
     private func 生成Shadowsocks出站(_ 节点: 节点模型, 标签: String) -> SingBox出站配置 {
-        SingBox出站配置.shadowsocks出站(
+        var 配置 = SingBox出站配置.shadowsocks出站(
             标签: 标签,
             服务器: 节点.地址,
             端口: 节点.端口,
             方法: "aes-256-gcm",
             密码: 节点.用户标识 ?? ""
         )
+        配置.dialerOptions = 生成拨号器配置()
+        return 配置
     }
 
     // MARK: - 生成路由配置（兼容当前 libbox 版本）

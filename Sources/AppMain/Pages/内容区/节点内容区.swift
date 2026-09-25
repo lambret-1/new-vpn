@@ -358,7 +358,7 @@ private struct 节点卡片内容: View {
                     .frame(width: 3, height: 28)
             }
 
-            // 左侧：协议 + 名称 + 标签
+            // 左侧：协议 + 节点名称(tag) + 地址/标签
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Text(节点.协议.rawValue)
@@ -368,13 +368,14 @@ private struct 节点卡片内容: View {
                         .padding(.vertical, 2)
                         .background(是否选中 ? Color.主题色 : Color.主题色.opacity(0.7))
                         .cornerRadius(4)
-                    Text(节点.地址)
+                    Text(节点.名称)
                         .font(.system(size: 14, weight: 是否选中 ? .medium : .regular))
                         .lineLimit(1)
                 }
-                Text(节点.标签.joined(separator: " · "))
+                Text("\(节点.地址):\(节点.端口) · \(节点.标签.joined(separator: " · "))")
                     .font(.system(size: 11))
                     .foregroundColor(.secondary)
+                    .lineLimit(1)
             }
 
             Spacer()

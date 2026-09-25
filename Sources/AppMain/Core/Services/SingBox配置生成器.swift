@@ -218,7 +218,9 @@ final class SingBox配置生成器 {
 
     /// 生成 VLESS 出站
     private func 生成VLESS出站(_ 节点: 节点模型, 标签: String) -> SingBox出站配置 {
-        var 出站 = SingBox出站配置.vless出站(
+        // 注意：libbox v1.11.0 不识别 dialer_options 字段，会导致配置解析失败
+        // TCP keep-alive 由系统默认处理，不手动设置
+        SingBox出站配置.vless出站(
             标签: 标签,
             服务器: 节点.地址,
             端口: 节点.端口,
@@ -228,12 +230,6 @@ final class SingBox配置生成器 {
             TLS: 生成TLS配置(节点),
             传输: 生成传输配置(节点)
         )
-        // 添加 TCP keep-alive 拨号器配置，防止 Cloudflare 空闲超时断开连接
-        var 拨号器 = SingBox拨号器配置()
-        拨号器.tcpKeepAliveInterval = "10s"
-        拨号器.tcpNoDelay = true
-        出站.dialerOptions = 拨号器
-        return 出站
     }
 
     /// 生成 VMess 出站

@@ -275,7 +275,7 @@ struct 调试日志内容区: View {
             switch 分组.分组名 {
             case "错误日志": return .危险色
             case "警告日志": return .警告色
-            case "调试日志": return .蓝色
+            case "调试日志": return .主题色
             case "追踪日志": return .purple
             default: return .secondary
             }

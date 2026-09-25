@@ -218,7 +218,9 @@ final class SingBox配置生成器 {
         }
 
         // Direct 出站（标签大写参考官方客户端）
-        出站列表.append(SingBox出站配置.direct出站(标签: "DIRECT"))
+        // 动态检测当前活动物理网卡（WiFi=en0 / 蜂窝=pdp_ip0），避免硬编码 en0 导致蜂窝用户 connection refused
+        let 活动接口 = 检测当前活动物理网卡()
+        出站列表.append(SingBox出站配置.direct出站(标签: "DIRECT", 绑定接口: 活动接口))
 
         // Block 出站
         出站列表.append(SingBox出站配置.block出站(标签: "REJECT"))
@@ -460,6 +462,56 @@ final class SingBox配置生成器 {
         }
 
         return 路由规则
+    }
+
+    // MARK: - 物理网卡检测
+
+    /// 检测当前活动的物理网卡接口名（WiFi=en0 / 蜂窝=pdp_ip0）
+    /// 用于 DIRECT 出站的 bind_interface，避免硬编码 en0 导致蜂窝用户 connection refused
+    /// - Returns: 接口名，检测失败返回 "en0"
+    private func 检测当前活动物理网卡() -> String {
+        var 接口列表: [ifaddrs]? = nil
+        guard getifaddrs(&接口列表) == 0, let 链表 = 接口列表 else {
+            return "en0"
+        }
+        defer { freeifaddrs(接口列表) }
+
+        var WiFi接口: String?
+        var 蜂窝接口: String?
+        var 指针 = 链表
+        while true {
+            let 接口名 = String(cString: 指针.ifa_name)
+            let 标志 = 指针.ifa_flags
+            // 只处理已启用的接口
+            guard (标志 & IFF_UP) != 0 else {
+                if 指针.ifa_next == nil { break }
+                指针 = 指针.ifa_next!.pointee
+                continue
+            }
+            // 只处理 IPv4 地址
+            guard 指针.ifa_addr.pointee.sa_family == AF_INET else {
+                if 指针.ifa_next == nil { break }
+                指针 = 指针.ifa_next!.pointee
+                continue
+            }
+            // 跳过回环和隧道接口
+            if 接口名 == "lo0" || 接口名.hasPrefix("utun") || 接口名.hasPrefix("ipsec") {
+                if 指针.ifa_next == nil { break }
+                指针 = 指针.ifa_next!.pointee
+                continue
+            }
+            // 优先 WiFi（en开头），其次蜂窝（pdp_ip开头）
+            if 接口名.hasPrefix("en") && WiFi接口 == nil {
+                WiFi接口 = 接口名
+            } else if (接口名.hasPrefix("pdp_ip") || 接口名.hasPrefix("cell")) && 蜂窝接口 == nil {
+                蜂窝接口 = 接口名
+            }
+            if 指针.ifa_next == nil { break }
+            指针 = 指针.ifa_next!.pointee
+        }
+
+        // 优先 WiFi，其次蜂窝，最后默认 en0
+        return WiFi接口 ?? 蜂窝接口 ?? "en0"
     }
 
     // MARK: - 配置验证

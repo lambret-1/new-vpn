@@ -139,11 +139,11 @@ private struct 模式按钮: View {
                 // 圆形图标
                 ZStack {
                     Circle()
-                        .fill(选中 ? 主题色 : Color.页面背景)
+                        .fill(选中 ? Color.主题色 : Color.页面背景)
                         .frame(width: 直径, height: 直径)
                         .overlay(
                             Circle()
-                                .stroke(选中 ? 主题色 : Color.分割线, lineWidth: 选中 ? 2 : 1)
+                                .stroke(选中 ? Color.主题色 : Color.分割线, lineWidth: 选中 ? 2 : 1)
                         )
 
                     Image(systemName: 模式图标)

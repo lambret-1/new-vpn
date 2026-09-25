@@ -376,7 +376,8 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
             guard 部分.count >= 4 else { return }
 
-            let 域名 = String(部分[0].hasSuffix(".") ? 部分[0].dropLast() : 部分[0])
+            let 原始域名 = 部分[0]
+            let 域名 = 原始域名.hasSuffix(".") ? String(原始域名.dropLast()) : 原始域名
             let TTL = Int(部分[1]) ?? 300
             let 记录类型字符串 = 部分.count > 3 ? 部分[3] : "A"
             let 解析结果 = 部分.count > 4 ? Array(部分[4...]) : []

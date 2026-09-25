@@ -102,7 +102,7 @@ private struct 内容列表栏: View {
             }
             .contentShape(Rectangle())
             .onTapGesture {
-                状态.当前节点ID = 节点.id
+                状态.保存选中节点(节点ID: 节点.id)
             }
         }
     }

@@ -91,6 +91,11 @@ struct 节点模型: Identifiable, Codable, Hashable {
         }
         return "\(延迟)ms"
     }
+
+    /// 节点稳定标识（用于跨会话记住选中节点，不依赖 UUID）
+    var 稳定标识: String {
+        "\(协议.rawValue)|\(地址)|\(端口)|\(用户标识 ?? "")"
+    }
 }
 
 // MARK: - 订阅流量信息

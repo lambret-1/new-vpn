@@ -151,11 +151,12 @@ final class SingBox配置生成器 {
             // TUN 入站（iOS 隧道使用）
             // 注意：Network Extension 中必须用 gvisor 栈，system 栈需要 root 权限
             // auto_route/strict_route 由系统 NEPacketTunnelNetworkSettings 控制，不需 sing-box 管理
+            // MTU 降低到 1400：避免物理网卡 MTU 差异导致大包分片被丢弃触发 RST
             // 启用协议嗅探（sniff）：从 TLS Client Hello 中提取 SNI 域名，提升分流精度
             SingBox入站配置.tun入站(
                 标签: "tun-in",
                 地址: "10.0.0.2/24",
-                MTU: 1500,
+                MTU: 1400,
                 自动路由: false,
                 严格路由: false,
                 网络栈: "gvisor",

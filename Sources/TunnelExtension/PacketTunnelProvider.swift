@@ -250,8 +250,8 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         DNS设置.matchDomains = [""]
         设置.dnsSettings = DNS设置
 
-        // MTU（与 sing-box TUN 入站配置保持一致，避免分片丢包）
-        设置.mtu = 1500
+        // MTU（降低到 1400 避免物理网卡 MTU 差异导致分片丢包）
+        设置.mtu = 1400
 
         // 代理设置（可选）
         if let 代理配置 = 隧道配置["proxy"] as? [String: Any],

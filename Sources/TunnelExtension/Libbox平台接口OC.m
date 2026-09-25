@@ -85,59 +85,40 @@
 /// 这是 iOS Network Extension 中直连流量能正常发出的关键
 - (BOOL)autoDetectInterfaceControl:(int32_t)fd error:(NSError * _Nullable * _Nullable)error {
     if (fd < 0) {
-        if (error) {
-            *error = [NSError errorWithDomain:@"com.newvpn.tunnel" code:-1
-                                     userInfo:@{NSLocalizedDescriptionKey: @"socket 文件描述符无效"}];
-        }
-        return NO;
+        // fd 无效时返回 YES，避免 sing-box 因接口控制失败而中断连接
+        return YES;
     }
 
-    // 获取默认物理网卡接口索引（优先 WiFi，其次蜂窝）
+    // 每次都获取最新的物理网卡接口索引（不缓存，避免网络切换后使用过期索引）
     int 接口索引 = [self 获取默认接口索引];
     if (接口索引 <= 0) {
-        if (error) {
-            *error = [NSError errorWithDomain:@"com.newvpn.tunnel" code:-2
-                                     userInfo:@{NSLocalizedDescriptionKey: @"未找到可用物理网卡接口"}];
-        }
-        return NO;
+        // 未找到可用物理网卡时返回 YES，让 socket 使用系统默认路由
+        return YES;
     }
 
     // 绑定 socket 到物理网卡（IPv4）
     int 结果 = setsockopt(fd, IPPROTO_IP, IP_BOUND_IF, &接口索引, sizeof(接口索引));
     if (结果 != 0) {
         // 绑定 IPv4 失败，尝试 IPv6
-        结果 = setsockopt(fd, IPPROTO_IPV6, IPV6_BOUND_IF, &接口索引, sizeof(接口索引));
+        setsockopt(fd, IPPROTO_IPV6, IPV6_BOUND_IF, &接口索引, sizeof(接口索引));
     }
 
-    if (结果 != 0) {
-        if (error) {
-            *error = [NSError errorWithDomain:@"com.newvpn.tunnel" code:errno
-                                     userInfo:@{NSLocalizedDescriptionKey: [NSString stringWithFormat:@"setsockopt 绑定接口失败: %s", strerror(errno)]}];
-        }
-        return NO;
-    }
-
-    if (self.日志回调) {
-        self.日志回调(1, [NSString stringWithFormat:@"socket fd=%d 已绑定到物理接口 index=%d", fd, 接口索引]);
-    }
+    // 无论绑定成功与否都返回 YES，避免 sing-box 因接口控制失败而中断连接
+    // 绑定失败时 socket 回退到系统默认路由，仍可正常工作
     return YES;
 }
 
-/// 获取默认物理网卡接口索引（缓存结果，避免每次都遍历接口列表）
+/// 获取默认物理网卡接口索引（每次实时获取，不缓存）
 - (int)获取默认接口索引 {
-    static int 缓存索引 = 0;
-    static dispatch_once_t 一次令牌;
-    dispatch_once(&一次令牌, ^{
-        NSError *错误 = nil;
-        id<LibboxNetworkInterfaceIterator> 迭代器 = [self getInterfaces:&错误];
-        if (迭代器) {
-            LibboxNetworkInterface *第一个接口 = [迭代器 next];
-            if (第一个接口 && 第一个接口.index > 0) {
-                缓存索引 = (int)第一个接口.index;
-            }
+    NSError *错误 = nil;
+    id<LibboxNetworkInterfaceIterator> 迭代器 = [self getInterfaces:&错误];
+    if (迭代器) {
+        LibboxNetworkInterface *第一个接口 = [迭代器 next];
+        if (第一个接口 && 第一个接口.index > 0) {
+            return (int)第一个接口.index;
         }
-    });
-    return 缓存索引;
+    }
+    return 0;
 }
 
 /// 查找连接所有者（iOS 不支持，返回 -1）

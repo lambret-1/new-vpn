@@ -44,6 +44,14 @@
 
 @end
 
+#pragma mark - 平台接口实现
+
+/// 类扩展：声明内部辅助方法
+@interface Libbox平台接口OC ()
+/// 创建 LibboxNetworkInterface 对象
+- (LibboxNetworkInterface *)创建接口对象:(NSDictionary *)信息;
+@end
+
 @implementation Libbox平台接口OC
 
 /// 当前运行在 Network Extension 中，必须返回 YES
@@ -92,69 +100,166 @@
     return NO;
 }
 
-/// 启动默认接口监视器（iOS 由系统管理，返回 YES 表示成功但不实际操作）
+/// 默认接口更新监听器（保存引用，网络切换时通知 sing-box）
+static id<LibboxInterfaceUpdateListener> _默认接口监听器 = nil;
+
+/// 启动默认接口监视器
 - (BOOL)startDefaultInterfaceMonitor:(id<LibboxInterfaceUpdateListener> _Nullable)listener error:(NSError * _Nullable * _Nullable)error {
+    _默认接口监听器 = listener;
+
+    // 立即通知当前默认接口（通过 getInterfaces 获取第一个可用接口）
+    if (listener) {
+        NSError *接口错误 = nil;
+        id<LibboxNetworkInterfaceIterator> 迭代器 = [self getInterfaces:&接口错误];
+        if (迭代器) {
+            LibboxNetworkInterface *第一个接口 = [迭代器 next];
+            if (第一个接口) {
+                // 通知 sing-box 当前默认接口索引
+                if ([listener respondsToSelector:@selector(updateDefaultInterfaceIndex:)]) {
+                    [listener updateDefaultInterfaceIndex:第一个接口.index];
+                } else if ([listener respondsToSelector:@selector(defaultInterfaceUpdated:)]) {
+                    [listener defaultInterfaceUpdated:第一个接口.index];
+                }
+            }
+        }
+    }
     return YES;
 }
 
-/// 关闭默认接口监视器（iOS 由系统管理，返回 YES 表示成功但不实际操作）
+/// 关闭默认接口监视器
 - (BOOL)closeDefaultInterfaceMonitor:(id<LibboxInterfaceUpdateListener> _Nullable)listener error:(NSError * _Nullable * _Nullable)error {
+    _默认接口监听器 = nil;
     return YES;
 }
 
-/// 获取网络接口列表（使用 ifaddrs 获取系统真实接口）
+/// 获取网络接口列表（使用 ifaddrs 获取系统真实接口，支持 IPv4/IPv6，按接口名分组）
 - (id<LibboxNetworkInterfaceIterator> _Nullable)getInterfaces:(NSError * _Nullable * _Nullable)error {
     struct ifaddrs *接口链表 = NULL;
     if (getifaddrs(&接口链表) != 0) {
+        if (error) {
+            *error = [NSError errorWithDomain:@"com.newvpn.tunnel" code:-1
+                                     userInfo:@{NSLocalizedDescriptionKey: @"getifaddrs 调用失败"}];
+        }
         return nil;
     }
 
-    NSMutableArray<LibboxNetworkInterface *> *接口列表 = [NSMutableArray array];
-    int32_t 索引 = 0;
+    // 按接口名分组，收集每个接口的所有地址和属性
+    NSMutableDictionary *接口字典 = [NSMutableDictionary dictionary];
 
     for (struct ifaddrs *当前 = 接口链表; 当前 != NULL; 当前 = 当前->ifa_next) {
-        // 跳过无地址的接口
         if (当前->ifa_addr == NULL) continue;
 
-        // 只处理 IPv4 接口
-        if (当前->ifa_addr->sa_family != AF_INET) continue;
-
         NSString *接口名 = [NSString stringWithUTF8String:当前->ifa_name];
-        // 跳过回环接口和隧道接口
+        if (!接口名) continue;
+
+        // 跳过回环、隧道、IPsec 接口（这些不是物理出站接口）
         if ([接口名 isEqualToString:@"lo0"]) continue;
         if ([接口名 hasPrefix:@"utun"]) continue;
         if ([接口名 hasPrefix:@"ipsec"]) continue;
+        if ([接口名 hasPrefix:@"tap"]) continue;
+        if ([接口名 hasPrefix:@"bridge"]) continue;
 
-        struct sockaddr_in *地址 = (struct sockaddr_in *)当前->ifa_addr;
-        NSString *IP字符串 = [NSString stringWithUTF8String:inet_ntoa(地址->sin_addr)];
+        // 只处理 IPv4 和 IPv6
+        sa_family_t 地址族 = 当前->ifa_addr->sa_family;
+        if (地址族 != AF_INET && 地址族 != AF_INET6) continue;
 
-        // 跳过无有效 IP 的接口
-        if ([IP字符串 isEqualToString:@"0.0.0.0"]) continue;
-
-        LibboxNetworkInterface *接口 = [[LibboxNetworkInterface alloc] init];
-        接口.index = 索引;
-        接口.name = 接口名;
-        int32_t MTU值 = 1500;
-        if (当前->ifa_data != NULL) {
-            MTU值 = (int32_t)((struct if_data *)当前->ifa_data)->ifi_mtu;
+        // 解析 IP 地址字符串
+        char 地址缓冲[INET6_ADDRSTRLEN];
+        if (地址族 == AF_INET) {
+            struct sockaddr_in *addr = (struct sockaddr_in *)当前->ifa_addr;
+            inet_ntop(AF_INET, &addr->sin_addr, 地址缓冲, sizeof(地址缓冲));
+        } else {
+            struct sockaddr_in6 *addr = (struct sockaddr_in6 *)当前->ifa_addr;
+            inet_ntop(AF_INET6, &addr->sin6_addr, 地址缓冲, sizeof(地址缓冲));
         }
-        接口.mtu = MTU值;
-        接口.flags = (int32_t)当前->ifa_flags;
-        接口.type = 0; // 0 表示未知类型
-        接口.metered = NO;
-        // addresses 留空（nil），sing-box 不需要具体地址
+        NSString *IP字符串 = [NSString stringWithUTF8String:地址缓冲];
 
-        [接口列表 addObject:接口];
-        索引 += 1;
+        // 跳过全零地址和链路本地地址（fe80:: 开头的 IPv6）
+        if ([IP字符串 isEqualToString:@"0.0.0.0"] || [IP字符串 isEqualToString:@"::"]) continue;
+        if ([IP字符串 hasPrefix:@"fe80:"]) continue;
+
+        // 获取或创建接口信息
+        NSMutableDictionary *接口信息 = 接口字典[接口名];
+        if (!接口信息) {
+            // 使用 if_nametoindex 获取真实接口索引（sing-box 绑定 socket 需要真实 ifindex）
+            unsigned int 真实索引 = if_nametoindex(当前->ifa_name);
+            int32_t MTU值 = 1500;
+            if (当前->ifa_data != NULL) {
+                MTU值 = (int32_t)((struct if_data *)当前->ifa_data)->ifi_mtu;
+                if (MTU值 <= 0) MTU值 = 1500;
+            }
+
+            // 判断接口类型
+            int32_t 接口类型 = 0; // 0=未知
+            if ([接口名 hasPrefix:@"en"]) {
+                接口类型 = 1; // 1=以太网/WiFi
+            } else if ([接口名 hasPrefix:@"pdp_ip"] || [接口名 hasPrefix:@"cell"] || [接口名 hasPrefix:@"rmnet"]) {
+                接口类型 = 2; // 2=蜂窝
+            }
+
+            接口信息 = [NSMutableDictionary dictionary];
+            接口信息[@"name"] = 接口名;
+            接口信息[@"index"] = @(真实索引 > 0 ? 真实索引 : (int32_t)接口字典.count);
+            接口信息[@"mtu"] = @(MTU值);
+            接口信息[@"flags"] = @((int32_t)当前->ifa_flags);
+            接口信息[@"type"] = @(接口类型);
+            接口信息[@"addresses"] = [NSMutableArray array];
+            接口字典[接口名] = 接口信息;
+        }
+
+        // 收集地址
+        [(NSMutableArray *)接口信息[@"addresses"] addObject:IP字符串];
+
+        // 更新 flags（取最新的）
+        接口信息[@"flags"] = @((int32_t)当前->ifa_flags);
     }
 
     freeifaddrs(接口链表);
 
-    if (接口列表.count == 0) {
+    if (接口字典.count == 0) {
+        if (error) {
+            *error = [NSError errorWithDomain:@"com.newvpn.tunnel" code:-2
+                                     userInfo:@{NSLocalizedDescriptionKey: @"未找到可用的物理网络接口"}];
+        }
         return nil;
     }
 
+    // 转换为 LibboxNetworkInterface 列表，优先 WiFi（en），其次蜂窝（pdp_ip）
+    NSMutableArray<LibboxNetworkInterface *> *接口列表 = [NSMutableArray array];
+
+    // 先加 WiFi 接口
+    for (NSString *接口名 in 接口字典) {
+        if ([接口名 hasPrefix:@"en"]) {
+            [接口列表 addObject:[self 创建接口对象:接口字典[接口名]]];
+        }
+    }
+    // 再加蜂窝接口
+    for (NSString *接口名 in 接口字典) {
+        if ([接口名 hasPrefix:@"pdp_ip"] || [接口名 hasPrefix:@"cell"]) {
+            [接口列表 addObject:[self 创建接口对象:接口字典[接口名]]];
+        }
+    }
+    // 最后加其他接口
+    for (NSString *接口名 in 接口字典) {
+        if (![接口名 hasPrefix:@"en"] && ![接口名 hasPrefix:@"pdp_ip"] && ![接口名 hasPrefix:@"cell"]) {
+            [接口列表 addObject:[self 创建接口对象:接口字典[接口名]]];
+        }
+    }
+
     return [[网络接口迭代器 alloc] initWith接口列表:接口列表];
+}
+
+/// 创建 LibboxNetworkInterface 对象（辅助方法）
+- (LibboxNetworkInterface *)创建接口对象:(NSDictionary *)信息 {
+    LibboxNetworkInterface *接口 = [[LibboxNetworkInterface alloc] init];
+    接口.index = [信息[@"index"] intValue];
+    接口.name = 信息[@"name"];
+    接口.mtu = [信息[@"mtu"] intValue];
+    接口.flags = [信息[@"flags"] intValue];
+    接口.type = [信息[@"type"] intValue];
+    接口.metered = NO;
+    // addresses 留空：libbox 当前版本不强制要求地址列表，index 和 name 足够用于 socket 绑定
+    return 接口;
 }
 
 /// 读取 WIFI 状态（iOS 不使用，返回 nil）

@@ -394,8 +394,9 @@ final class SingBox配置生成器 {
 
         return SingBox路由配置(
             final: 最终出站,
-            // 启用自动检测出站网卡，确保 WiFi/蜂窝切换时正确选择物理接口
-            autoDetectInterface: true,
+            // iOS Network Extension 进程的流量被系统自动排除在 VPN 路由之外，
+            // 不需要 sing-box 手动检测出站接口，设为 false 避免 "no available network interface" 错误
+            autoDetectInterface: false,
             rules: 规则列表
         )
     }

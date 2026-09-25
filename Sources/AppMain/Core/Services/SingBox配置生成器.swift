@@ -76,34 +76,12 @@ final class SingBox配置生成器 {
     ///   - 运行模式: 隧道运行模式
     private func 生成DNS配置(_ DNS配置: DNS配置模型?, 节点: 节点模型?, 运行模式: 隧道运行模式) -> SingBoxDNS配置 {
         // DNS 分流策略：
-        // dns_resolver: 国内 DNS，走 DIRECT，用于国内域名和代理服务器域名解析
-        // dns_proxy: Cloudflare DoH，走 proxy，用于国外域名（仅代理模式下使用）
-        //
-        // 关键背景：iOS NE 下 DIRECT 出站 bind_interface 后，UDP 响应包回不到 socket
-        // （浏览器 DNS 全超时），但 TCP 连接正常。因此：
-        //   - 代理模式：dns_resolver 用 UDP（TCP/UDP 都需要，代理服务器域名解析必须可靠）
-        //   - 直连模式：dns_resolver 用 DoH 域名（TCP 443），绕开 UDP 回包问题
-        //     另放一个 UDP 服务器做 bootstrap，用于解析 dns.alidns.com 自身
-        let 默认服务器: [SingBoxDNS服务器]
-        let 默认DNS服务器: String
-
-        switch 运行模式 {
-        case .全局直连:
-            // 纯直连模式：DoH 直接用 IP，走 TCP 解决 iOS NE 下 UDP 绑接口回包失败
-            // 地址用 IP 不用域名，省去 address_resolver/bootstrap
-            默认服务器 = [
-                .https服务器(标签: "dns_resolver", 地址: "223.5.5.5", 出站: "DIRECT")
-            ]
-            默认DNS服务器 = "dns_resolver"
-
-        case .规则分流, .全局代理:
-            // 代理模式：保持原配置不变
-            默认服务器 = [
-                .udp服务器(标签: "dns_resolver", 地址: "223.5.5.5", 出站: "DIRECT"),
-                .https服务器(标签: "dns_proxy", 地址: "1.1.1.1", 出站: "proxy")
-            ]
-            默认DNS服务器 = "dns_proxy"
-        }
+        // dns_resolver: 阿里云 DNS（223.5.5.5），走 DIRECT，用于国内域名和代理服务器域名解析
+        // dns_proxy: Cloudflare DoH（https://1.1.1.1/dns-query），走 proxy，用于国外域名（仅代理模式下使用）
+        let 默认服务器 = [
+            SingBoxDNS服务器.udp服务器(标签: "dns_resolver", 地址: "223.5.5.5", 出站: "DIRECT"),
+            SingBoxDNS服务器.https服务器(标签: "dns_proxy", 地址: "1.1.1.1", 出站: "proxy")
+        ]
 
         // DNS 规则列表
         var DNS规则列表: [SingBoxDNS规则] = []
@@ -143,6 +121,17 @@ final class SingBox配置生成器 {
             if !是否IP地址 {
                 DNS规则列表.append(SingBoxDNS规则(域名: [节点地址], 服务器: "dns_resolver"))
             }
+        }
+
+        // 根据运行模式决定默认 DNS 服务器
+        // 全局直连模式：所有域名都走国内直连 DNS，避免依赖代理通道
+        // 规则分流/全局代理：未匹配的域名走代理 DNS（通过隧道查询，避免 DNS 污染）
+        let 默认DNS服务器: String
+        switch 运行模式 {
+        case .全局直连:
+            默认DNS服务器 = "dns_resolver"
+        case .规则分流, .全局代理:
+            默认DNS服务器 = "dns_proxy"
         }
 
         return SingBoxDNS配置(
@@ -359,20 +348,20 @@ final class SingBox配置生成器 {
     private func 生成路由配置(分流规则: [分流规则项], 节点: 节点模型?, 运行模式: 隧道运行模式) -> SingBox路由配置 {
         var 规则列表: [SingBox路由规则] = []
 
-        // ① DNS 服务器自身 IP 直连，必须放在最前面
-        //    否则 DNS 模块发往 223.5.5.5 的查询一旦绕回 TUN，会被 port:53 规则再次拦截形成死循环
+        // DNS 拦截：目标端口 53 的流量转发到 dns-out 出站，交给 sing-box DNS 模块处理
+        // libbox v1.11.0 不支持 TUN 入站 dns_address 字段，改用路由规则方式拦截
         规则列表.append(SingBox路由规则(
-            ipCidr: ["223.5.5.5/32", "1.1.1.1/32", "8.8.8.8/32"],
-            outbound: "DIRECT"
+            port: [53],
+            outbound: "dns-out"
         ))
 
-        // ② 私有 IP 直连
+        // 私有 IP 直连
         规则列表.append(SingBox路由规则(
             ipIsPrivate: true,
             outbound: "DIRECT"
         ))
 
-        // ③ 局域网地址直连
+        // 局域网地址直连
         规则列表.append(SingBox路由规则(
             ipCidr: [
                 "10.0.0.0/8",
@@ -386,12 +375,10 @@ final class SingBox配置生成器 {
             outbound: "DIRECT"
         ))
 
-        // ④ DNS 拦截放最后：目标端口 53 的流量转发到 dns-out 出站
-        //    libbox v1.11.0 不支持 TUN 入站 dns_address 字段，改用路由规则方式拦截
-        //    此时 223.5.5.5 等 DNS 服务器自身 IP 已被规则①放行直连，不会回环
+        // DNS 服务器 IP 直连（避免 DNS 查询走代理导致回环）
         规则列表.append(SingBox路由规则(
-            port: [53],
-            outbound: "dns-out"
+            ipCidr: ["223.5.5.5/32", "8.8.8.8/32", "1.1.1.1/32"],
+            outbound: "DIRECT"
         ))
 
         // 关键修复：代理服务器地址直连，避免代理流量自身被路由到代理导致回环

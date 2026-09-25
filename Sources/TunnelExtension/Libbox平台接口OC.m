@@ -51,8 +51,6 @@
 @interface Libbox平台接口OC ()
 /// 创建 LibboxNetworkInterface 对象
 - (LibboxNetworkInterface *)创建接口对象:(NSDictionary *)信息;
-/// 获取默认物理网卡接口索引
-- (int)获取默认接口索引;
 @end
 
 @implementation Libbox平台接口OC
@@ -72,53 +70,19 @@
     return NO;
 }
 
-/// 使用平台自动检测接口控制（将出站 socket 绑定到物理网卡，排除 VPN 路由）
+/// 不使用平台自动检测接口控制（iOS libbox 中此机制不生效）
+/// 改用 auto_detect_interface=true + getInterfaces 方式，由 sing-box 内部绑定 socket
 - (BOOL)usePlatformAutoDetectInterfaceControl {
-    return YES;
+    return NO;
 }
 
 /// 清空 DNS 缓存（iOS 由系统管理，空实现）
 - (void)clearDNSCache {
 }
 
-/// 自动检测接口控制：将出站 socket 绑定到物理网卡，避免被 VPN 路由回环
-/// 这是 iOS Network Extension 中直连流量能正常发出的关键
+/// 自动检测接口控制（不使用，返回 NO）
 - (BOOL)autoDetectInterfaceControl:(int32_t)fd error:(NSError * _Nullable * _Nullable)error {
-    if (fd < 0) {
-        // fd 无效时返回 YES，避免 sing-box 因接口控制失败而中断连接
-        return YES;
-    }
-
-    // 每次都获取最新的物理网卡接口索引（不缓存，避免网络切换后使用过期索引）
-    int 接口索引 = [self 获取默认接口索引];
-    if (接口索引 <= 0) {
-        // 未找到可用物理网卡时返回 YES，让 socket 使用系统默认路由
-        return YES;
-    }
-
-    // 绑定 socket 到物理网卡（IPv4）
-    int 结果 = setsockopt(fd, IPPROTO_IP, IP_BOUND_IF, &接口索引, sizeof(接口索引));
-    if (结果 != 0) {
-        // 绑定 IPv4 失败，尝试 IPv6
-        setsockopt(fd, IPPROTO_IPV6, IPV6_BOUND_IF, &接口索引, sizeof(接口索引));
-    }
-
-    // 无论绑定成功与否都返回 YES，避免 sing-box 因接口控制失败而中断连接
-    // 绑定失败时 socket 回退到系统默认路由，仍可正常工作
-    return YES;
-}
-
-/// 获取默认物理网卡接口索引（每次实时获取，不缓存）
-- (int)获取默认接口索引 {
-    NSError *错误 = nil;
-    id<LibboxNetworkInterfaceIterator> 迭代器 = [self getInterfaces:&错误];
-    if (迭代器) {
-        LibboxNetworkInterface *第一个接口 = [迭代器 next];
-        if (第一个接口 && 第一个接口.index > 0) {
-            return (int)第一个接口.index;
-        }
-    }
-    return 0;
+    return NO;
 }
 
 /// 查找连接所有者（iOS 不支持，返回 -1）
@@ -243,9 +207,11 @@ static void 通知默认接口更新(id<LibboxInterfaceUpdateListener> listener,
         }
         NSString *IP字符串 = [NSString stringWithUTF8String:地址缓冲];
 
-        // 跳过全零地址和链路本地地址（fe80:: 开头的 IPv6）
+        // 跳过全零地址（但保留链路本地地址 fe80::，iOS 物理网卡可能只有链路本地地址）
         if ([IP字符串 isEqualToString:@"0.0.0.0"] || [IP字符串 isEqualToString:@"::"]) continue;
-        if ([IP字符串 hasPrefix:@"fe80:"]) continue;
+
+        // 只处理已启用且运行中的接口（IFF_UP | IFF_RUNNING）
+        if (!(当前->ifa_flags & IFF_UP) || !(当前->ifa_flags & IFF_RUNNING)) continue;
 
         // 获取或创建接口信息
         NSMutableDictionary *接口信息 = 接口字典[接口名];

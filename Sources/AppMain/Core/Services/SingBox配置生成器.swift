@@ -405,10 +405,10 @@ final class SingBox配置生成器 {
 
         return SingBox路由配置(
             final: 最终出站,
-            // 关闭 auto_detect_interface：平台接口 usePlatformAutoDetectInterfaceControl=YES
-            // 已通过 autoDetectInterfaceControl 将每个出站 socket 绑定到物理网卡，
-            // 两者同时启用会导致 sing-box 内部双重接口管理冲突，触发 Go runtime panic 崩溃
-            autoDetectInterface: false,
+            // 启用 auto_detect_interface：sing-box 通过 getInterfaces 获取物理网卡（en0/pdp_ip0），
+            // 用 SO_BOUND_IF 将出站 socket 绑定到物理网卡，避免直连流量被路由回 TUN 形成回环
+            // usePlatformAutoDetectInterfaceControl 在 iOS libbox 中不生效，故不使用
+            autoDetectInterface: true,
             rules: 规则列表
         )
     }

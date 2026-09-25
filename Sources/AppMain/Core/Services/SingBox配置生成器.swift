@@ -188,9 +188,17 @@ final class SingBox配置生成器 {
         }
 
         // 所有节点出站（用于 urltest/selector）
+        // tag 使用节点真实名称，重名时自动加 _2、_3 后缀
         var 节点标签列表: [String] = []
-        for (索引, 节点) in 节点列表.enumerated() {
-            let 标签 = "node-\(索引)"
+        var 名称计数: [String: Int] = [:]
+        for 节点 in 节点列表 {
+            var 标签 = 节点.名称
+            if let 已有计数 = 名称计数[节点.名称] {
+                名称计数[节点.名称] = 已有计数 + 1
+                标签 = "\(节点.名称)_\(已有计数 + 1)"
+            } else {
+                名称计数[节点.名称] = 1
+            }
             if let 节点出站 = 节点转换为出站(节点, 标签: 标签) {
                 出站列表.append(节点出站)
                 节点标签列表.append(标签)

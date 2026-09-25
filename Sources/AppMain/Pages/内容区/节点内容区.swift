@@ -106,6 +106,18 @@ private struct 分组行视图: View {
                     分组.是否展开.toggle()
                 }
             }
+            .contextMenu {
+                Button {
+                    复制分组JSON()
+                } label: {
+                    Label("复制 JSON", systemImage: "doc.on.doc")
+                }
+                Button {
+                    分享分组JSON()
+                } label: {
+                    Label("分享 JSON", systemImage: "square.and.arrow.up")
+                }
+            }
 
             // 展开的节点列表
             if 分组.是否展开 {
@@ -155,6 +167,63 @@ private struct 分组行视图: View {
                 }
             }
         )
+    }
+
+    // MARK: - 分组 JSON 导出
+
+    /// 生成分组内所有节点的 sing-box 出站配置 JSON 字符串
+    private func 生成分组JSON() -> String {
+        let 出站列表 = 分组.节点列表.enumerated().compactMap { 索引, 节点 in
+            SingBox配置生成器.共享.节点转换为出站(节点, 标签: "node-\(索引)")
+        }
+        let 编码器 = JSONEncoder()
+        编码器.keyEncodingStrategy = .convertToSnakeCase
+        编码器.outputFormatting = [.prettyPrinted, .sortedKeys]
+        guard let 数据 = try? 编码器.encode(出站列表) else { return "" }
+        return String(data: 数据, encoding: .utf8) ?? ""
+    }
+
+    /// 复制分组 JSON 到剪贴板
+    private func 复制分组JSON() {
+        let json = 生成分组JSON()
+        guard !json.isEmpty else { return }
+        UIPasteboard.general.string = json
+    }
+
+    /// 分享分组 JSON（弹出 iOS 系统分享面板）
+    private func 分享分组JSON() {
+        let json = 生成分组JSON()
+        guard !json.isEmpty else { return }
+
+        let 活动控制器 = UIActivityViewController(
+            activityItems: [json],
+            applicationActivities: nil
+        )
+
+        // 获取最顶层视图控制器
+        guard let 窗口 = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .flatMap({ $0.windows })
+            .first(where: { $0.isKeyWindow }),
+              var 顶层控制器 = 窗口.rootViewController else {
+            return
+        }
+        while let 弹出的 = 顶层控制器.presentedViewController {
+            顶层控制器 = 弹出的
+        }
+
+        // iPad 适配
+        if let 弹出控制器 = 活动控制器.popoverPresentationController {
+            弹出控制器.sourceView = 顶层控制器.view
+            弹出控制器.sourceRect = CGRect(
+                x: 顶层控制器.view.bounds.midX,
+                y: 顶层控制器.view.bounds.midY,
+                width: 0, height: 0
+            )
+            弹出控制器.permittedArrowDirections = []
+        }
+
+        顶层控制器.present(活动控制器, animated: true)
     }
 }
 

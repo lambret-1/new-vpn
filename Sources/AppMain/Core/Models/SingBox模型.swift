@@ -413,6 +413,8 @@ struct SingBox出站配置: Codable, Equatable {
     var overrideAddress: String?
     /// 节点端口（direct）
     var overridePort: Int?
+    /// 包编码（VLESS：xudp/none）
+    var packetEncoding: String?
 
     /// 创建 VLESS 出站
     static func vless出站(标签: String,
@@ -428,6 +430,7 @@ struct SingBox出站配置: Codable, Equatable {
         配置.serverPort = 端口
         配置.uuid = UUID
         配置.flow = 流控
+        配置.packetEncoding = "xudp"
         // 注意：VLESS 出站没有 security 字段，那是 VMess 的字段
         // security 字段会导致 sing-box 解析配置失败
         配置.tls = TLS
@@ -541,6 +544,7 @@ struct SingBox出站配置: Codable, Equatable {
         case version
         case overrideAddress = "override_address"
         case overridePort = "override_port"
+        case packetEncoding = "packet_encoding"
     }
 }
 

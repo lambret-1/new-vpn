@@ -431,6 +431,8 @@ struct SingBox出站配置: Codable, Equatable {
     var overridePort: Int?
     /// 包编码（VLESS：xudp/none）
     var packetEncoding: String?
+    /// 绑定物理网卡接口名（en0=WiFi, pdp_ip0=蜂窝），直连出站必须设置避免回环
+    var bindInterface: String?
 
     /// 创建 VLESS 出站
     static func vless出站(标签: String,
@@ -504,8 +506,11 @@ struct SingBox出站配置: Codable, Equatable {
     }
 
     /// 创建 Direct 出站（标签大写对齐官方客户端）
-    static func direct出站(标签: String = "DIRECT") -> SingBox出站配置 {
-        SingBox出站配置(type: "direct", tag: 标签)
+    /// - Parameter 绑定接口: 物理网卡接口名（en0=WiFi, pdp_ip0=蜂窝），绑定后直连流量走物理网卡避免回环
+    static func direct出站(标签: String = "DIRECT", 绑定接口: String? = "en0") -> SingBox出站配置 {
+        var 配置 = SingBox出站配置(type: "direct", tag: 标签)
+        配置.bindInterface = 绑定接口
+        return 配置
     }
 
     /// 创建 Block 出站（标签大写对齐官方客户端）
@@ -561,6 +566,7 @@ struct SingBox出站配置: Codable, Equatable {
         case overrideAddress = "override_address"
         case overridePort = "override_port"
         case packetEncoding = "packet_encoding"
+        case bindInterface = "bind_interface"
     }
 }
 

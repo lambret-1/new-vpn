@@ -57,10 +57,32 @@ final class 隧道管理器: NSObject, ObservableObject {
     /// 私有初始化
     private override init() {
         super.init()
+        加载运行模式偏好()
         加载配置()
         注册通知监听()
         // 首次初始化时先请求 VPN 权限，再检测描述文件状态
         初始化VPN权限()
+    }
+
+    // MARK: - 运行模式持久化
+
+    /// UserDefaults 键名：上次选择的运行模式
+    private let 运行模式偏好键 = "com.newvpn.上次运行模式"
+
+    /// 从 UserDefaults 加载上次选择的运行模式
+    private func 加载运行模式偏好() {
+        if let 保存值 = UserDefaults.standard.string(forKey: 运行模式偏好键),
+           let 模式 = 隧道运行模式(rawValue: 保存值) {
+            配置.运行模式 = 模式
+            调试日志管理器.共享.信息("隧道", "已加载上次运行模式：\(模式.rawValue)")
+        }
+    }
+
+    /// 保存当前运行模式到 UserDefaults
+    func 保存运行模式偏好() {
+        UserDefaults.standard.set(配置.运行模式.rawValue, forKey: 运行模式偏好键)
+        UserDefaults.standard.synchronize()
+        调试日志管理器.共享.信息("隧道", "已保存运行模式：\(配置.运行模式.rawValue)")
     }
 
     /// 初始化 VPN 权限（先触发系统授权对话框，再检测描述文件）

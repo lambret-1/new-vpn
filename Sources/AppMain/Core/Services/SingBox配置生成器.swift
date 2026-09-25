@@ -76,13 +76,11 @@ final class SingBox配置生成器 {
     ///   - 运行模式: 隧道运行模式
     private func 生成DNS配置(_ DNS配置: DNS配置模型?, 节点: 节点模型?, 运行模式: 隧道运行模式) -> SingBoxDNS配置 {
         // DNS 分流策略：
-        // dns_resolver: 阿里云 DoH（https://223.5.5.5/dns-query），走 DIRECT，用于国内域名和代理服务器域名解析
-        // dns_proxy: Cloudflare DoH（https://1.1.1.1/dns-query），走 proxy，用于国外域名
-        // 关键：dns_resolver 必须用 DoH(TCP) 不能用 UDP。iOS NE 下 DIRECT 出站 bind_interface 后，
-        //       UDP 响应包回不到 socket，导致代理服务器域名解析超时、proxy 出站无法建立连接。
+        // dns_resolver: 阿里云 DNS（223.5.5.5），走 DIRECT，用于国内域名和代理服务器域名解析
+        // dns_proxy: Google DNS-over-TLS（8.8.8.8），走 proxy，用于国外域名
         let 默认服务器 = [
-            SingBoxDNS服务器.https服务器(标签: "dns_resolver", 地址: "223.5.5.5", 出站: "DIRECT"),
-            SingBoxDNS服务器.https服务器(标签: "dns_proxy", 地址: "1.1.1.1", 出站: "proxy")
+            SingBoxDNS服务器.udp服务器(标签: "dns_resolver", 地址: "223.5.5.5", 出站: "DIRECT"),
+            SingBoxDNS服务器.tls服务器(标签: "dns_proxy", 地址: "8.8.8.8", 出站: "proxy")
         ]
 
         // DNS 规则列表

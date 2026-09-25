@@ -268,70 +268,56 @@ struct 调试日志内容区: View {
         let 分组: 调试日志管理器.日志分组
         let 简洁模式: Bool
         let 复制回调: (日志模型) -> Void
-        @State private var 展开 = true
 
         /// 分组对应颜色
         private var 分组颜色: Color {
             switch 分组.分组名 {
             case "错误日志": return .危险色
             case "警告日志": return .警告色
+            case "debug": return Color(red: 0.56, green: 0.38, blue: 0.95) // 紫色
             case "调试日志": return .主题色
-            case "追踪日志": return .purple
+            case "追踪日志": return .secondary
             default: return .secondary
             }
         }
 
         var body: some View {
             VStack(spacing: 4) {
-                // 分组标题栏（可点击折叠）
-                Button {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        展开.toggle()
-                    }
-                } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: 展开 ? "chevron.down" : "chevron.right")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundColor(.secondary)
+                // 分组标题栏（不可折叠，直接显示）
+                HStack(spacing: 8) {
+                    Circle()
+                        .fill(分组颜色)
+                        .frame(width: 8, height: 8)
 
-                        Circle()
-                            .fill(分组颜色)
-                            .frame(width: 8, height: 8)
+                    Text(分组.分组名)
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundColor(.primary)
 
-                        Text(分组.分组名)
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundColor(.primary)
+                    Text("\(分组.日志.count) 条")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(分组颜色.opacity(0.1))
+                        .cornerRadius(4)
 
-                        Text("\(分组.日志.count) 条")
-                            .font(.system(size: 11))
-                            .foregroundColor(.secondary)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(分组颜色.opacity(0.1))
-                            .cornerRadius(4)
-
-                        Spacer()
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(Color.卡片背景)
-                    .cornerRadius(8)
+                    Spacer()
                 }
-                .buttonStyle(PlainButtonStyle())
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color.卡片背景)
+                .cornerRadius(8)
 
-                // 分组内容
-                if 展开 {
-                    LazyVStack(spacing: 简洁模式 ? 2 : 4) {
-                        ForEach(分组.日志) { 日志 in
-                            日志行(
-                                日志: 日志,
-                                简洁模式: 简洁模式,
-                                复制回调: { 复制回调(日志) }
-                            )
-                            .id(日志.id)
-                        }
+                // 分组内容（直接展开显示，无折叠）
+                LazyVStack(spacing: 简洁模式 ? 2 : 4) {
+                    ForEach(分组.日志) { 日志 in
+                        日志行(
+                            日志: 日志,
+                            简洁模式: 简洁模式,
+                            复制回调: { 复制回调(日志) }
+                        )
+                        .id(日志.id)
                     }
-                    .transition(.opacity.combined(with: .move(edge: .top)))
                 }
             }
         }

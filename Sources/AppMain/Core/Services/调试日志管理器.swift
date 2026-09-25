@@ -370,20 +370,48 @@ final class 调试日志管理器: ObservableObject {
         let 日志: [日志模型]
     }
 
-    /// 按级别分组后的日志列表（错误/警告+致命/调试/追踪分组，错误组优先）
+    /// 按级别分组后的日志列表（错误/警告+致命/debug/调试/追踪分组，错误组优先）
+    /// debug 分组：sing-box 内核的 DEBUG 日志
+    /// 调试分组：应用自身的调试日志
     var 分组后的日志列表: [日志分组] {
         let 筛选列表 = 筛选后的日志列表
-        let 分组定义: [(名称: String, 级别: [日志级别])] = [
-            ("错误日志", [.错误]),
-            ("警告日志", [.警告, .致命]),
-            ("调试日志", [.调试]),
-            ("追踪日志", [.追踪])
-        ]
-        return 分组定义.compactMap { 定义 in
-            let 分组日志 = 筛选列表.filter { 定义.级别.contains($0.级别) }
-            guard !分组日志.isEmpty else { return nil }
-            return 日志分组(分组名: 定义.名称, 级别列表: 定义.级别, 日志: 分组日志)
+
+        // 错误日志
+        let 错误日志 = 筛选列表.filter { $0.级别 == .错误 }
+
+        // 警告日志（警告 + 致命合并）
+        let 警告日志 = 筛选列表.filter { $0.级别 == .警告 || $0.级别 == .致命 }
+
+        // debug 日志：sing-box 内核的 DEBUG 级别日志
+        let debug日志 = 筛选列表.filter {
+            $0.级别 == .调试 && $0.模块.localizedCaseInsensitiveContains("sing-box")
         }
+
+        // 调试日志：应用自身的 DEBUG 级别日志（非 sing-box）
+        let 调试日志 = 筛选列表.filter {
+            $0.级别 == .调试 && !$0.模块.localizedCaseInsensitiveContains("sing-box")
+        }
+
+        // 追踪日志
+        let 追踪日志 = 筛选列表.filter { $0.级别 == .追踪 }
+
+        var 分组列表: [日志分组] = []
+        if !错误日志.isEmpty {
+            分组列表.append(日志分组(分组名: "错误日志", 级别列表: [.错误], 日志: 错误日志))
+        }
+        if !警告日志.isEmpty {
+            分组列表.append(日志分组(分组名: "警告日志", 级别列表: [.警告, .致命], 日志: 警告日志))
+        }
+        if !debug日志.isEmpty {
+            分组列表.append(日志分组(分组名: "debug", 级别列表: [.调试], 日志: debug日志))
+        }
+        if !调试日志.isEmpty {
+            分组列表.append(日志分组(分组名: "调试日志", 级别列表: [.调试], 日志: 调试日志))
+        }
+        if !追踪日志.isEmpty {
+            分组列表.append(日志分组(分组名: "追踪日志", 级别列表: [.追踪], 日志: 追踪日志))
+        }
+        return 分组列表
     }
 
     /// 未分组的日志列表（仅信息，平铺显示）

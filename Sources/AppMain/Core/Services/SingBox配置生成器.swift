@@ -152,6 +152,7 @@ final class SingBox配置生成器 {
             // 注意：Network Extension 中必须用 gvisor 栈，system 栈需要 root 权限
             // auto_route/strict_route 由系统 NEPacketTunnelNetworkSettings 控制，不需 sing-box 管理
             // MTU 降低到 1400：避免物理网卡 MTU 差异导致大包分片被丢弃触发 RST
+            // dns_address 必须设置为 TUN 接口地址，sing-box 拦截发往该地址的 DNS 查询交给 DNS 模块处理
             // 启用协议嗅探（sniff）：从 TLS Client Hello 中提取 SNI 域名，提升分流精度
             SingBox入站配置.tun入站(
                 标签: "tun-in",
@@ -160,7 +161,8 @@ final class SingBox配置生成器 {
                 自动路由: false,
                 严格路由: false,
                 网络栈: "gvisor",
-                启用嗅探: true
+                启用嗅探: true,
+                DNS地址: "10.0.0.2"
             ),
             // Mixed 入站（HTTP+SOCKS5，用于本地应用）
             SingBox入站配置.mixed入站(

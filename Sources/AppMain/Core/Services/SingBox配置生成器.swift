@@ -408,9 +408,10 @@ final class SingBox配置生成器 {
 
         return SingBox路由配置(
             final: 最终出站,
-            // 关闭 auto_detect_interface：改用 DIRECT 出站的 bind_interface 直接绑定物理网卡，
-            // 避免 getInterfaces 平台接口在 iOS 扩展进程中返回空列表导致 "no available network interface"
-            autoDetectInterface: false,
+            // 启用 auto_detect_interface：sing-box 通过 getInterfaces 获取物理网卡，用 SO_BOUND_IF 绑定出站 socket，
+            // 避免直连流量被路由回 TUN 形成回环（回环会导致 connection refused）
+            // startDefaultInterfaceMonitor 已简化为仅保存监听器，不会触发运行时探测崩溃
+            autoDetectInterface: true,
             rules: 规则列表
         )
     }

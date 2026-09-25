@@ -262,7 +262,21 @@ static id<LibboxInterfaceUpdateListener> _默认接口监听器 = nil;
     接口.flags = [信息[@"flags"] intValue];
     接口.type = [信息[@"type"] intValue];
     接口.metered = NO;
-    // addresses 留空：libbox 当前版本不强制要求地址列表，index 和 name 足够用于 socket 绑定
+
+    // 尝试通过 KVC 设置 addresses 属性（libbox 可能需要地址列表判断接口有效性）
+    NSArray *地址列表 = 信息[@"addresses"];
+    if (地址列表 && [接口 respondsToSelector:NSSelectorFromString(@"addresses")]) {
+        @try {
+            [接口 setValue:地址列表 forKey:@"addresses"];
+        } @catch (NSException *异常) {
+            // 忽略 KVC 设置失败，index 和 name 足够用于 socket 绑定
+        }
+    }
+
+    if (self.日志回调) {
+        self.日志回调(2, [NSString stringWithFormat:@"getInterfaces 返回接口：name=%@ index=%d mtu=%d flags=%d type=%d addresses=%lu",
+                         接口.name, 接口.index, 接口.mtu, 接口.flags, 接口.type, (unsigned long)地址列表.count]);
+    }
     return 接口;
 }
 

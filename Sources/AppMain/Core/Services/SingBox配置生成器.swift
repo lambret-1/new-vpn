@@ -483,7 +483,7 @@ final class SingBox配置生成器 {
             let 接口名 = String(cString: 当前.pointee.ifa_name)
             let 标志 = 当前.pointee.ifa_flags
             // 只处理已启用的接口
-            if (标志 & IFF_UP) != 0,
+            if (标志 & UInt32(IFF_UP)) != 0,
                // 只处理 IPv4 地址
                当前.pointee.ifa_addr.pointee.sa_family == AF_INET,
                // 跳过回环和隧道接口

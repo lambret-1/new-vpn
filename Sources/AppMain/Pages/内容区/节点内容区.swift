@@ -35,7 +35,7 @@ struct 节点内容区: View {
                 .padding(.top, 60)
             } else {
                 // 分组列表（远程订阅导入的节点按订阅名称分组常驻显示）
-                LazyVStack(spacing: 10) {
+                VStack(spacing: 10) {
                     ForEach($状态.节点分组列表) { $分组 in
                         分组行视图(分组: $分组)
                     }
@@ -112,10 +112,11 @@ private struct 分组行视图: View {
                 VStack(spacing: 8) {
                     ForEach(分组.节点列表) { 节点 in
                         可滑动节点行视图(节点: 节点)
+                            .id(节点.id)
                     }
                 }
                 .padding(.top, 8)
-                .transition(.opacity.combined(with: .move(edge: .top)))
+                .transition(.opacity)
             }
         }
     }
@@ -210,14 +211,13 @@ private struct 可滑动节点行视图: View {
                     .foregroundColor(.white)
                     .frame(width: 展开宽度, height: 60)
                     .background(Color.主题色)
+                    .cornerRadius(12)
                 }
                 .buttonStyle(PlainButtonStyle())
 
                 Spacer()
             }
             .frame(maxWidth: .infinity)
-            .background(Color.主题色.opacity(0.3))
-            .cornerRadius(12)
 
             // 上层：节点卡片内容
             节点卡片内容(节点: 节点, 是否选中: 是否选中)

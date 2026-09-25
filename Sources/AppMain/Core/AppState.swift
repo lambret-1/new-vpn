@@ -200,6 +200,8 @@ final class AppState: ObservableObject {
     @Published var 当前顶部卡片: 顶部卡片类型 = .节点
     /// 当前底部弹窗（nil 表示未弹出）
     @Published var 当前底部弹窗: 底部弹窗类型?
+    /// 是否显示运行模式选择面板（右下角设置图标长按触发）
+    @Published var 显示运行模式面板: Bool = false
 
     // MARK: 隧道状态
 

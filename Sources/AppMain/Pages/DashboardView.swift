@@ -44,6 +44,7 @@ struct DashboardView: View {
         }
         .background(Color.页面背景.ignoresSafeArea())
         .底部弹窗(弹窗类型: $状态.当前底部弹窗)
+        .运行模式面板(显示: $状态.显示运行模式面板)
         .onAppear {
             // 启动时每日检测更新
             更新管理器.每日启动检测()

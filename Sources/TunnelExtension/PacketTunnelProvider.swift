@@ -535,18 +535,26 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         }
         记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "日志回调已设置")
 
-        // 从 packetFlow 中安全提取 TUN 文件描述符（通过运行时反射枚举属性/方法，兼容各 iOS 版本）
-        // 不使用 LibboxGetTunnelFileDescriptor() 全局函数，该函数在 iOS Network Extension 中返回值不可靠
-        var 获取错误: NSError?
-        let tun文件描述符 = Libbox平台接口OC.安全获取文件描述符(packetFlow, error: &获取错误)
-        记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "从 packetFlow 提取 TUN fd=\(tun文件描述符)")
+        // 获取 TUN 文件描述符，多种方式依次尝试，记录每种方式的结果
+        // 方式1：libbox 官方提供的全局函数（专门为 iOS Network Extension 设计）
+        let libboxFD = LibboxGetTunnelFileDescriptor()
+        记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "方式1 LibboxGetTunnelFileDescriptor 返回 fd=\(libboxFD)")
 
-        if let 错误 = 获取错误 {
-            记录扩展日志(级别: "警告", 模块: "sing-box", 内容: "TUN fd 提取详情：\(错误.localizedDescription)")
+        var tun文件描述符 = libboxFD
+
+        // 方式2：如果官方函数返回无效，通过运行时反射从 packetFlow 提取
+        if tun文件描述符 < 0 {
+            var 获取错误: NSError?
+            let 反射FD = Libbox平台接口OC.安全获取文件描述符(packetFlow, error: &获取错误)
+            记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "方式2 反射提取返回 fd=\(反射FD)")
+            if let 错误 = 获取错误 {
+                记录扩展日志(级别: "警告", 模块: "sing-box", 内容: "反射提取详情：\(错误.localizedDescription)")
+            }
+            tun文件描述符 = 反射FD
         }
 
         guard tun文件描述符 >= 0 else {
-            记录扩展日志(级别: "错误", 模块: "sing-box", 内容: "TUN 文件描述符无效：\(tun文件描述符)，sing-box 无法接管流量")
+            记录扩展日志(级别: "错误", 模块: "sing-box", 内容: "所有方式均未获取到有效 TUN 文件描述符，sing-box 无法接管流量")
             完成(false)
             return
         }

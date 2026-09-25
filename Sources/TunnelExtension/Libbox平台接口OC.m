@@ -216,8 +216,64 @@
     NSMutableString *调试信息 = [NSMutableString string];
     Class 类 = [packetFlow class];
 
-    // 枚举所有属性（包括父类）
     [调试信息 appendFormat:@"类名=%@; ", NSStringFromClass(类)];
+
+    // 方式A：直接尝试已知的私有属性名（NEPacketTunnelFlow 常见内部属性）
+    NSArray *已知属性名列表 = @[
+        @"_socket", @"socket", @"_fileDescriptor", @"fileDescriptor",
+        @"_tunSocket", @"tunSocket", @"_tunFd", @"tunFd",
+        @"_utunSocket", @"utunSocket", @"_interfaceSocket",
+        @"_nwSocket", @"nwSocket", @"_connectionSocket",
+        @"socketDescriptor", @"_socketDescriptor"
+    ];
+    for (NSString *属性名 in 已知属性名列表) {
+        @try {
+            id 值 = [packetFlow valueForKey:属性名];
+            if ([值 isKindOfClass:[NSNumber class]]) {
+                int32_t fd = [(NSNumber *)值 intValue];
+                [调试信息 appendFormat:@"直接属性%@=%d; ", 属性名, fd];
+                if (fd > 2) {
+                    if (error) *error = nil;
+                    return fd;
+                }
+            }
+        } @catch (NSException *异常) {
+            [调试信息 appendFormat:@"直接属性%@=异常; ", 属性名];
+        }
+    }
+
+    // 方式B：枚举实例变量（ivar），文件描述符可能不在属性中而在 ivar 中
+    unsigned int ivar数量 = 0;
+    Ivar *ivar列表 = class_copyIvarList(类, &ivar数量);
+    NSMutableArray *ivar名列表 = [NSMutableArray array];
+    for (unsigned int i = 0; i < ivar数量; i++) {
+        const char *ivar名 = ivar_getName(ivar列表[i]);
+        NSString *名字 = [NSString stringWithUTF8String:ivar名];
+        [ivar名列表 addObject:名字];
+        NSString *小写名 = [名字 lowercaseString];
+        if ([小写名 containsString:@"fd"] || [小写名 containsString:@"socket"] ||
+            [小写名 containsString:@"file"] || [小写名 containsString:@"desc"] ||
+            [小写名 containsString:@"tun"] || [小写名 containsString:@"interface"]) {
+            @try {
+                id 值 = object_getIvar(packetFlow, ivar列表[i]);
+                if ([值 isKindOfClass:[NSNumber class]]) {
+                    int32_t fd = [(NSNumber *)值 intValue];
+                    [调试信息 appendFormat:@"ivar%@=%d; ", 名字, fd];
+                    if (fd > 2) {
+                        free(ivar列表);
+                        if (error) *error = nil;
+                        return fd;
+                    }
+                }
+            } @catch (NSException *异常) {
+                [调试信息 appendFormat:@"ivar%@=异常; ", 名字];
+            }
+        }
+    }
+    free(ivar列表);
+    [调试信息 appendFormat:@"ivar列表=%@; ", ivar名列表];
+
+    // 方式C：枚举所有属性
     unsigned int 属性数量 = 0;
     objc_property_t *属性列表 = class_copyPropertyList(类, &属性数量);
     NSMutableArray *属性名列表 = [NSMutableArray array];
@@ -229,18 +285,6 @@
     free(属性列表);
     [调试信息 appendFormat:@"属性列表=%@; ", 属性名列表];
 
-    // 枚举所有方法
-    unsigned int 方法数量 = 0;
-    Method *方法列表 = class_copyMethodList(类, &方法数量);
-    NSMutableArray *方法名列表 = [NSMutableArray array];
-    for (unsigned int i = 0; i < 方法数量; i++) {
-        SEL 方法名 = method_getName(方法列表[i]);
-        [方法名列表 addObject:NSStringFromSelector(方法名)];
-    }
-    free(方法列表);
-    [调试信息 appendFormat:@"方法列表=%@; ", 方法名列表];
-
-    // 尝试所有属性中包含 fd/socket/file/desc 的
     for (NSString *属性名 in 属性名列表) {
         NSString *小写名 = [属性名 lowercaseString];
         if ([小写名 containsString:@"fd"] || [小写名 containsString:@"socket"] ||
@@ -264,7 +308,17 @@
         }
     }
 
-    // 尝试所有方法中包含 fd/socket/file/desc 的
+    // 方式D：枚举所有无参数方法
+    unsigned int 方法数量 = 0;
+    Method *方法列表 = class_copyMethodList(类, &方法数量);
+    NSMutableArray *方法名列表 = [NSMutableArray array];
+    for (unsigned int i = 0; i < 方法数量; i++) {
+        SEL 方法名 = method_getName(方法列表[i]);
+        [方法名列表 addObject:NSStringFromSelector(方法名)];
+    }
+    free(方法列表);
+    [调试信息 appendFormat:@"方法列表=%@; ", 方法名列表];
+
     for (NSString *方法名 in 方法名列表) {
         NSString *小写名 = [方法名 lowercaseString];
         if (([小写名 containsString:@"fd"] || [小写名 containsString:@"socket"] ||

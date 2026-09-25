@@ -581,7 +581,8 @@ struct SingBoxTLS配置: Codable, Equatable {
         配置.serverName = SNI
         配置.insecure = 跳过验证
         配置.minVersion = "1.3"
-        // 注意：WebSocket over TLS 不手动设置 ALPN，使用系统默认协商
+        // uTLS 指纹伪装，模拟 Chrome 浏览器 TLS 握手
+        配置.utls = SingBoxUTLS配置(enabled: true, fingerprint: "chrome")
         return 配置
     }
 

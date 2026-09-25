@@ -31,6 +31,8 @@ targets:
     deploymentTarget: "16.0"
     sources:
       - path: Sources/AppMain
+        excludes:
+          - "**/README.md"
     # Info.plist 配置（XcodeGen 自动生成）
     info:
       path: Sources/AppMain/Info.plist
@@ -69,6 +71,8 @@ targets:
     deploymentTarget: "16.0"
     sources:
       - path: Sources/TunnelExtension
+        excludes:
+          - "**/README.md"
     # 扩展 Info.plist 配置
     info:
       path: Sources/TunnelExtension/Info.plist

@@ -751,21 +751,25 @@ struct SingBox多路复用配置: Codable, Equatable {
 /// sing-box 拨号器配置
 struct SingBox拨号器配置: Codable, Equatable {
     /// 出站接口
-    var interfaceName: String?
+    var interfaceName: String? = nil
     /// 路由表索引
-    var routingMark: Int?
+    var routingMark: Int? = nil
     /// 连接超时
-    var connectTimeout: String?
+    var connectTimeout: String? = nil
     /// 域名解析策略
-    var domainStrategy: String?
+    var domainStrategy: String? = nil
     /// 域名解析器标签
-    var domainResolver: String?
+    var domainResolver: String? = nil
     /// 独立栈
-    var independentStack: Bool?
+    var independentStack: Bool? = nil
     /// TCP 快速打开
-    var tcpFastOpen: Bool?
+    var tcpFastOpen: Bool? = nil
     /// TCP 多路径
-    var tcpMultiPath: Bool?
+    var tcpMultiPath: Bool? = nil
+    /// TCP keep-alive 间隔
+    var tcpKeepAliveInterval: String? = nil
+    /// TCP no-delay
+    var tcpNoDelay: Bool? = nil
 
     enum CodingKeys: String, CodingKey {
         case interfaceName = "interface_name"
@@ -776,6 +780,8 @@ struct SingBox拨号器配置: Codable, Equatable {
         case independentStack = "independent_stack"
         case tcpFastOpen = "tcp_fast_open"
         case tcpMultiPath = "tcp_multi_path"
+        case tcpKeepAliveInterval = "tcp_keep_alive_interval"
+        case tcpNoDelay = "tcp_no_delay"
     }
 }
 

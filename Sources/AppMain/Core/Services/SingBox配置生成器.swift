@@ -77,10 +77,10 @@ final class SingBox配置生成器 {
     private func 生成DNS配置(_ DNS配置: DNS配置模型?, 节点: 节点模型?, 运行模式: 隧道运行模式) -> SingBoxDNS配置 {
         // DNS 分流策略：
         // dns_resolver: 阿里云 DNS（223.5.5.5），走 DIRECT，用于国内域名和代理服务器域名解析
-        // dns_proxy: Cloudflare DoH（https://1.1.1.1/dns-query），走 proxy，用于国外域名（仅代理模式下使用）
+        // dns_proxy: Google DNS-over-TLS（8.8.8.8），走 proxy，用于国外域名
         let 默认服务器 = [
             SingBoxDNS服务器.udp服务器(标签: "dns_resolver", 地址: "223.5.5.5", 出站: "DIRECT"),
-            SingBoxDNS服务器.https服务器(标签: "dns_proxy", 地址: "1.1.1.1", 出站: "proxy")
+            SingBoxDNS服务器.tls服务器(标签: "dns_proxy", 地址: "8.8.8.8", 出站: "proxy")
         ]
 
         // DNS 规则列表
@@ -188,9 +188,17 @@ final class SingBox配置生成器 {
         }
 
         // 所有节点出站（用于 urltest/selector）
+        // tag 使用节点真实名称，重名时自动加 _2、_3 后缀
         var 节点标签列表: [String] = []
-        for (索引, 节点) in 节点列表.enumerated() {
-            let 标签 = "node-\(索引)"
+        var 名称计数: [String: Int] = [:]
+        for 节点 in 节点列表 {
+            var 标签 = 节点.名称
+            if let 已有计数 = 名称计数[节点.名称] {
+                名称计数[节点.名称] = 已有计数 + 1
+                标签 = "\(节点.名称)_\(已有计数 + 1)"
+            } else {
+                名称计数[节点.名称] = 1
+            }
             if let 节点出站 = 节点转换为出站(节点, 标签: 标签) {
                 出站列表.append(节点出站)
                 节点标签列表.append(标签)

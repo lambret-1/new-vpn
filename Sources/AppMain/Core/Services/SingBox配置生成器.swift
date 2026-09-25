@@ -470,44 +470,35 @@ final class SingBox配置生成器 {
     /// 用于 DIRECT 出站的 bind_interface，避免硬编码 en0 导致蜂窝用户 connection refused
     /// - Returns: 接口名，检测失败返回 "en0"
     private func 检测当前活动物理网卡() -> String {
-        var 接口列表: [ifaddrs]? = nil
-        guard getifaddrs(&接口列表) == 0, let 链表 = 接口列表 else {
+        var 接口指针: UnsafeMutablePointer<ifaddrs>?
+        guard getifaddrs(&接口指针) == 0, let 首接口 = 接口指针 else {
             return "en0"
         }
-        defer { freeifaddrs(接口列表) }
+        defer { freeifaddrs(接口指针) }
 
         var WiFi接口: String?
         var 蜂窝接口: String?
-        var 指针 = 链表
+        var 当前 = 首接口
         while true {
-            let 接口名 = String(cString: 指针.ifa_name)
-            let 标志 = 指针.ifa_flags
+            let 接口名 = String(cString: 当前.pointee.ifa_name)
+            let 标志 = 当前.pointee.ifa_flags
             // 只处理已启用的接口
-            guard (标志 & IFF_UP) != 0 else {
-                if 指针.ifa_next == nil { break }
-                指针 = 指针.ifa_next!.pointee
-                continue
+            if (标志 & IFF_UP) != 0,
+               // 只处理 IPv4 地址
+               当前.pointee.ifa_addr.pointee.sa_family == AF_INET,
+               // 跳过回环和隧道接口
+               接口名 != "lo0",
+               !接口名.hasPrefix("utun"),
+               !接口名.hasPrefix("ipsec") {
+                // 优先 WiFi（en开头），其次蜂窝（pdp_ip开头）
+                if 接口名.hasPrefix("en") && WiFi接口 == nil {
+                    WiFi接口 = 接口名
+                } else if (接口名.hasPrefix("pdp_ip") || 接口名.hasPrefix("cell")) && 蜂窝接口 == nil {
+                    蜂窝接口 = 接口名
+                }
             }
-            // 只处理 IPv4 地址
-            guard 指针.ifa_addr.pointee.sa_family == AF_INET else {
-                if 指针.ifa_next == nil { break }
-                指针 = 指针.ifa_next!.pointee
-                continue
-            }
-            // 跳过回环和隧道接口
-            if 接口名 == "lo0" || 接口名.hasPrefix("utun") || 接口名.hasPrefix("ipsec") {
-                if 指针.ifa_next == nil { break }
-                指针 = 指针.ifa_next!.pointee
-                continue
-            }
-            // 优先 WiFi（en开头），其次蜂窝（pdp_ip开头）
-            if 接口名.hasPrefix("en") && WiFi接口 == nil {
-                WiFi接口 = 接口名
-            } else if (接口名.hasPrefix("pdp_ip") || 接口名.hasPrefix("cell")) && 蜂窝接口 == nil {
-                蜂窝接口 = 接口名
-            }
-            if 指针.ifa_next == nil { break }
-            指针 = 指针.ifa_next!.pointee
+            guard let 下一个 = 当前.pointee.ifa_next else { break }
+            当前 = 下一个
         }
 
         // 优先 WiFi，其次蜂窝，最后默认 en0

@@ -207,6 +207,12 @@ struct SingBoxDNS规则: Codable, Equatable {
         self.server = 服务器
     }
 
+    /// 创建域名后缀 DNS 规则（指定域名后缀走某个 DNS 服务器）
+    init(域名后缀: [String], 服务器: String) {
+        self.domainSuffix = 域名后缀
+        self.server = 服务器
+    }
+
     enum CodingKeys: String, CodingKey {
         case server
         case ruleSet = "rule_set"

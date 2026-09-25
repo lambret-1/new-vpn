@@ -69,18 +69,47 @@ final class SingBox配置生成器 {
 
     /// 生成 DNS 配置
     private func 生成DNS配置(_ DNS配置: DNS配置模型?, 节点: 节点模型?) -> SingBoxDNS配置 {
-        // 默认 DNS 服务器（detour 显式指定出站，避免 DNS 回环）
-        // dns_resolver: 国内直连 UDP（223.5.5.5），走 DIRECT
-        // dns_proxy: TLS 加密（tls://8.8.8.8），走 proxy
+        // DNS 分流策略：
+        // dns_resolver: 阿里云 DNS（223.5.5.5），走 DIRECT，用于国内域名
+        // dns_proxy: Cloudflare DNS（tls://1.1.1.1），走 proxy，用于国外域名
         let 默认服务器 = [
             SingBoxDNS服务器.udp服务器(标签: "dns_resolver", 地址: "223.5.5.5", 出站: "DIRECT"),
-            SingBoxDNS服务器.tls服务器(标签: "dns_proxy", 地址: "8.8.8.8", 出站: "proxy")
+            SingBoxDNS服务器.tls服务器(标签: "dns_proxy", 地址: "1.1.1.1", 出站: "proxy")
         ]
 
-        // DNS 规则：代理服务器域名用直连 DNS 解析，避免回环
+        // DNS 规则列表
         var DNS规则列表: [SingBoxDNS规则] = []
+
+        // 国内域名走阿里云 DNS 直连解析（域名后缀匹配）
+        let 国内域名后缀 = [
+            "cn", "com.cn", "net.cn", "org.cn", "gov.cn", "edu.cn",
+            "baidu.com", "qq.com", "taobao.com", "tmall.com", "jd.com",
+            "weibo.com", "zhihu.com", "bilibili.com", "douyin.com",
+            "kuaishou.com", "xiaohongshu.com", "meituan.com", "dianping.com",
+            "ctrip.com", "qunar.com", "163.com", "126.com", "sina.com",
+            "sohu.com", "ifeng.com", "thepaper.cn", "xinhuanet.com",
+            "people.com.cn", "chinadaily.com.cn", "caijing.com.cn",
+            "yicai.com", "caixin.com", "36kr.com", "huxiu.com",
+            "csdn.net", "jianshu.com", "cnblogs.com", "oschina.net",
+            "aliyun.com", "alibaba.com", "alipay.com", "dingtalk.com",
+            "feishu.cn", "bytedance.com", "tencent.com", "weixin.qq.com",
+            "huawei.com", "xiaomi.com", "oppo.com", "vivo.com.cn",
+            "lenovo.com.cn", "zhaopin.com", "51job.com", "liepin.com",
+            "bosszhipin.com", "lagou.com", "anjuke.com", "lianjia.com",
+            "ke.com", "fang.com", "soufun.com", "eastmoney.com",
+            "10jqka.com.cn", "sina.com.cn", "hexun.com", "jrj.com.cn",
+            "cnstock.com", "stcn.com", "amap.com", "baidu.cn",
+            "autonavi.com", "10086.cn", "189.cn", "10010.com",
+            "chinaunicom.cn", "chinatelecom.cn", "chinamobile.com",
+            "spdb.com.cn", "icbc.com.cn", "ccb.com", "boc.cn",
+            "abchina.com", "cmbchina.com", "bankcomm.com", "cib.com.cn",
+            "citicbank.com", "cebbank.com", "psbc.com", "hxb.com.cn",
+            "cgbchina.com.cn"
+        ]
+        DNS规则列表.append(SingBoxDNS规则(域名后缀: 国内域名后缀, 服务器: "dns_resolver"))
+
+        // 代理服务器域名用直连 DNS 解析，避免回环
         if let 节点地址 = 节点?.地址, !节点地址.isEmpty {
-            // 判断是否为域名（不是纯 IP 地址）
             let 是否IP地址 = 节点地址.allSatisfy({ $0.isNumber || $0 == "." })
             if !是否IP地址 {
                 DNS规则列表.append(SingBoxDNS规则(域名: [节点地址], 服务器: "dns_resolver"))
@@ -89,12 +118,11 @@ final class SingBox配置生成器 {
 
         return SingBoxDNS配置(
             servers: 默认服务器,
-            // 默认使用国内直连 DNS，确保代理不通时也能解析域名
-            // 代理域名通过 DNS 规则指定走 dns_resolver 直连解析
-            final: "dns_resolver",
+            // 默认走 Cloudflare DNS（代理），国内域名通过规则走阿里云
+            final: "dns_proxy",
             strategy: "ipv4_only",
             disableCache: false,
-            rules: DNS规则列表.isEmpty ? nil : DNS规则列表
+            rules: DNS规则列表
         )
     }
 

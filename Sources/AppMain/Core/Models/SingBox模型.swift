@@ -120,9 +120,10 @@ struct SingBoxDNS配置: Codable, Equatable {
     var rules: [SingBoxDNS规则]?
 
     /// 默认配置（兼容当前 libbox 版本，detour 避免 DNS 回环）
+    /// dns_resolver 用 TCP 而非 UDP：iOS NE 下 DIRECT 出站 bind_interface 后 UDP 回包失败
     static let 默认 = SingBoxDNS配置(
         servers: [
-            SingBoxDNS服务器.udp服务器(标签: "dns_resolver", 地址: "223.5.5.5", 出站: "DIRECT"),
+            SingBoxDNS服务器.tcp服务器(标签: "dns_resolver", 地址: "223.5.5.5", 出站: "DIRECT"),
             SingBoxDNS服务器.tls服务器(标签: "dns_proxy", 地址: "8.8.8.8", 出站: "proxy")
         ],
         final: "dns_proxy",
@@ -143,6 +144,12 @@ struct SingBoxDNS服务器: Codable, Equatable {
     /// 创建 UDP DNS 服务器
     static func udp服务器(标签: String, 地址: String, 端口: Int? = nil, 出站: String? = nil) -> SingBoxDNS服务器 {
         let 地址字符串 = 端口 != nil ? "\(地址):\(端口!)" : 地址
+        return SingBoxDNS服务器(tag: 标签, address: 地址字符串, detour: 出站)
+    }
+
+    /// 创建 TCP DNS 服务器（纯 TCP 53 端口，不加密。iOS NE 下 DIRECT 出站 UDP 回包失败，TCP 正常）
+    static func tcp服务器(标签: String, 地址: String, 端口: Int? = nil, 出站: String? = nil) -> SingBoxDNS服务器 {
+        let 地址字符串 = 端口 != nil ? "tcp://\(地址):\(端口!)" : "tcp://\(地址)"
         return SingBoxDNS服务器(tag: 标签, address: 地址字符串, detour: 出站)
     }
 

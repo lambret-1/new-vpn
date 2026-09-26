@@ -389,8 +389,8 @@ final class 配置描述文件管理器: ObservableObject {
               },
               {
                 "tag": "dns_proxy",
-                "address": "https://223.5.5.5/dns-query",
-                "detour": "DIRECT"
+                "address": "https://8.8.8.8/dns-query",
+                "detour": "proxy"
               }
             ],
             "final": "dns_proxy",

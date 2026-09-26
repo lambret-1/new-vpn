@@ -80,13 +80,11 @@ final class SingBox配置生成器 {
         //   关键：必须用 TCP-based 不能用 UDP。iOS NE 下 DIRECT 出站 bind_interface 后，
         //   UDP 响应包回不到 socket，导致 DNS 超时、代理服务器域名解析失败、proxy 出站无法建立连接。
         //   用 tls://(DoT) 而非 tcp://：当前 libbox 版本 tcp:// 会被误判为 HTTP 端点返回 403。
-        // dns_proxy: 阿里云 DNS-over-HTTPS（https://223.5.5.5/dns-query），走 DIRECT，用于国外域名
-        //   走 DIRECT 而非 proxy：部分代理服务器封锁 Google/Cloudflare DNS IP 导致超时
-        //   国外域名虽可能被污染，但 TUN 入站开启了 sniff_override_destination，
-        //   会用嗅探到的真实域名通过代理服务器重新解析连接
+        // dns_proxy: Google DNS-over-HTTPS（https://8.8.8.8/dns-query），走 proxy，用于国外域名
+        //   用 DoH(443端口) 而非 DoT(853端口)：部分代理服务器限制 853 端口转发导致超时
         let 默认服务器 = [
             SingBoxDNS服务器.tls服务器(标签: "dns_resolver", 地址: "223.5.5.5", 出站: "DIRECT"),
-            SingBoxDNS服务器.https服务器(标签: "dns_proxy", 地址: "223.5.5.5", 出站: "DIRECT")
+            SingBoxDNS服务器.https服务器(标签: "dns_proxy", 地址: "8.8.8.8", 出站: "proxy")
         ]
 
         // DNS 规则列表

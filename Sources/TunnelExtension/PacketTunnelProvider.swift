@@ -689,8 +689,12 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             case 5: 级别字符串 = "致命"
             default: 级别字符串 = "未知"
             }
-            self.记录扩展日志(级别: 级别字符串, 模块: "sing-box内核", 内容: 内容)
-            // 解析 DNS 查询日志并记录
+            // 调试日志总开关：关闭时不写入 UserDefaults（减少 IO），但仍解析 DNS 查询记录
+            let 调试日志开启 = self.共享默认?.bool(forKey: "debugLogEnabled") ?? true
+            if 调试日志开启 {
+                self.记录扩展日志(级别: 级别字符串, 模块: "sing-box内核", 内容: 内容)
+            }
+            // 解析 DNS 查询日志并记录（独立于调试日志开关）
             self.解析并记录DNS查询(内容)
         }
         记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "日志回调已设置")

@@ -28,6 +28,11 @@ struct 调试日志内容区: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            // 内核日志采集总开关
+            内核日志开关行
+                .padding(.horizontal, 15)
+                .padding(.top, 8)
+
             // 统计栏（可点击过滤）
             统计栏
                 .padding(.horizontal, 15)
@@ -65,6 +70,42 @@ struct 调试日志内容区: View {
             日志设置面板()
                 .environmentObject(日志管理)
         }
+    }
+
+    // MARK: - 内核日志采集总开关
+
+    private var 内核日志开关行: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "doc.text.magnifyingglass")
+                .font(.system(size: 14))
+                .foregroundColor(.主题色)
+                .frame(width: 20)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("内核日志采集")
+                    .font(.system(size: 13, weight: .medium))
+                Text("关闭后不记录 sing-box 内核日志，降低性能开销")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+            }
+
+            Spacer()
+
+            Toggle("", isOn: Binding(
+                get: {
+                    UserDefaults(suiteName: "group.com.newvpn.app")?.bool(forKey: "debugLogEnabled") ?? true
+                },
+                set: { 新值 in
+                    UserDefaults(suiteName: "group.com.newvpn.app")?.set(新值, forKey: "debugLogEnabled")
+                }
+            ))
+            .labelsHidden()
+            .tint(.主题色)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(Color.卡片背景)
+        .cornerRadius(10)
     }
 
     // MARK: - 统计栏（可点击过滤）

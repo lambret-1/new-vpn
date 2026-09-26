@@ -362,7 +362,7 @@ final class 调试日志管理器: ObservableObject {
         }
     }
 
-    /// 日志分组（错误/警告/调试分组，信息平铺显示）
+    /// 日志分组（按功能模块分组，错误/警告优先，sing-box 内核日志按内容子系统细分）
     struct 日志分组: Identifiable {
         let id = UUID()
         let 分组名: String
@@ -370,30 +370,99 @@ final class 调试日志管理器: ObservableObject {
         let 日志: [日志模型]
     }
 
-    /// 按级别分组后的日志列表（错误/警告+致命/debug/调试/追踪分组，错误组优先）
-    /// debug 分组：sing-box 内核的 DEBUG 日志
-    /// 调试分组：应用自身的调试日志
+    /// sing-box 内核日志内容分类
+    private enum 内核日志分类: String {
+        case DNS解析 = "DNS 解析"
+        case 路由分流 = "路由分流"
+        case 连接管理 = "连接管理"
+        case 出站代理 = "出站代理"
+        case TLS与传输 = "TLS 与传输"
+        case 入站TUN = "入站 TUN"
+        case 内核其他 = "内核其他"
+
+        /// 根据日志内容判断分类
+        static func 分类(_ 内容: String) -> 内核日志分类 {
+            if 内容.hasPrefix("dns:") || 内容.contains("dns:") {
+                return .DNS解析
+            }
+            if 内容.hasPrefix("router:") || 内容.contains("router:") {
+                return .路由分流
+            }
+            if 内容.hasPrefix("connection:") || 内容.contains("connection:") {
+                return .连接管理
+            }
+            if 内容.hasPrefix("outbound:") || 内容.contains("outbound:") ||
+               内容.hasPrefix("proxy:") || 内容.contains("proxy:") {
+                return .出站代理
+            }
+            if 内容.hasPrefix("tls:") || 内容.contains("tls:") ||
+               内容.hasPrefix("ws:") || 内容.contains("ws:") ||
+               内容.hasPrefix("grpc:") || 内容.contains("grpc:") ||
+               内容.hasPrefix("quic:") || 内容.contains("quic:") ||
+               内容.hasPrefix("tcp:") || 内容.contains("tcp:") ||
+               内容.hasPrefix("udp:") || 内容.contains("udp:") {
+                return .TLS与传输
+            }
+            if 内容.hasPrefix("inbound:") || 内容.contains("inbound:") ||
+               内容.hasPrefix("tun:") || 内容.contains("tun:") ||
+               内容.contains("interface") {
+                return .入站TUN
+            }
+            return .内核其他
+        }
+    }
+
+    /// 按功能模块分组后的日志列表
+    /// 错误/警告优先显示，sing-box 内核日志按内容子系统细分（DNS/路由/连接/出站/TLS/入站），
+    /// 隧道扩展日志单独一组，应用自身信息日志平铺显示
     var 分组后的日志列表: [日志分组] {
         let 筛选列表 = 筛选后的日志列表
 
-        // 错误日志
+        // 1. 错误日志（所有模块的错误集中在一起）
         let 错误日志 = 筛选列表.filter { $0.级别 == .错误 }
 
-        // 警告日志（警告 + 致命合并）
+        // 2. 警告日志（警告 + 致命合并）
         let 警告日志 = 筛选列表.filter { $0.级别 == .警告 || $0.级别 == .致命 }
 
-        // debug 日志：sing-box 内核的 DEBUG 级别日志
-        let debug日志 = 筛选列表.filter {
-            $0.级别 == .调试 && $0.模块.localizedCaseInsensitiveContains("sing-box")
+        // sing-box 内核日志（模块名包含 sing-box，且非错误非警告）
+        let 内核日志 = 筛选列表.filter {
+            $0.模块.localizedCaseInsensitiveContains("sing-box") &&
+            $0.级别 != .错误 && $0.级别 != .警告 && $0.级别 != .致命
         }
 
-        // 调试日志：应用自身的 DEBUG 级别日志（非 sing-box）
-        let 调试日志 = 筛选列表.filter {
-            $0.级别 == .调试 && !$0.模块.localizedCaseInsensitiveContains("sing-box")
+        // 3. DNS 解析
+        let DNS日志 = 内核日志.filter { 内核日志分类.分类($0.内容) == .DNS解析 }
+
+        // 4. 路由分流
+        let 路由日志 = 内核日志.filter { 内核日志分类.分类($0.内容) == .路由分流 }
+
+        // 5. 连接管理
+        let 连接日志 = 内核日志.filter { 内核日志分类.分类($0.内容) == .连接管理 }
+
+        // 6. 出站代理
+        let 出站日志 = 内核日志.filter { 内核日志分类.分类($0.内容) == .出站代理 }
+
+        // 7. TLS 与传输
+        let TLS日志 = 内核日志.filter { 内核日志分类.分类($0.内容) == .TLS与传输 }
+
+        // 8. 入站 TUN
+        let 入站日志 = 内核日志.filter { 内核日志分类.分类($0.内容) == .入站TUN }
+
+        // 9. 内核其他
+        let 内核其他日志 = 内核日志.filter { 内核日志分类.分类($0.内容) == .内核其他 }
+
+        // 10. 隧道扩展日志（扩展自身的日志，非 sing-box 内核，非错误非警告）
+        let 扩展日志 = 筛选列表.filter {
+            $0.模块.hasPrefix("扩展-") &&
+            !$0.模块.localizedCaseInsensitiveContains("sing-box内核") &&
+            $0.级别 != .错误 && $0.级别 != .警告 && $0.级别 != .致命
         }
 
-        // 追踪日志
-        let 追踪日志 = 筛选列表.filter { $0.级别 == .追踪 }
+        // 11. 应用自身调试/追踪日志（非扩展，非错误非警告）
+        let 应用调试日志 = 筛选列表.filter {
+            !$0.模块.hasPrefix("扩展-") &&
+            ($0.级别 == .调试 || $0.级别 == .追踪)
+        }
 
         var 分组列表: [日志分组] = []
         if !错误日志.isEmpty {
@@ -402,21 +471,44 @@ final class 调试日志管理器: ObservableObject {
         if !警告日志.isEmpty {
             分组列表.append(日志分组(分组名: "警告日志", 级别列表: [.警告, .致命], 日志: 警告日志))
         }
-        if !debug日志.isEmpty {
-            分组列表.append(日志分组(分组名: "debug", 级别列表: [.调试], 日志: debug日志))
+        if !DNS日志.isEmpty {
+            分组列表.append(日志分组(分组名: "DNS 解析", 级别列表: [.调试], 日志: DNS日志))
         }
-        if !调试日志.isEmpty {
-            分组列表.append(日志分组(分组名: "调试日志", 级别列表: [.调试], 日志: 调试日志))
+        if !路由日志.isEmpty {
+            分组列表.append(日志分组(分组名: "路由分流", 级别列表: [.调试], 日志: 路由日志))
         }
-        if !追踪日志.isEmpty {
-            分组列表.append(日志分组(分组名: "追踪日志", 级别列表: [.追踪], 日志: 追踪日志))
+        if !连接日志.isEmpty {
+            分组列表.append(日志分组(分组名: "连接管理", 级别列表: [.调试], 日志: 连接日志))
+        }
+        if !出站日志.isEmpty {
+            分组列表.append(日志分组(分组名: "出站代理", 级别列表: [.调试], 日志: 出站日志))
+        }
+        if !TLS日志.isEmpty {
+            分组列表.append(日志分组(分组名: "TLS 与传输", 级别列表: [.调试], 日志: TLS日志))
+        }
+        if !入站日志.isEmpty {
+            分组列表.append(日志分组(分组名: "入站 TUN", 级别列表: [.调试], 日志: 入站日志))
+        }
+        if !内核其他日志.isEmpty {
+            分组列表.append(日志分组(分组名: "内核其他", 级别列表: [.调试], 日志: 内核其他日志))
+        }
+        if !扩展日志.isEmpty {
+            分组列表.append(日志分组(分组名: "隧道扩展", 级别列表: [.调试, .信息], 日志: 扩展日志))
+        }
+        if !应用调试日志.isEmpty {
+            分组列表.append(日志分组(分组名: "应用调试", 级别列表: [.调试, .追踪], 日志: 应用调试日志))
         }
         return 分组列表
     }
 
     /// 未分组的日志列表（仅信息，平铺显示）
     var 未分组日志列表: [日志模型] {
-        筛选后的日志列表.filter { $0.级别 == .信息 }
+        筛选后的日志列表.filter { 日志 in
+            // 信息级别且不属于错误/警告，且不是 sing-box 内核日志
+            日志.级别 == .信息 &&
+            !日志.模块.localizedCaseInsensitiveContains("sing-box") &&
+            !日志.模块.hasPrefix("扩展-")
+        }
     }
 
     /// 当前是否为简洁模式（全部/信息过滤下取消卡片和复制）

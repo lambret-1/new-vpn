@@ -274,9 +274,15 @@ struct 调试日志内容区: View {
             switch 分组.分组名 {
             case "错误日志": return .危险色
             case "警告日志": return .警告色
-            case "debug": return Color(red: 0.56, green: 0.38, blue: 0.95) // 紫色
-            case "调试日志": return .主题色
-            case "追踪日志": return .secondary
+            case "DNS 解析": return Color(red: 0.20, green: 0.60, blue: 0.90) // 蓝色
+            case "路由分流": return Color(red: 0.56, green: 0.38, blue: 0.95) // 紫色
+            case "连接管理": return Color(red: 0.95, green: 0.55, blue: 0.20) // 橙色
+            case "出站代理": return Color(red: 0.90, green: 0.35, blue: 0.55) // 粉红
+            case "TLS 与传输": return Color(red: 0.15, green: 0.70, blue: 0.65) // 青色
+            case "入站 TUN": return Color(red: 0.45, green: 0.75, blue: 0.25) // 绿色
+            case "内核其他": return .secondary
+            case "隧道扩展": return .主题色
+            case "应用调试": return .secondary
             default: return .secondary
             }
         }

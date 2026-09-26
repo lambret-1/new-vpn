@@ -246,10 +246,10 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         设置.ipv4Settings = IPv4设置
 
         // DNS 设置
-        // 关键：DNS 服务器设为 VPN 接口地址，让所有 DNS 查询走 TUN 入站
-        // sing-box 内置机制自动拦截 TUN 入站的 DNS 查询，交由 DNS 模块处理
-        // 避免客户端直接向 8.8.8.8 发查询导致 DNS 回环
-        let DNS设置 = NEDNSSettings(servers: ["10.0.0.2"])
+        // 关键：DNS 服务器不能设为 TUN 接口自身地址（10.0.0.2），否则发到接口自身的包可能不进 TUN
+        // 设为同网段的网关地址 10.0.0.1，DNS 查询包走默认路由进 TUN，被路由规则端口53拦截到 dns-out
+        // matchDomains = [""] 确保所有域名都走这个 DNS 服务器
+        let DNS设置 = NEDNSSettings(servers: ["10.0.0.1"])
         DNS设置.matchDomains = [""]
         设置.dnsSettings = DNS设置
 

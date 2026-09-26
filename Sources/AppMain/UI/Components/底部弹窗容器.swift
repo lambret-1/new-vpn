@@ -305,9 +305,9 @@ private struct 设置视图: View {
         }
         .sheet(isPresented: $显示分流规则) {
             NavigationStack {
-                分流规则页面()
+                分流规则设置页面()
                     .environmentObject(分流管理)
-                    .navigationTitle("分流规则")
+                    .navigationTitle("分流规则设置")
                     .navigationBarTitleDisplayMode(.inline)
             }
         }

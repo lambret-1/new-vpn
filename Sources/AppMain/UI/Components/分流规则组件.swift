@@ -8,6 +8,97 @@
 
 import SwiftUI
 
+// MARK: - 分流规则设置页面（轻量级，不加载规则列表）
+
+/// 分流规则设置页面（设置页面入口使用，避免加载几千条规则导致卡死）
+struct 分流规则设置页面: View {
+    @EnvironmentObject private var 分流管理: 分流规则管理器
+    @State private var 显示完整规则页面 = false
+
+    var body: some View {
+        List {
+            Section("基本设置") {
+                Toggle("启用分流", isOn: Binding(
+                    get: { 分流管理.配置.启用分流 },
+                    set: { 分流管理.配置.启用分流 = $0; 分流管理.保存配置() }
+                ))
+                Picker("默认动作", selection: Binding(
+                    get: { 分流管理.配置.默认动作 },
+                    set: { 分流管理.配置.默认动作 = $0; 分流管理.保存配置() }
+                )) {
+                    Text("代理").tag(分流动作.代理)
+                    Text("直连").tag(分流动作.直连)
+                    Text("拦截").tag(分流动作.拦截)
+                }
+            }
+
+            Section("分流维度") {
+                Toggle("按域名分流", isOn: Binding(
+                    get: { 分流管理.配置.按域名分流 },
+                    set: { 分流管理.配置.按域名分流 = $0; 分流管理.保存配置() }
+                ))
+                Toggle("按 IP 分流", isOn: Binding(
+                    get: { 分流管理.配置.按IP分流 },
+                    set: { 分流管理.配置.按IP分流 = $0; 分流管理.保存配置() }
+                ))
+                Toggle("按端口分流", isOn: Binding(
+                    get: { 分流管理.配置.按端口分流 },
+                    set: { 分流管理.配置.按端口分流 = $0; 分流管理.保存配置() }
+                ))
+                Toggle("按协议分流", isOn: Binding(
+                    get: { 分流管理.配置.按协议分流 },
+                    set: { 分流管理.配置.按协议分流 = $0; 分流管理.保存配置() }
+                ))
+            }
+
+            Section("规则统计") {
+                HStack {
+                    Text("分组数量")
+                    Spacer()
+                    Text("\(分流管理.配置.分组列表.count) 个")
+                        .foregroundColor(.secondary)
+                }
+                HStack {
+                    Text("启用规则数")
+                    Spacer()
+                    Text("\(分流管理.配置.所有规则.count) 条")
+                        .foregroundColor(.secondary)
+                }
+                HStack {
+                    Text("总命中次数")
+                    Spacer()
+                    Text("\(分流管理.统计.总命中数) 次")
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            Section {
+                Button {
+                    显示完整规则页面 = true
+                } label: {
+                    HStack {
+                        Label("管理规则列表", systemImage: "list.bullet")
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 13))
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .buttonStyle(PlainButtonStyle())
+            }
+        }
+        .listStyle(.insetGrouped)
+        .sheet(isPresented: $显示完整规则页面) {
+            NavigationStack {
+                分流规则页面()
+                    .environmentObject(分流管理)
+                    .navigationTitle("分流规则")
+                    .navigationBarTitleDisplayMode(.inline)
+            }
+        }
+    }
+}
+
 // MARK: - 分流规则主页面
 
 /// 分流规则主页面（底部弹窗使用）

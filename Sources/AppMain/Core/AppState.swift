@@ -314,21 +314,48 @@ final class AppState: ObservableObject {
             return
         }
 
-        // 根据稳定标识查找节点
+        // 先在主节点列表中查找
         if let 节点 = 节点列表.first(where: { $0.稳定标识 == 稳定标识 }) {
             当前节点ID = 节点.id
-        } else {
-            // 找不到，选中第一个
-            当前节点ID = 节点列表.first?.id
+            return
         }
+
+        // 主列表找不到，遍历分组列表查找
+        for 分组 in 节点分组列表 {
+            if let 节点 = 分组.节点列表.first(where: { $0.稳定标识 == 稳定标识 }) {
+                当前节点ID = 节点.id
+                return
+            }
+        }
+
+        // 都找不到，选中第一个
+        当前节点ID = 节点列表.first?.id
     }
 
     /// 保存当前选中节点（切换节点时调用）
     func 保存选中节点(节点ID: UUID) {
         当前节点ID = 节点ID
+        // 先在主节点列表中查找
         if let 节点 = 节点列表.first(where: { $0.id == 节点ID }) {
             UserDefaults.standard.set(节点.稳定标识, forKey: 上次选中节点键)
+            UserDefaults.standard.synchronize()
+            return
         }
+        // 主列表找不到，遍历分组列表查找
+        for 分组 in 节点分组列表 {
+            if let 节点 = 分组.节点列表.first(where: { $0.id == 节点ID }) {
+                UserDefaults.standard.set(节点.稳定标识, forKey: 上次选中节点键)
+                UserDefaults.standard.synchronize()
+                return
+            }
+        }
+    }
+
+    /// 保存当前选中节点（直接传入节点对象，更可靠）
+    func 保存选中节点(_ 节点: 节点模型) {
+        当前节点ID = 节点.id
+        UserDefaults.standard.set(节点.稳定标识, forKey: 上次选中节点键)
+        UserDefaults.standard.synchronize()
     }
 
     // MARK: - 当前节点便捷属性

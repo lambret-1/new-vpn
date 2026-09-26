@@ -333,7 +333,7 @@ private struct 可滑动节点行视图: View {
     /// 选中节点
     private func 选中节点() {
         withAnimation(.easeInOut(duration: 0.2)) {
-            状态.保存选中节点(节点ID: 节点.id)
+            状态.保存选中节点(节点)
         }
     }
 }

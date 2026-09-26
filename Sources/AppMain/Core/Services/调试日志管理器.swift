@@ -15,7 +15,7 @@ import Combine
 /// 日志配置（持久化到 UserDefaults）
 struct 日志配置: Codable, Equatable {
     /// 最低输出级别
-    var 最低输出级别: 日志级别 = .调试
+    var 最低输出级别: 日志级别 = .追踪
     /// 内存缓冲区最大条数
     var 最大日志条数: Int = 2000
     /// 是否启用文件日志

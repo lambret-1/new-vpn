@@ -287,7 +287,9 @@ private struct 可滑动节点行视图: View {
             // 上层：节点卡片内容
             节点卡片内容(节点: 节点, 是否选中: 是否选中)
                 .offset(x: 偏移量)
-                .gesture(
+                .contentShape(Rectangle())
+                // 使用 simultaneousGesture 让滑动和点击同时识别，避免 DragGesture 拦截点击
+                .simultaneousGesture(
                     DragGesture(minimumDistance: 0, coordinateSpace: .local)
                         .onChanged { 值 in
                             if 拖拽起始偏移 == 0 {
@@ -308,36 +310,37 @@ private struct 可滑动节点行视图: View {
                             }
                         }
                         .onEnded { 值 in
-                            // 判断是否为点击（水平和垂直移动都很小）
+                            // 只处理滑动（移动大于 20 点），点击由 onTapGesture 处理
                             let 水平移动 = abs(值.translation.width)
                             let 垂直移动 = abs(值.translation.height)
-                            let 是点击 = 水平移动 < 20 && 垂直移动 < 20
+                            guard 水平移动 >= 20 || 垂直移动 >= 20 else {
+                                拖拽起始偏移 = 0
+                                return
+                            }
 
-                            if 是点击 {
-                                // 点击操作
-                                if 偏移量 > 5 {
-                                    // 已展开时点击收起
-                                    withAnimation(.easeOut(duration: 0.2)) {
-                                        偏移量 = 0
-                                    }
+                            // 滑动操作，根据偏移量决定展开或收起
+                            let 最终速度 = 值.predictedEndTranslation.width - 值.translation.width
+                            withAnimation(.easeOut(duration: 0.25)) {
+                                if 偏移量 > 展开宽度 / 2 || 最终速度 > 50 {
+                                    偏移量 = 展开宽度
                                 } else {
-                                    // 未展开时点击选中节点
-                                    选中节点()
-                                }
-                            } else {
-                                // 滑动操作，根据偏移量决定展开或收起
-                                let 最终速度 = 值.predictedEndTranslation.width - 值.translation.width
-                                withAnimation(.easeOut(duration: 0.25)) {
-                                    if 偏移量 > 展开宽度 / 2 || 最终速度 > 50 {
-                                        偏移量 = 展开宽度
-                                    } else {
-                                        偏移量 = 0
-                                    }
+                                    偏移量 = 0
                                 }
                             }
                             拖拽起始偏移 = 0
                         }
                 )
+                .onTapGesture {
+                    if 偏移量 > 5 {
+                        // 已展开时点击收起
+                        withAnimation(.easeOut(duration: 0.2)) {
+                            偏移量 = 0
+                        }
+                    } else {
+                        // 未展开时点击选中节点
+                        选中节点()
+                    }
+                }
         }
         .frame(height: 60)
         .clipped()

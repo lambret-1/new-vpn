@@ -276,8 +276,8 @@ struct SingBox入站配置: Codable, Equatable {
     var stack: String?
     /// TUN 接口名
     var interfaceName: String?
-    /// TUN DNS 地址（拦截发往该地址的 DNS 查询，交由内部 DNS 模块处理）
-    var dnsAddress: String?
+    /// TUN DNS 地址列表（拦截发往这些地址的 DNS 查询，交由内部 DNS 模块处理）
+    var dnsAddress: [String]?
     /// 是否启用协议嗅探
     var sniff: Bool?
     /// 嗅探是否覆盖目标地址
@@ -300,7 +300,9 @@ struct SingBox入站配置: Codable, Equatable {
         配置.autoRoute = 自动路由
         配置.strictRoute = 严格路由
         配置.stack = 网络栈
-        配置.dnsAddress = DNS地址
+        if let dnsAddr = DNS地址 {
+            配置.dnsAddress = [dnsAddr]
+        }
         配置.sniff = 启用嗅探
         配置.sniffOverrideDestination = false
         配置.sniffTimeout = "300ms"

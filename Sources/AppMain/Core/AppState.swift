@@ -256,6 +256,8 @@ final class AppState: ObservableObject {
         加载模拟数据()
         加载订阅列表()
         加载持久化节点()
+        // 所有节点加载完成后，恢复上次选中的节点
+        恢复上次选中节点()
     }
 
     // MARK: - 节点持久化
@@ -296,9 +298,6 @@ final class AppState: ObservableObject {
 
         // 重新生成分组
         节点分组列表 = Mock数据.生成节点分组(节点列表: 节点列表)
-
-        // 恢复上次选中的节点
-        恢复上次选中节点()
     }
 
     // MARK: - 记住选中节点
@@ -414,7 +413,6 @@ final class AppState: ObservableObject {
         日志列表 = Mock数据.生成日志()
         抓包列表 = Mock数据.生成抓包会话()
         节点分组列表 = Mock数据.生成节点分组(节点列表: 节点列表)
-        当前节点ID = 节点列表.first?.id
     }
 
     // MARK: - 分组测速
@@ -531,6 +529,9 @@ final class AppState: ObservableObject {
 
         // 持久化保存
         保存持久化节点()
+
+        // 恢复上次选中的节点（更新后 UUID 可能变化，用稳定标识匹配）
+        恢复上次选中节点()
     }
 
     /// 获取指定订阅解析出的节点

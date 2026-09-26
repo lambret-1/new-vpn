@@ -71,4 +71,19 @@ PacketTunnelProvider 的每秒定时器在保存统计前调用此方法。
 - **配置传递**：主 App 生成 sing-box JSON 配置写入 App Group 共享目录，扩展启动时读取。
 - **统计回传**：扩展每秒将上下行字节写入 App Group UserDefaults，主 App 读取展示。
 - **日志回传**：扩展将内核日志和自身日志写入 App Group UserDefaults（环形缓冲，最多 300 条）。
-- **IPC 消息**：主 App 通过 `sendProviderMessage` 向扩展发送 getVersion/getStats/reloadConfig/getLogs 指令。
+- **IPC 消息**：主 App 通过 `sendProviderMessage` 向扩展发送 getVersion/getStats/reloadConfig/getLogs/testLatency 指令。
+
+## 节点延迟测速（testLatency）
+
+VPN 已连接时，主 App 进程的 TCP 连接会被全局 TUN 截获（测到的是到本地 TUN 的握手，
+表现为假 5ms），因此改由扩展进程完成真实测速：
+
+- 主 App 通过 XPC 发送 `testLatency`（address/port），扩展在自己进程内发起一次到
+  节点服务器的 TCP 握手，回传 `latency`(ms) 或 `error`。
+- **关键**：扩展进程里未绑定出接口的 socket 同样会被路由进 TUN，且因扩展进程的
+  socket 带“绕过 VPN”标记，TUN 回包无法匹配，连接必然超时。因此测速 socket 必须用
+  `SO_BINDTODEVICE` 钉在物理网卡（`getifaddrs` 枚举跳过 lo0/utun/ipsec/tap/bridge
+  后取第一个物理接口，通常是 en0 / pdp_ip0），让 SYN 从物理网卡直连节点服务器，
+  测到真实 RTT。这与 sing-box 内核 `auto_detect_interface=true` 绑定物理接口出墙是同一机制。
+- 实现为非阻塞 `connect` + `DispatchSource` 监听可写，5 秒超时；失败回 `{"error":"timeout"}`，
+  主 App 侧会读取该错误字段并展示，不再静默判定失败。

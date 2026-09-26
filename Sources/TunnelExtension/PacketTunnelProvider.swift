@@ -260,34 +260,108 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     // MARK: - 节点测速（扩展进程内，绕过自身 TUN）
 
     /// 在扩展进程内对 地址:端口 做一次 TCP 连接，返回真实 RTT(ms)，失败返回 nil
+    ///
+    /// 为什么不能用裸 NWConnection：本隧道 includeAllNetworks=YES（全局 0.0.0.0/0 进 TUN），
+    /// 扩展进程里未绑定出接口的 socket 会被路由进 TUN；而扩展进程的 socket 又带“绕过 VPN”
+    /// 标记，导致 TUN 接口回包无法匹配回原 socket，连接必然超时（这就是上一版全部测不出的原因）。
+    /// 因此这里用 SO_BINDTODEVICE 把探测 socket 钉在物理网卡（en0 / pdp_ip0）上，
+    /// 让 SYN 从物理网卡直连节点服务器、SYN-ACK 从物理网卡回来，测到真实 RTT。
     private func 测试TCP延迟(地址: String, 端口: Int, 完成: @escaping (Int?) -> Void) {
-        guard let 端口号 = NWEndpoint.Port(rawValue: UInt16(端口)) else {
-            完成(nil)
-            return
-        }
-        let 连接 = NWConnection(host: NWEndpoint.Host(地址), port: 端口号, using: .tcp)
-        let 开始 = Date()
-        var 已回 = false
-        let 回包: (Int?) -> Void = { ms in
-            guard !已回 else { return }
-            已回 = true
-            连接.cancel()
+        DispatchQueue.global(qos: .userInitiated).async {
+            let ms = 物理接口TCP连接RTT(地址: 地址, 端口: 端口, 超时: 5.0)
             完成(ms)
         }
-        连接.stateUpdateHandler = { 状态 in
-            switch 状态 {
-            case .ready:
-                回包(Int(Date().timeIntervalSince(开始) * 1000))
-            case .failed:
-                回包(nil)
-            default:
-                break
+    }
+
+    /// 绑定物理出接口、带超时地连接 地址:端口，成功返回握手 RTT(ms)，失败返回 nil
+    private func 物理接口TCP连接RTT(地址: String, 端口: Int, 超时: TimeInterval) -> Int? {
+        // 1. 解析目标地址（域名或 IP 字面量）为内核地址结构
+        var 提示 = addrinfo()
+        提示.ai_family = AF_INET
+        提示.ai_socktype = SOCK_STREAM
+        var 链表: UnsafeMutablePointer<addrinfo>?
+        guard getaddrinfo(地址, String(端口), &提示, &链表) == 0,
+              let 首节点 = 链表?.pointee,
+              let 目标地址 = 首节点.ai_addr else {
+            if let 链表 = 链表 { freeaddrinfo(链表) }
+            return nil
+        }
+        defer { if let 链表 = 链表 { freeaddrinfo(链表) } }
+
+        // 2. 创建 TCP socket
+        let fd = socket(首节点.ai_family, SOCK_STREAM, 0)
+        guard fd >= 0 else { return nil }
+        var 已关闭 = false
+        func 关闭fd() { if !已关闭 { close(fd); 已关闭 = true } }
+        defer { 关闭fd() }
+
+        // 3. 关键：把 socket 钉到物理出接口，绕过本 TUN
+        guard let 接口名 = 首个物理接口名() else { return nil }
+        接口名.withCString { 名 in
+            var 长度 = socklen_t(strlen(名))
+            setsockopt(fd, SOL_SOCKET, SO_BINDTODEVICE, 名, &长度)
+        }
+
+        // 4. 设为非阻塞
+        let 旧标志 = fcntl(fd, F_GETFL, 0)
+        guard 旧标志 >= 0 else { return nil }
+        _ = fcntl(fd, F_SETFL, 旧标志 | O_NONBLOCK)
+
+        // 5. 发起连接（非阻塞下会立即返回 EINPROGRESS）
+        let 开始 = Date()
+        if connect(fd, 目标地址, 首节点.ai_addrlen) < 0 && errno != EINPROGRESS {
+            return nil
+        }
+
+        // 6. 用 DispatchSource 等待连接完成，另起一个超时兜底
+        let 信号 = DispatchSemaphore(value: 0)
+        var 最终错误 = 0
+        var 已完成 = false
+
+        let 写源 = DispatchSource.makeWriteSource(fileDescriptor: fd, queue: .global())
+        写源.setEventHandler {
+            var 错误码 = 0
+            var 长度 = socklen_t(MemoryLayout<Int>.size)
+            getsockopt(fd, SOL_SOCKET, SO_ERROR, &错误码, &长度)
+            最终错误 = 错误码
+            已完成 = true
+            写源.cancel()
+            信号.signal()
+        }
+        写源.resume()
+
+        DispatchQueue.global().asyncAfter(deadline: .now() + 超时) {
+            if !已完成 { 最终错误 = ETIMEDOUT }
+            信号.signal()
+        }
+
+        _ = 信号.wait()
+        写源.cancel()
+        if 最终错误 != 0 { return nil }
+
+        return Int(Date().timeIntervalSince(开始) * 1000)
+    }
+
+    /// 枚举本机接口，返回第一个可用物理出接口名（跳过回环与隧道接口）
+    private func 首个物理接口名() -> String? {
+        var 链表: UnsafeMutablePointer<ifaddrs>?
+        guard getifaddrs(&链表) == 0, let 起始 = 链表 else { return nil }
+        defer { freeifaddrs(起始) }
+        var 当前: UnsafeMutablePointer<ifaddrs>? = 起始
+        while let 节点 = 当前 {
+            let 项 = 节点.pointee
+            if let 名指针 = 项.ifa_name {
+                let 名称 = String(cString: 名指针)
+                let 跳过 = 名称.hasPrefix("lo") || 名称.hasPrefix("utun")
+                    || 名称.hasPrefix("ipsec") || 名称.hasPrefix("tap")
+                    || 名称.hasPrefix("bridge")
+                if !跳过, 项.ifa_addr != nil {
+                    return 名称
+                }
             }
+            当前 = 项.ifa_next
         }
-        连接.start(queue: .global(qos: .userInitiated))
-        DispatchQueue.global().asyncAfter(deadline: .now() + 5.0) {
-            回包(nil)
-        }
+        return nil
     }
 
     // MARK: - 网络配置

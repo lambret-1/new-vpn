@@ -59,10 +59,15 @@ final class 测速管理器: ObservableObject {
         if 隧道管理器.共享.当前状态.是否活动 {
             let 信号 = DispatchSemaphore(value: 0)
             var 延迟ms: Int?
+            var 扩展错误: String?
             隧道管理器.共享.发送消息到扩展(
                 ["action": "testLatency", "address": 节点.地址, "port": 节点.端口]
             ) { 响应, _ in
-                延迟ms = 响应?["latency"] as? Int
+                if let ms = 响应?["latency"] as? Int {
+                    延迟ms = ms
+                } else if let 错误 = 响应?["error"] as? String {
+                    扩展错误 = 错误
+                }
                 信号.signal()
             }
             _ = 信号.wait(timeout: .now() + 6)
@@ -72,7 +77,7 @@ final class 测速管理器: ObservableObject {
                 结果.成功 = true
             } else {
                 结果.成功 = false
-                结果.错误信息 = "扩展测速超时"
+                结果.错误信息 = 扩展错误 ?? "扩展测速超时"
                 结果.丢包率 = 100
             }
         } else {

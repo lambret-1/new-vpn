@@ -50,7 +50,7 @@
 | DNS服务.swift | DNS 解析底层实现，支持 UDP/TLS/HTTPS 协议 |
 | 分流规则管理器.swift | 分流规则的增删改查和持久化 |
 | 分流规则服务.swift | 分流规则匹配引擎 |
-| 测速管理器.swift | 节点延迟/抖动/丢包/带宽测速 |
+| 测速管理器.swift | 节点延迟/抖动/丢包/带宽测速；已连接时经 XPC 委托扩展进程绑定物理接口测速（避免被 TUN 截获的假延迟），未连接时本地直连 |
 | 测速服务.swift | 测速底层实现（TCP 握手/HTTP 请求） |
 | 节点链接解析器.swift | vmess/vless/trojan/shadowsocks 链接解析 |
 | 订阅下载服务.swift | 订阅源 HTTP 拉取 |

@@ -304,8 +304,6 @@ final class SingBox配置生成器 {
         )
         // 出站顶层字段设置 TCP 快速打开（libbox v1.11.0 支持）
         配置.tcpFastOpen = true
-        // 启用 UDP 转发：支持 QUIC/HTTP3 等基于 UDP 的应用（如 TikTok）
-        配置.udpForward = true
         return 配置
     }
 
@@ -321,7 +319,6 @@ final class SingBox配置生成器 {
             传输: 生成传输配置(节点)
         )
         配置.tcpFastOpen = true
-        配置.udpForward = true
         return 配置
     }
 
@@ -336,7 +333,6 @@ final class SingBox配置生成器 {
             传输: 生成传输配置(节点)
         )
         配置.tcpFastOpen = true
-        配置.udpForward = true
         return 配置
     }
 
@@ -350,7 +346,6 @@ final class SingBox配置生成器 {
             密码: 节点.用户标识 ?? ""
         )
         配置.tcpFastOpen = true
-        配置.udpForward = true
         return 配置
     }
 

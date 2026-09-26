@@ -69,29 +69,92 @@ struct 分流规则内容区: View {
     @EnvironmentObject private var 分流管理: 分流规则管理器
     @State private var 搜索关键词 = ""
     @State private var 展开的分组ID: UUID?
+    @State private var 显示添加规则 = false
+    @State private var 显示预设规则 = false
+    @State private var 显示规则测试 = false
+
+    /// 统计数据
+    private var 统计: (分组数: Int, 总规则数: Int, 启用规则数: Int, 总命中数: Int) {
+        let 所有规则 = 分流管理.配置.分组列表.flatMap { $0.规则列表 }
+        let 启用规则 = 所有规则.filter { $0.启用 }
+        let 总命中 = 所有规则.reduce(0) { $0 + $1.命中次数 }
+        return (分流管理.配置.分组列表.count, 所有规则.count, 启用规则.count, 总命中)
+    }
 
     var body: some View {
         VStack(spacing: 12) {
-            // 搜索栏
+            // 顶部统计栏
+            HStack(spacing: 0) {
+                统计项(数值: 统计.分组数, 标签: "分组", 颜色: .主题色)
+                分割线()
+                统计项(数值: 统计.总规则数, 标签: "总规则", 颜色: .成功色)
+                分割线()
+                统计项(数值: 统计.启用规则数, 标签: "已启用", 颜色: .警告色)
+                分割线()
+                统计项(数值: 统计.总命中数, 标签: "总命中", 颜色: .危险色)
+            }
+            .padding(.vertical, 14)
+            .background(Color.卡片背景)
+            .cornerRadius(12)
+
+            // 操作栏：搜索 + 测试 + 预设 + 添加
             HStack(spacing: 8) {
-                Image(systemName: "magnifyingglass")
-                    .font(.system(size: 14))
-                    .foregroundColor(.secondary)
-                TextField("搜索规则名称或匹配值", text: $搜索关键词)
-                    .font(.system(size: 14))
-                if !搜索关键词.isEmpty {
-                    Button {
-                        搜索关键词 = ""
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(.secondary)
+                HStack(spacing: 6) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 14))
+                        .foregroundColor(.secondary)
+                    TextField("搜索规则", text: $搜索关键词)
+                        .font(.system(size: 14))
+                    if !搜索关键词.isEmpty {
+                        Button {
+                            搜索关键词 = ""
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundColor(.secondary)
+                        }
                     }
                 }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .background(Color.卡片背景)
+                .cornerRadius(8)
+
+                Button {
+                    显示规则测试 = true
+                } label: {
+                    Image(systemName: "text.magnifyingglass")
+                        .font(.system(size: 18))
+                        .foregroundColor(.主题色)
+                        .frame(width: 36, height: 36)
+                        .background(Color.卡片背景)
+                        .cornerRadius(8)
+                }
+                .buttonStyle(PlainButtonStyle())
+
+                Button {
+                    显示预设规则 = true
+                } label: {
+                    Image(systemName: "square.stack.3d.down.forward")
+                        .font(.system(size: 18))
+                        .foregroundColor(.主题色)
+                        .frame(width: 36, height: 36)
+                        .background(Color.卡片背景)
+                        .cornerRadius(8)
+                }
+                .buttonStyle(PlainButtonStyle())
+
+                Button {
+                    显示添加规则 = true
+                } label: {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.system(size: 20))
+                        .foregroundColor(.主题色)
+                        .frame(width: 36, height: 36)
+                        .background(Color.卡片背景)
+                        .cornerRadius(8)
+                }
+                .buttonStyle(PlainButtonStyle())
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .background(Color.卡片背景)
-            .cornerRadius(10)
 
             // 分组列表
             if 分流管理.配置.分组列表.isEmpty {
@@ -116,6 +179,47 @@ struct 分流规则内容区: View {
             }
         }
         .padding(.horizontal, 15)
+        .sheet(isPresented: $显示添加规则) {
+            规则编辑页面(规则: nil)
+                .environmentObject(分流管理)
+        }
+        .sheet(isPresented: $显示预设规则) {
+            NavigationStack {
+                预设规则页面()
+                    .environmentObject(分流管理)
+                    .navigationTitle("预设规则集")
+                    .navigationBarTitleDisplayMode(.inline)
+            }
+        }
+        .sheet(isPresented: $显示规则测试) {
+            NavigationStack {
+                规则测试页面()
+                    .environmentObject(分流管理)
+                    .navigationTitle("规则测试")
+                    .navigationBarTitleDisplayMode(.inline)
+            }
+        }
+    }
+
+    /// 统计项
+    private func 统计项(数值: Int, 标签: String, 颜色: Color) -> some View {
+        VStack(spacing: 4) {
+            Text("\(数值)")
+                .font(.system(size: 20, weight: .bold))
+                .foregroundColor(颜色)
+            Text(标签)
+                .font(.system(size: 12))
+                .foregroundColor(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    /// 分割线
+    private func 分割线() -> some View {
+        Rectangle()
+            .fill(Color.分割线)
+            .frame(width: 1)
+            .padding(.vertical, 4)
     }
 
     /// 空状态视图
@@ -127,7 +231,7 @@ struct 分流规则内容区: View {
             Text("暂无分流规则")
                 .font(.system(size: 16, weight: .medium))
                 .foregroundColor(.secondary)
-            Text("在设置中添加分流规则分组")
+            Text("点击右上角 + 添加规则，或导入预设规则集")
                 .font(.system(size: 14))
                 .foregroundColor(.secondary.opacity(0.8))
         }

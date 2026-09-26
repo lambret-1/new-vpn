@@ -365,6 +365,9 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
     // MARK: - DNS 查询记录
 
+    /// 已知的 DNS 记录类型关键字（用于动态定位，不依赖固定位置）
+    private let 已知记录类型: Set<String> = ["A", "AAAA", "CNAME", "MX", "TXT", "NS", "SOA", "PTR", "SRV", "CAA", "HTTPS", "SVCB"]
+
     /// 解析 sing-box DNS 日志并记录到共享 UserDefaults
     /// 支持格式：
     /// - dns: exchanged example.com. 300 IN A 1.2.3.4（成功解析）
@@ -382,7 +385,6 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
            let 范围 = 日志内容.range(of: "lookup ") {
             let 剩余部分 = String(日志内容[范围.upperBound...])
                 .trimmingCharacters(in: .whitespaces)
-            // 提取域名（去掉可能的端口、错误信息等）
             let 域名 = 剩余部分.components(separatedBy: .whitespaces).first ?? 剩余部分
             if !域名.isEmpty {
                 DNS查询开始时间[域名] = Date()
@@ -397,8 +399,10 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             let 部分 = 剩余部分.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
             guard 部分.count >= 2 else { return }
 
+            // 域名始终是第一个字段，去掉末尾的点
             let 原始域名 = 部分[0]
             let 域名 = 原始域名.hasSuffix(".") ? String(原始域名.dropLast()) : 原始域名
+            guard !域名.isEmpty else { return }
 
             // 计算响应耗时
             let 响应时间 = 计算DNS响应时间(域名: 域名)
@@ -410,12 +414,42 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                 return
             }
 
-            // 正常解析结果
-            guard 部分.count >= 4 else { return }
-            let TTL = Int(部分[1]) ?? 300
-            // 记录类型转大写，修复 a/aaaa 等小写无法映射的问题
-            let 记录类型字符串 = 部分[3].uppercased()
-            let 解析结果 = 部分.count > 4 ? Array(部分[4...]) : []
+            // 动态查找记录类型的位置（不依赖固定位置，兼容不同 sing-box 版本格式）
+            var 类型索引 = -1
+            var 记录类型字符串 = "A"
+            for (索引, 字段) in 部分.enumerated() {
+                if 索引 == 0 { continue } // 跳过域名
+                let 大写字段 = 字段.uppercased()
+                if 已知记录类型.contains(大写字段) {
+                    类型索引 = 索引
+                    记录类型字符串 = 大写字段
+                    break
+                }
+            }
+
+            // 没找到已知类型，尝试用位置3作为类型（兼容旧格式）
+            if 类型索引 == -1 {
+                if 部分.count >= 4 {
+                    记录类型字符串 = 部分[3].uppercased()
+                    类型索引 = 3
+                } else {
+                    // 格式不认识，跳过
+                    return
+                }
+            }
+
+            // TTL：类型索引前面的数字字段（通常在域名后面）
+            var TTL = 300
+            for i in 1..<类型索引 {
+                if let 数字 = Int(部分[i]) {
+                    TTL = 数字
+                    break
+                }
+            }
+
+            // 解析结果：类型索引后面的所有字段
+            let 解析结果 = 类型索引 + 1 < 部分.count ? Array(部分[(类型索引 + 1)...]) : []
+
             保存DNS记录(域名: 域名, 记录类型: 记录类型字符串, 解析结果: 解析结果, TTL: TTL, DNS服务器: "sing-box", 来源: "远程", 是否失败: false, 响应时间: 响应时间)
             return
         }
@@ -428,6 +462,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             let 部分 = 剩余部分.components(separatedBy: ": ")
             guard !部分.isEmpty else { return }
             let 域名 = 部分[0].trimmingCharacters(in: .whitespaces)
+            guard !域名.isEmpty else { return }
             let 响应时间 = 计算DNS响应时间(域名: 域名)
             保存DNS记录(域名: 域名, 记录类型: "A", 解析结果: [], TTL: 0, DNS服务器: "sing-box", 来源: "远程", 是否失败: true, 响应时间: 响应时间)
         }
@@ -443,10 +478,14 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
     /// 保存 DNS 记录到共享 UserDefaults
     private func 保存DNS记录(域名: String, 记录类型: String, 解析结果: [String], TTL: Int, DNS服务器: String, 来源: String, 是否失败: Bool, 响应时间: Int?) {
+        // 解析结果统一去掉末尾的点（CNAME/MX/NS 等域名类型的值带末尾点，IP 类型不受影响）
+        let 清理后的结果 = 解析结果.map { 值 -> String in
+            值.hasSuffix(".") ? String(值.dropLast()) : 值
+        }
         var DNS记录: [String: Any] = [
             "域名": 域名,
             "记录类型": 记录类型,
-            "解析结果": 解析结果,
+            "解析结果": 清理后的结果,
             "TTL": TTL,
             "查询时间": Date().timeIntervalSince1970,
             "DNS服务器": DNS服务器,

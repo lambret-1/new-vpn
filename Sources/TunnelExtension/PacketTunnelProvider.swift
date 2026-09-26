@@ -705,7 +705,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
               !域名或IP.hasPrefix("172.16.") else { return }
 
         // 串行化写入
-        共享队列.async { [weak self] in
+        扩展数据队列.async { [weak self] in
             guard let self = self, let 共享默认 = self.共享默认 else { return }
 
             var 记录列表 = 共享默认.array(forKey: "connectionRecords") as? [[String: Any]] ?? []

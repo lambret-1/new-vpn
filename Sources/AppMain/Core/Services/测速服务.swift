@@ -4,6 +4,7 @@
 //
 //  节点测速核心服务
 //  仅支持 TCP 连接延迟测试
+//  VPN 连接时自动使用物理网络接口测速，避免隧道接管导致虚假低延迟
 //
 
 import Foundation
@@ -16,8 +17,37 @@ final class 测速服务 {
     /// 共享单例
     static let 共享 = 测速服务()
 
+    /// 网络路径监视器（用于检测当前物理网络接口类型）
+    private let 路径监视器 = NWPathMonitor()
+    /// 监视器队列
+    private let 监视器队列 = DispatchQueue(label: "com.newvpn.pathmonitor")
+    /// 当前物理网络接口类型
+    private var 当前接口类型: NWInterface.InterfaceType?
+
     /// 私有初始化
-    private init() {}
+    private init() {
+        启动网络监测()
+    }
+
+    // MARK: - 网络监测
+
+    /// 启动网络路径监测，记录当前物理接口类型
+    private func 启动网络监测() {
+        路径监视器.pathUpdateHandler = { [weak self] 路径 in
+            guard let self = self else { return }
+            // 优先获取 WiFi，其次蜂窝，排除 VPN（.other）和回环
+            if 路径.usesInterfaceType(.wifi) {
+                self.当前接口类型 = .wifi
+            } else if 路径.usesInterfaceType(.cellular) {
+                self.当前接口类型 = .cellular
+            } else if 路径.usesInterfaceType(.wiredEthernet) {
+                self.当前接口类型 = .wiredEthernet
+            } else {
+                self.当前接口类型 = nil
+            }
+        }
+        路径监视器.start(queue: 监视器队列)
+    }
 
     // MARK: - TCP 延迟测试
 
@@ -63,17 +93,42 @@ final class 测速服务 {
     }
 
     /// 单次 TCP 连接测试（使用 NWConnection）
+    /// VPN 连接时优先使用物理接口，失败后降级为默认路由
     private func 单次TCP连接测试(地址: String, 端口: Int, 超时: TimeInterval) -> Int? {
         guard let 端口号 = NWEndpoint.Port(rawValue: UInt16(端口)) else {
             return nil
         }
 
         let 主机 = NWEndpoint.Host(地址)
-        // 创建 TCP 参数，禁止使用 VPN 接口（.other），强制使用物理网络接口
-        // 避免 VPN 连接后测速被隧道接管，显示虚假的低延迟
+
+        // 优先尝试物理接口测速（绕过 VPN 隧道）
+        if let 物理接口 = 当前接口类型 {
+            if let 延迟 = 尝试连接(主机: 主机, 端口: 端口号, 超时: 超时, 强制接口: 物理接口) {
+                return 延迟
+            }
+            // 物理接口失败，降级为默认路由重试一次
+        }
+
+        // 降级：使用默认路由（可能走 VPN，但至少能成功）
+        return 尝试连接(主机: 主机, 端口: 端口号, 超时: 超时, 强制接口: nil)
+    }
+
+    /// 尝试建立 TCP 连接并返回延迟
+    /// - Parameters:
+    ///   - 主机: 目标主机
+    ///   - 端口: 目标端口
+    ///   - 超时: 超时时间
+    ///   - 强制接口: 强制使用的网络接口类型，nil 表示默认路由
+    /// - Returns: 连接延迟（毫秒），失败返回 nil
+    private func 尝试连接(主机: NWEndpoint.Host, 端口: NWEndpoint.Port, 超时: TimeInterval, 强制接口: NWInterface.InterfaceType?) -> Int? {
         let 参数 = NWParameters.tcp
-        参数.prohibitedInterfaceTypes = [.other]
-        let 连接 = NWConnection(host: 主机, port: 端口号, using: 参数)
+
+        // 如果指定了物理接口，强制使用该接口（绕过 VPN）
+        if let 接口 = 强制接口 {
+            参数.requiredInterfaceType = 接口
+        }
+
+        let 连接 = NWConnection(host: 主机, port: 端口, using: 参数)
 
         let 信号 = DispatchSemaphore(value: 0)
         var 延迟: Int?

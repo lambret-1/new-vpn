@@ -76,13 +76,15 @@ struct 调试日志内容区: View {
                     标题: "全部",
                     值: "\(日志管理.日志列表.count)",
                     颜色: .主题色,
-                    选中: 选中级别 == nil
+                    选中: 选中级别 == nil && 日志管理.搜索关键词 != "dns:"
                 ) {
                     选中级别 = nil
                     日志管理.过滤级别 = nil
+                    日志管理.搜索关键词 = ""
                 }
 
-                ForEach(日志级别.allCases, id: \.self) { 级别 in
+                // 跳过"致命"级别，换成 DNS 快捷过滤
+                ForEach(日志级别.allCases.filter { $0 != .致命 }, id: \.self) { 级别 in
                     统计项(
                         标题: 级别.rawValue,
                         值: "\(日志管理.级别统计[级别] ?? 0)",
@@ -95,12 +97,34 @@ struct 调试日志内容区: View {
                         } else {
                             选中级别 = 级别
                             日志管理.过滤级别 = 级别
+                            日志管理.搜索关键词 = ""
                         }
+                    }
+                }
+
+                // DNS 快捷过滤：只看包含 dns: 的日志
+                统计项(
+                    标题: "DNS",
+                    值: "\(DNS日志数量)",
+                    颜色: Color(red: 0.20, green: 0.60, blue: 0.90),
+                    选中: 日志管理.搜索关键词 == "dns:"
+                ) {
+                    if 日志管理.搜索关键词 == "dns:" {
+                        日志管理.搜索关键词 = ""
+                    } else {
+                        选中级别 = nil
+                        日志管理.过滤级别 = nil
+                        日志管理.搜索关键词 = "dns:"
                     }
                 }
             }
             .padding(.horizontal, 1)
         }
+    }
+
+    /// DNS 相关日志数量（内容包含 dns:）
+    private var DNS日志数量: Int {
+        日志管理.日志列表.filter { $0.内容.localizedCaseInsensitiveContains("dns:") }.count
     }
 
     private struct 统计项: View {

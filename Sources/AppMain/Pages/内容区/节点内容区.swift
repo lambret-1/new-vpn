@@ -288,11 +288,15 @@ private struct 可滑动节点行视图: View {
             节点卡片内容(节点: 节点, 是否选中: 是否选中)
                 .offset(x: 偏移量)
                 .gesture(
-                    DragGesture(minimumDistance: 8, coordinateSpace: .local)
+                    DragGesture(minimumDistance: 0, coordinateSpace: .local)
                         .onChanged { 值 in
                             if 拖拽起始偏移 == 0 {
                                 拖拽起始偏移 = 偏移量
                             }
+                            // 点击时（移动很小）不更新偏移量，避免卡片微动
+                            let 总移动 = abs(值.translation.width) + abs(值.translation.height)
+                            guard 总移动 > 5 else { return }
+
                             let 目标偏移 = 拖拽起始偏移 + 值.translation.width
                             // 限制滑动范围，添加阻尼效果
                             if 目标偏移 < 0 {

@@ -288,7 +288,7 @@ private struct 可滑动节点行视图: View {
             节点卡片内容(节点: 节点, 是否选中: 是否选中)
                 .offset(x: 偏移量)
                 .gesture(
-                    DragGesture(minimumDistance: 10, coordinateSpace: .local)
+                    DragGesture(minimumDistance: 8, coordinateSpace: .local)
                         .onChanged { 值 in
                             if 拖拽起始偏移 == 0 {
                                 拖拽起始偏移 = 偏移量
@@ -304,27 +304,36 @@ private struct 可滑动节点行视图: View {
                             }
                         }
                         .onEnded { 值 in
-                            let 最终速度 = 值.predictedEndTranslation.width - 值.translation.width
-                            withAnimation(.easeOut(duration: 0.25)) {
-                                if 偏移量 > 展开宽度 / 2 || 最终速度 > 50 {
-                                    偏移量 = 展开宽度
+                            // 判断是否为点击（水平和垂直移动都很小）
+                            let 水平移动 = abs(值.translation.width)
+                            let 垂直移动 = abs(值.translation.height)
+                            let 是点击 = 水平移动 < 20 && 垂直移动 < 20
+
+                            if 是点击 {
+                                // 点击操作
+                                if 偏移量 > 5 {
+                                    // 已展开时点击收起
+                                    withAnimation(.easeOut(duration: 0.2)) {
+                                        偏移量 = 0
+                                    }
                                 } else {
-                                    偏移量 = 0
+                                    // 未展开时点击选中节点
+                                    选中节点()
+                                }
+                            } else {
+                                // 滑动操作，根据偏移量决定展开或收起
+                                let 最终速度 = 值.predictedEndTranslation.width - 值.translation.width
+                                withAnimation(.easeOut(duration: 0.25)) {
+                                    if 偏移量 > 展开宽度 / 2 || 最终速度 > 50 {
+                                        偏移量 = 展开宽度
+                                    } else {
+                                        偏移量 = 0
+                                    }
                                 }
                             }
                             拖拽起始偏移 = 0
                         }
                 )
-                .onTapGesture {
-                    if 偏移量 > 0 {
-                        // 已展开时点击收起
-                        withAnimation(.easeOut(duration: 0.2)) {
-                            偏移量 = 0
-                        }
-                    } else {
-                        选中节点()
-                    }
-                }
         }
         .frame(height: 60)
         .clipped()

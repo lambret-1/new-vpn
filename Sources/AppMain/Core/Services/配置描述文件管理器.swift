@@ -389,7 +389,7 @@ final class 配置描述文件管理器: ObservableObject {
               },
               {
                 "tag": "dns_proxy",
-                "address": "https://8.8.8.8/dns-query",
+                "address": "https://1.1.1.1/dns-query",
                 "detour": "proxy"
               }
             ],

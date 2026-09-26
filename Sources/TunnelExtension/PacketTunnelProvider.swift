@@ -44,6 +44,10 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     /// DNS 查询开始时间追踪（域名: 开始时间），用于计算响应耗时
     private var DNS查询开始时间: [String: Date] = [:]
 
+    /// 日志内存缓冲，批量写入 UserDefaults 减少 IO
+    private var 日志缓冲: [扩展日志条目] = []
+    private let 日志缓冲上限 = 50
+
     /// sing-box 内核是否运行中
     private var singBox运行中 = false
 
@@ -168,8 +172,9 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         // 停止统计定时器
         停止统计定时器()
 
-        // 保存最终统计
+        // 保存最终统计和日志缓冲
         保存统计数据()
+        批量写入日志缓冲()
 
         // 记录停止日志
         记录扩展日志(级别: "信息", 模块: "隧道", 内容: "隧道已停止，原因：\(停止原因描述(reason))")
@@ -336,8 +341,19 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
         统计定时器 = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             self?.保存统计数据()
+            self?.清理超时的DNS查询开始时间()
+            self?.批量写入日志缓冲()
         }
         RunLoop.main.add(统计定时器!, forMode: .common)
+    }
+
+    /// 清理超过 30 秒的 DNS 查询开始时间记录，防止字典无限增长导致内存超限
+    private func 清理超时的DNS查询开始时间() {
+        let 超时阈值: TimeInterval = 30
+        let 现在 = Date()
+        DNS查询开始时间 = DNS查询开始时间.filter { _, 开始时间 in
+            现在.timeIntervalSince(开始时间) <= 超时阈值
+        }
     }
 
     /// 停止统计定时器
@@ -554,20 +570,10 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     private func 记录扩展日志(级别: String, 模块: String, 内容: String) {
         let 条目 = 扩展日志条目(id: UUID(), 时间: Date(), 级别: 级别, 模块: 模块, 内容: 内容)
 
-        // 保存到共享 UserDefaults（格式与主 App 读取一致）
-        if let 共享默认 = 共享默认 {
-            var 日志列表: [扩展日志条目] = []
-            if let 日志数据 = 共享默认.data(forKey: "tunnelLogs"),
-               let 已存列表 = try? JSONDecoder().decode([扩展日志条目].self, from: 日志数据) {
-                日志列表 = 已存列表
-            }
-            日志列表.insert(条目, at: 0)
-            if 日志列表.count > 300 {
-                日志列表.removeLast(日志列表.count - 300)
-            }
-            if let 编码数据 = try? JSONEncoder().encode(日志列表) {
-                共享默认.set(编码数据, forKey: "tunnelLogs")
-            }
+        // 先加入内存缓冲，减少 UserDefaults IO 次数
+        日志缓冲.insert(条目, at: 0)
+        if 日志缓冲.count > 日志缓冲上限 {
+            批量写入日志缓冲()
         }
 
         // 输出到系统日志
@@ -581,6 +587,26 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         default:
             日志.info("\(模块): \(内容)")
         }
+    }
+
+    /// 批量将日志缓冲写入 UserDefaults
+    private func 批量写入日志缓冲() {
+        guard !日志缓冲.isEmpty, let 共享默认 = 共享默认 else { return }
+
+        var 日志列表: [扩展日志条目] = []
+        if let 日志数据 = 共享默认.data(forKey: "tunnelLogs"),
+           let 已存列表 = try? JSONDecoder().decode([扩展日志条目].self, from: 日志数据) {
+            日志列表 = 已存列表
+        }
+        // 缓冲中的日志已经是最新在前，直接拼到前面
+        日志列表 = 日志缓冲 + 日志列表
+        if 日志列表.count > 300 {
+            日志列表 = Array(日志列表.prefix(300))
+        }
+        if let 编码数据 = try? JSONEncoder().encode(日志列表) {
+            共享默认.set(编码数据, forKey: "tunnelLogs")
+        }
+        日志缓冲.removeAll()
     }
 
     /// 读取扩展日志（供主 App 通过 IPC 查询）

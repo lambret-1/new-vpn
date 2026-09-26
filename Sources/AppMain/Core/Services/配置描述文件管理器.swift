@@ -384,12 +384,12 @@ final class 配置描述文件管理器: ObservableObject {
             "servers": [
               {
                 "tag": "dns_resolver",
-                "address": "223.5.5.5",
+                "address": "tls://223.5.5.5",
                 "detour": "DIRECT"
               },
               {
                 "tag": "dns_proxy",
-                "address": "tls://8.8.8.8",
+                "address": "https://8.8.8.8/dns-query",
                 "detour": "proxy"
               }
             ],

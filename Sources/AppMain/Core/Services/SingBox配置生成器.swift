@@ -34,7 +34,7 @@ final class SingBox配置生成器 {
                   分流规则: [分流规则项] = [],
                   DNS配置: DNS配置模型? = nil,
                   运行模式: 隧道运行模式 = .规则分流,
-                  日志级别: String = "trace") -> SingBox配置 {
+                  日志级别: String = "debug") -> SingBox配置 {
         var 配置 = SingBox配置()
 
         // 日志配置

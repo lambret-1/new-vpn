@@ -307,6 +307,7 @@ struct SingBox入站配置: Codable, Equatable {
         配置.sniff = 启用嗅探
         配置.sniffOverrideDestination = false
         配置.sniffTimeout = "300ms"
+        配置.udpForward = true
         return 配置
     }
 

@@ -304,6 +304,8 @@ final class SingBox配置生成器 {
         )
         // 出站顶层字段设置 TCP 快速打开（libbox v1.11.0 支持）
         配置.tcpFastOpen = true
+        // 启用 UDP 转发：支持 QUIC/HTTP3 等基于 UDP 的应用（如 TikTok）
+        配置.udpForward = true
         return 配置
     }
 
@@ -319,6 +321,7 @@ final class SingBox配置生成器 {
             传输: 生成传输配置(节点)
         )
         配置.tcpFastOpen = true
+        配置.udpForward = true
         return 配置
     }
 
@@ -333,6 +336,7 @@ final class SingBox配置生成器 {
             传输: 生成传输配置(节点)
         )
         配置.tcpFastOpen = true
+        配置.udpForward = true
         return 配置
     }
 
@@ -346,6 +350,7 @@ final class SingBox配置生成器 {
             密码: 节点.用户标识 ?? ""
         )
         配置.tcpFastOpen = true
+        配置.udpForward = true
         return 配置
     }
 
@@ -364,6 +369,14 @@ final class SingBox配置生成器 {
         规则列表.append(SingBox路由规则(
             port: [53],
             outbound: "dns-out"
+        ))
+
+        // 阻止 QUIC（UDP 443）：TikTok 等应用大量使用 QUIC/HTTP3，代理环境下 QUIC 常出问题
+        // 阻止后应用会自动降级到 TCP 443（HTTPS），确保兼容性
+        规则列表.append(SingBox路由规则(
+            network: ["udp"],
+            port: [443],
+            outbound: "REJECT"
         ))
 
         // 私有 IP 直连
@@ -387,8 +400,9 @@ final class SingBox配置生成器 {
         ))
 
         // DNS 服务器 IP 直连（避免 DNS 查询走代理导致回环）
+        // 注意：1.1.1.1 不在这里直连，因为 dns_proxy 使用 DoH（https://1.1.1.1/dns-query）需要走代理
         规则列表.append(SingBox路由规则(
-            ipCidr: ["223.5.5.5/32", "8.8.8.8/32", "1.1.1.1/32"],
+            ipCidr: ["223.5.5.5/32", "8.8.8.8/32"],
             outbound: "DIRECT"
         ))
 

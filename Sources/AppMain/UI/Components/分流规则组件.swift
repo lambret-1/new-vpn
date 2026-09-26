@@ -10,10 +10,12 @@ import SwiftUI
 
 // MARK: - 分流规则设置页面（轻量级，不加载规则列表）
 
-/// 分流规则设置页面（设置页面入口使用，避免加载几千条规则导致卡死）
+/// 分流规则设置页面（设置页面入口使用，按分组管理避免加载几千条规则卡死）
 struct 分流规则设置页面: View {
     @EnvironmentObject private var 分流管理: 分流规则管理器
-    @State private var 显示完整规则页面 = false
+    @State private var 选中的分组: 分流规则分组?
+    @State private var 显示添加分组 = false
+    @State private var 显示预设规则 = false
 
     var body: some View {
         List {
@@ -51,49 +53,256 @@ struct 分流规则设置页面: View {
                 ))
             }
 
-            Section("规则统计") {
-                HStack {
-                    Text("分组数量")
-                    Spacer()
-                    Text("\(分流管理.配置.分组列表.count) 个")
+            Section("规则分组（点击进入管理该分组规则）") {
+                if 分流管理.配置.分组列表.isEmpty {
+                    Text("暂无分组，点击下方按钮添加")
                         .foregroundColor(.secondary)
+                } else {
+                    ForEach($分流管理.配置.分组列表) { $分组 in
+                        Button {
+                            选中的分组 = 分组
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: 分组.图标)
+                                    .font(.system(size: 18))
+                                    .foregroundColor(.主题色)
+                                    .frame(width: 24)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(分组.名称)
+                                        .font(.system(size: 15, weight: .medium))
+                                        .foregroundColor(.primary)
+                                    Text("\(分组.启用规则数)/\(分组.规则列表.count) 条规则")
+                                        .font(.system(size: 12))
+                                        .foregroundColor(.secondary)
+                                }
+                                Spacer()
+                                Toggle("", isOn: Binding(
+                                    get: { 分组.启用 },
+                                    set: { _ in 分流管理.切换分组启用(分组) }
+                                ))
+                                .labelsHidden()
+                                .toggleStyle(SwitchToggleStyle(tint: .主题色))
+                                .frame(width: 45)
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 13))
+                                    .foregroundColor(.secondary)
+                            }
+                            .padding(.vertical, 4)
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    }
+                    .onDelete { 索引集 in
+                        索引集.forEach { 索引 in
+                            分流管理.删除分组(分流管理.配置.分组列表[索引])
+                        }
+                    }
                 }
-                HStack {
-                    Text("启用规则数")
-                    Spacer()
-                    Text("\(分流管理.配置.所有规则.count) 条")
-                        .foregroundColor(.secondary)
-                }
-                HStack {
-                    Text("总命中次数")
-                    Spacer()
-                    Text("\(分流管理.统计.总命中数) 次")
-                        .foregroundColor(.secondary)
-                }
-            }
 
-            Section {
                 Button {
-                    显示完整规则页面 = true
+                    显示添加分组 = true
                 } label: {
                     HStack {
-                        Label("管理规则列表", systemImage: "list.bullet")
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 13))
-                            .foregroundColor(.secondary)
+                        Image(systemName: "plus.circle.fill")
+                            .foregroundColor(.主题色)
+                        Text("添加分组")
+                            .foregroundColor(.主题色)
+                    }
+                }
+                .buttonStyle(PlainButtonStyle())
+
+                Button {
+                    显示预设规则 = true
+                } label: {
+                    HStack {
+                        Image(systemName: "square.stack.3d.down.forward")
+                            .foregroundColor(.主题色)
+                        Text("导入预设规则集")
+                            .foregroundColor(.主题色)
                     }
                 }
                 .buttonStyle(PlainButtonStyle())
             }
         }
         .listStyle(.insetGrouped)
-        .sheet(isPresented: $显示完整规则页面) {
+        .sheet(item: $选中的分组) { 分组 in
             NavigationStack {
-                分流规则页面()
+                分组规则管理页面(分组: 分组)
                     .environmentObject(分流管理)
-                    .navigationTitle("分流规则")
+                    .navigationTitle(分组.名称)
                     .navigationBarTitleDisplayMode(.inline)
+            }
+        }
+        .sheet(isPresented: $显示添加分组) {
+            添加分组页面()
+                .environmentObject(分流管理)
+        }
+        .sheet(isPresented: $显示预设规则) {
+            NavigationStack {
+                预设规则页面()
+                    .environmentObject(分流管理)
+                    .navigationTitle("预设规则集")
+                    .navigationBarTitleDisplayMode(.inline)
+            }
+        }
+    }
+}
+
+// MARK: - 分组规则管理页面（单分组，避免加载所有规则）
+
+/// 单个分组的规则管理页面
+private struct 分组规则管理页面: View {
+    let 分组: 分流规则分组
+    @EnvironmentObject private var 分流管理: 分流规则管理器
+    @State private var 显示添加规则 = false
+    @State private var 编辑的规则: 分流规则项?
+    @State private var 搜索关键词 = ""
+
+    /// 当前分组在管理器中的索引
+    private var 分组索引: Int? {
+        分流管理.配置.分组列表.firstIndex { $0.id == 分组.id }
+    }
+
+    /// 当前分组的规则列表（带搜索过滤）
+    private var 规则列表: [分流规则项] {
+        guard let 索引 = 分组索引 else { return [] }
+        let 所有规则 = 分流管理.配置.分组列表[索引].规则列表
+        if 搜索关键词.isEmpty {
+            return 所有规则
+        }
+        return 所有规则.filter { 规则 in
+            规则.匹配值.lowercased().contains(搜索关键词.lowercased()) ||
+            规则.名称.lowercased().contains(搜索关键词.lowercased())
+        }
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // 搜索栏
+            HStack(spacing: 8) {
+                AppSearchBar(搜索文字: $搜索关键词, 占位文字: "搜索规则")
+                    .frame(maxWidth: .infinity)
+                Button {
+                    显示添加规则 = true
+                } label: {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.system(size: 22))
+                        .foregroundColor(.主题色)
+                }
+            }
+            .padding(.horizontal, 15)
+            .padding(.vertical, 8)
+
+            // 规则列表
+            if 规则列表.isEmpty {
+                EmptyStateView(
+                    图标: "list.bullet",
+                    标题: "暂无规则",
+                    说明: "点击右上角添加规则",
+                    按钮文字: "添加规则"
+                ) {
+                    显示添加规则 = true
+                }
+            } else {
+                List {
+                    ForEach(规则列表) { 规则 in
+                        规则行视图(规则: Binding(
+                            get: { 规则 },
+                            set: { 新规则 in
+                                if let 索引 = 分组索引,
+                                   let 规则索引 = 分流管理.配置.分组列表[索引].规则列表.firstIndex(where: { $0.id == 规则.id }) {
+                                    分流管理.配置.分组列表[索引].规则列表[规则索引] = 新规则
+                                    分流管理.保存配置()
+                                }
+                            }
+                        ))
+                        .onTapGesture {
+                            编辑的规则 = 规则
+                        }
+                        .listRowInsets(EdgeInsets(top: 4, leading: 15, bottom: 4, trailing: 15))
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                    }
+                    .onDelete { 索引集 in
+                        guard let 分组索引 = 分组索引 else { return }
+                        索引集.forEach { 规则索引 in
+                            let 规则 = 规则列表[规则索引]
+                            分流管理.删除规则(规则)
+                        }
+                    }
+                }
+                .listStyle(.plain)
+            }
+        }
+        .background(Color.页面背景)
+        .sheet(isPresented: $显示添加规则) {
+            规则编辑页面(规则: nil, 分组: 分组)
+                .environmentObject(分流管理)
+        }
+        .sheet(item: $编辑的规则) { 规则 in
+            规则编辑页面(规则: 规则, 分组: 分组)
+                .environmentObject(分流管理)
+        }
+    }
+}
+
+// MARK: - 添加分组页面
+
+/// 添加分组页面
+private struct 添加分组页面: View {
+    @EnvironmentObject private var 分流管理: 分流规则管理器
+    @Environment(\.dismiss) private var 关闭
+    @State private var 分组名称 = ""
+    @State private var 分组描述 = ""
+    @State private var 分组图标 = "folder"
+
+    private let 图标列表 = ["star", "folder", "globe", "cart", "video", "music", "book", "gamecontroller", "briefcase", "heart"]
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("分组信息") {
+                    TextField("分组名称", text: $分组名称)
+                    TextField("分组描述（可选）", text: $分组描述)
+                }
+                Section("选择图标") {
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 5), spacing: 12) {
+                        ForEach(图标列表, id: \.self) { 图标 in
+                            Button {
+                                分组图标 = 图标
+                            } label: {
+                                Image(systemName: 图标)
+                                    .font(.system(size: 20))
+                                    .foregroundColor(分组图标 == 图标 ? .white : .primary)
+                                    .frame(width: 44, height: 44)
+                                    .background(分组图标 == 图标 ? Color.主题色 : Color.卡片背景)
+                                    .cornerRadius(10)
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                        }
+                    }
+                    .padding(.vertical, 8)
+                }
+            }
+            .navigationTitle("添加分组")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("取消") { 关闭() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("保存") {
+                        guard !分组名称.isEmpty else { return }
+                        let 新分组 = 分流规则分组(
+                            名称: 分组名称,
+                            描述: 分组描述.isEmpty ? nil : 分组描述,
+                            图标: 分组图标,
+                            规则列表: []
+                        )
+                        分流管理.添加分组(新分组)
+                        关闭()
+                    }
+                    .disabled(分组名称.isEmpty)
+                }
             }
         }
     }

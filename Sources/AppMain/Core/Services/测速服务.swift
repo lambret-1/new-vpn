@@ -69,7 +69,11 @@ final class 测速服务 {
         }
 
         let 主机 = NWEndpoint.Host(地址)
-        let 连接 = NWConnection(host: 主机, port: 端口号, using: .tcp)
+        // 创建 TCP 参数，禁止使用 VPN 接口（.other），强制使用物理网络接口
+        // 避免 VPN 连接后测速被隧道接管，显示虚假的低延迟
+        let 参数 = NWParameters.tcp
+        参数.prohibitedInterfaceTypes = [.other]
+        let 连接 = NWConnection(host: 主机, port: 端口号, using: 参数)
 
         let 信号 = DispatchSemaphore(value: 0)
         var 延迟: Int?

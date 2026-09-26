@@ -97,22 +97,20 @@ struct 分流规则内容区: View {
             if 分流管理.配置.分组列表.isEmpty {
                 空状态视图()
             } else {
-                LazyVStack(spacing: 10) {
+                VStack(spacing: 10) {
                     ForEach($分流管理.配置.分组列表) { $分组 in
                         分组卡片(
                             分组: $分组,
                             已展开: 展开的分组ID == 分组.id,
-                            搜索关键词: 搜索关键词
-                        )
-                        .onTapGesture {
-                            withAnimation(.easeInOut(duration: 0.2)) {
+                            搜索关键词: 搜索关键词,
+                            切换展开: {
                                 if 展开的分组ID == 分组.id {
                                     展开的分组ID = nil
                                 } else {
                                     展开的分组ID = 分组.id
                                 }
                             }
-                        }
+                        )
                     }
                 }
             }
@@ -147,11 +145,9 @@ private struct 分组卡片: View {
     @Binding var 分组: 分流规则分组
     let 已展开: Bool
     let 搜索关键词: String
+    let 切换展开: () -> Void
     @EnvironmentObject private var 分流管理: 分流规则管理器
-    /// 当前显示的规则数量（点击加载更多时增加）
     @State private var 当前显示数量 = 30
-
-    /// 单次加载的规则数量（避免几千条规则同时渲染卡死）
     private let 每页规则数 = 30
 
     /// 过滤后的规则列表
@@ -166,7 +162,7 @@ private struct 分组卡片: View {
         }
     }
 
-    /// 当前显示的规则（限制数量）
+    /// 当前显示的规则
     private var 显示的规则: [分流规则项] {
         Array(过滤后的规则.prefix(当前显示数量))
     }
@@ -178,20 +174,35 @@ private struct 分组卡片: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // 分组标题行
-            HStack(spacing: 10) {
-                Image(systemName: 分组.图标)
-                    .font(.system(size: 16))
-                    .foregroundColor(.主题色)
-                    .frame(width: 20)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(分组.名称)
-                        .font(.system(size: 15, weight: .medium))
-                    Text("\(分组.启用规则数)/\(分组.规则列表.count) 条规则")
-                        .font(.system(size: 12))
+            // 分组标题行（点击展开/折叠）
+            Button(action: 切换展开) {
+                HStack(spacing: 10) {
+                    Image(systemName: 分组.图标)
+                        .font(.system(size: 16))
+                        .foregroundColor(.主题色)
+                        .frame(width: 20)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(分组.名称)
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundColor(.primary)
+                        Text("\(分组.启用规则数)/\(分组.规则列表.count) 条规则")
+                            .font(.system(size: 12))
+                            .foregroundColor(.secondary)
+                    }
+                    Spacer()
+                    Image(systemName: 已展开 ? "chevron.down" : "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(.secondary)
+                        .frame(width: 20)
                 }
-                Spacer()
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
+                .background(Color.卡片背景)
+                .cornerRadius(12)
+            }
+            .buttonStyle(PlainButtonStyle())
+            // 启用开关（独立于展开点击）
+            .overlay(alignment: .trailing) {
                 Toggle("", isOn: Binding(
                     get: { 分组.启用 },
                     set: { _ in 分流管理.切换分组启用(分组) }
@@ -199,17 +210,10 @@ private struct 分组卡片: View {
                 .labelsHidden()
                 .toggleStyle(SwitchToggleStyle(tint: .主题色))
                 .frame(width: 45)
-                Image(systemName: 已展开 ? "chevron.down" : "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.secondary)
-                    .frame(width: 20)
+                .padding(.trailing, 40)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 12)
-            .background(Color.卡片背景)
-            .cornerRadius(12)
 
-            // 展开的规则列表
+            // 展开的规则列表（无动画，避免重影）
             if 已展开 {
                 VStack(spacing: 8) {
                     if 过滤后的规则.isEmpty {
@@ -241,7 +245,6 @@ private struct 分组卡片: View {
                 .background(Color.卡片背景.opacity(0.5))
                 .cornerRadius(12)
                 .padding(.top, 8)
-                .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
     }

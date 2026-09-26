@@ -400,7 +400,7 @@ struct 预设规则集: Identifiable, Codable, Hashable {
         .国内直连,
         .广告拦截,
         .全局代理
-    ]
+    ] + 全部导入预设
 }
 
 // MARK: - 分流规则测试结果

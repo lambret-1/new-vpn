@@ -361,22 +361,19 @@ final class 分流规则管理器: ObservableObject {
         let 目标域名 = 域名.lowercased()
 
         switch 规则.类型 {
+        case .域名精确:
+            return 目标域名 == 匹配值
         case .域名后缀:
             return 目标域名.hasSuffix(匹配值) || 目标域名 == 匹配值
-        case .域名关键字:
+        case .域名关键词:
             return 目标域名.contains(匹配值)
-        case .域名完整:
-            return 目标域名 == 匹配值
+        case .正则表达式:
+            return false
         case .IP地址:
             return 目标域名 == 匹配值
         case .IP段:
-            // IP段匹配较复杂，这里简化处理
             return false
-        case .端口:
-            return false
-        case .进程名:
-            return false
-        case .网络类型:
+        case .端口, .端口范围, .协议, .进程名称, .用户代理, .地理区域, .全部:
             return false
         }
     }

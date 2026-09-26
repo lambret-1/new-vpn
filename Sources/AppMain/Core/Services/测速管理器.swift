@@ -50,6 +50,40 @@ final class 测速管理器: ObservableObject {
 
     // MARK: - 单节点测速
 
+    /// 测单个节点的真实延迟：
+    /// 隧道已连时，App 自身 TCP 会被 TUN 截获（假 5ms），改走扩展进程测速（扩展出站绕过 TUN，真实 RTT）；
+    /// 隧道未连时，App 本地直连测试即可。
+    private func 测速节点真实(_ 节点: 节点模型) -> 测速结果模型 {
+        var 结果 = 测速结果模型.空结果(节点ID: 节点.id)
+
+        if 隧道管理器.共享.当前状态.是否活动 {
+            let 信号 = DispatchSemaphore(value: 0)
+            var 延迟ms: Int?
+            隧道管理器.共享.发送消息到扩展(
+                ["action": "testLatency", "address": 节点.地址, "port": 节点.端口]
+            ) { 响应, _ in
+                延迟ms = 响应?["latency"] as? Int
+                信号.signal()
+            }
+            _ = 信号.wait(timeout: .now() + 6)
+
+            if let ms = 延迟ms {
+                结果.延迟毫秒 = ms
+                结果.成功 = true
+            } else {
+                结果.成功 = false
+                结果.错误信息 = "扩展测速超时"
+                结果.丢包率 = 100
+            }
+        } else {
+            // 未连接：本地直连，测的是真实网络 RTT
+            return 测速服务.共享.测速节点(节点, 配置: self.配置)
+        }
+
+        结果.测速时间 = Date()
+        return 结果
+    }
+
     /// 测速单个节点
     /// - Parameters:
     ///   - 节点: 节点模型
@@ -60,7 +94,7 @@ final class 测速管理器: ObservableObject {
         并发队列.async { [weak self] in
             guard let self = self else { return }
 
-            let 结果 = 测速服务.共享.测速节点(节点, 配置: self.配置)
+            let 结果 = self.测速节点真实(节点)
 
             DispatchQueue.main.async {
                 self.测速结果缓存[节点.id] = 结果
@@ -118,7 +152,7 @@ final class 测速管理器: ObservableObject {
                         self.批量进度?.当前节点名称 = 节点.名称
                     }
 
-                    let 结果 = 测速服务.共享.测速节点(节点, 配置: self.配置)
+                    let 结果 = self.测速节点真实(节点)
 
                     DispatchQueue.main.async {
                         self.测速结果缓存[节点.id] = 结果

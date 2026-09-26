@@ -7,6 +7,7 @@
 //
 
 import NetworkExtension
+import Network
 import os
 
 // MARK: - 隧道提供者
@@ -223,6 +224,28 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                         completionHandler?(nil)
                     }
 
+                case "testLatency":
+                    // 在扩展进程内做 TCP 连接测速：扩展自身出站绕过本 TUN，
+                    // 测到的是到远端服务器的真实 RTT（App 进程测会被 TUN 截获，虚高为 ~5ms）
+                    guard let 地址 = 消息["address"] as? String,
+                          let 端口 = 消息["port"] as? Int else {
+                        let 响应 = ["error": "缺少 address/port"]
+                        completionHandler?(try? JSONSerialization.data(withJSONObject: 响应))
+                        return
+                    }
+                    记录扩展日志(级别: "信息", 模块: "测速", 内容: "开始测试 \(地址):\(端口)")
+                    测试TCP延迟(地址: 地址, 端口: 端口) { 延迟ms in
+                        var 响应: [String: Any] = [:]
+                        if let ms = 延迟ms {
+                            响应["latency"] = ms
+                            self.记录扩展日志(级别: "信息", 模块: "测速", 内容: "\(地址):\(端口) = \(ms)ms")
+                        } else {
+                            响应["error"] = "timeout"
+                            self.记录扩展日志(级别: "错误", 模块: "测速", 内容: "\(地址):\(端口) 连接失败")
+                        }
+                        completionHandler?(try? JSONSerialization.data(withJSONObject: 响应))
+                    }
+
                 default:
                     let 响应 = ["error": "未知动作"]
                     completionHandler?(try JSONSerialization.data(withJSONObject: 响应))
@@ -231,6 +254,39 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         } catch {
             日志.error("处理消息失败：\(error.localizedDescription)")
             completionHandler?(nil)
+        }
+    }
+
+    // MARK: - 节点测速（扩展进程内，绕过自身 TUN）
+
+    /// 在扩展进程内对 地址:端口 做一次 TCP 连接，返回真实 RTT(ms)，失败返回 nil
+    private func 测试TCP延迟(地址: String, 端口: Int, 完成: @escaping (Int?) -> Void) {
+        guard let 端口号 = NWEndpoint.Port(rawValue: UInt16(端口)) else {
+            完成(nil)
+            return
+        }
+        let 连接 = NWConnection(host: NWEndpoint.Host(地址), port: 端口号, using: .tcp)
+        let 开始 = Date()
+        var 已回 = false
+        let 回包: (Int?) -> Void = { ms in
+            guard !已回 else { return }
+            已回 = true
+            连接.cancel()
+            完成(ms)
+        }
+        连接.stateUpdateHandler = { 状态 in
+            switch 状态 {
+            case .ready:
+                回包(Int(Date().timeIntervalSince(开始) * 1000))
+            case .failed:
+                回包(nil)
+            default:
+                break
+            }
+        }
+        连接.start(queue: .global(qos: .userInitiated))
+        DispatchQueue.global().asyncAfter(deadline: .now() + 5.0) {
+            回包(nil)
         }
     }
 

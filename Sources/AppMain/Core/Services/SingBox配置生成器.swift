@@ -154,7 +154,7 @@ final class SingBox配置生成器 {
             // 注意：Network Extension 中必须用 gvisor 栈，system 栈需要 root 权限
             // auto_route/strict_route 由系统 NEPacketTunnelNetworkSettings 控制，不需 sing-box 管理
             // MTU 降低到 1400：避免物理网卡 MTU 差异导致大包分片被丢弃触发 RST
-            // DNS 拦截通过路由规则将目标端口53流量转发到 dns-out 出站实现
+            // dns_address：拦截发往该地址的 DNS 查询，交由 sing-box 内部 DNS 模块处理（比路由规则+dns-out更可靠）
             // 启用协议嗅探（sniff）：从 TLS Client Hello 中提取 SNI 域名，提升分流精度
             SingBox入站配置.tun入站(
                 标签: "tun-in",
@@ -163,6 +163,7 @@ final class SingBox配置生成器 {
                 自动路由: false,
                 严格路由: false,
                 网络栈: "gvisor",
+                DNS地址: "10.0.0.2",
                 启用嗅探: true
             ),
             // Mixed 入站（HTTP+SOCKS5，用于本地应用）
@@ -237,11 +238,6 @@ final class SingBox配置生成器 {
 
         // Block 出站
         出站列表.append(SingBox出站配置.block出站(标签: "REJECT"))
-
-        // DNS 出站：将目标端口 53 的流量交给 sing-box DNS 模块处理
-        // libbox v1.11.0 不支持 TUN 入站的 dns_address 字段，改用路由规则 + dns-out 方式拦截 DNS
-        // dns 出站只需 type 和 tag，不支持 no_drop 字段
-        出站列表.append(SingBox出站配置(type: "dns", tag: "dns-out"))
 
         return 出站列表
     }
@@ -357,13 +353,6 @@ final class SingBox配置生成器 {
     ///   - 运行模式: 隧道运行模式，决定最终出站
     private func 生成路由配置(分流规则: [分流规则项], 节点: 节点模型?, 运行模式: 隧道运行模式) -> SingBox路由配置 {
         var 规则列表: [SingBox路由规则] = []
-
-        // DNS 拦截：目标端口 53 的流量转发到 dns-out 出站，交给 sing-box DNS 模块处理
-        // libbox v1.11.0 不支持 TUN 入站 dns_address 字段，改用路由规则方式拦截
-        规则列表.append(SingBox路由规则(
-            port: [53],
-            outbound: "dns-out"
-        ))
 
         // 私有 IP 直连
         规则列表.append(SingBox路由规则(

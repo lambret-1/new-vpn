@@ -240,7 +240,7 @@ struct 预设规则集: Identifiable, Codable, Hashable {
 
         for (索引, 域名) in 国内域名后缀.enumerated() {
             规则.append(分流规则项(
-                名称: "国内直连 - \(域名)",
+                名称: 域名,
                 类型: .域名后缀,
                 匹配值: 域名,
                 动作: .直连,
@@ -284,7 +284,7 @@ struct 预设规则集: Identifiable, Codable, Hashable {
 
         for (索引, IP段) in 国内IP段.enumerated() {
             规则.append(分流规则项(
-                名称: "国内IP - \(IP段)",
+                名称: IP段,
                 类型: .IP段,
                 匹配值: IP段,
                 动作: .直连,
@@ -335,7 +335,7 @@ struct 预设规则集: Identifiable, Codable, Hashable {
 
         for (索引, 域名) in 广告域名.enumerated() {
             规则.append(分流规则项(
-                名称: "广告拦截 - \(域名)",
+                名称: 域名,
                 类型: .域名后缀,
                 匹配值: 域名,
                 动作: .拦截,

@@ -89,12 +89,6 @@ final class SingBox配置生成器 {
         // DNS 规则列表
         var DNS规则列表: [SingBoxDNS规则] = []
 
-        // 拦截 iOS 系统的 DDR（加密 DNS 发现）查询，避免大量 _dns.resolver.arpa SVCB 查询报错
-        var ddr拦截规则 = SingBoxDNS规则(域名: ["_dns.resolver.arpa"], 服务器: "dns_resolver")
-        ddr拦截规则.reject = true
-        ddr拦截规则.rejectMethod = "noerror"
-        DNS规则列表.append(ddr拦截规则)
-
         // 国内域名走阿里云 DNS 直连解析（域名后缀匹配）
         let 国内域名后缀 = [
             "cn", "com.cn", "net.cn", "org.cn", "gov.cn", "edu.cn",

@@ -314,4 +314,70 @@ final class 分流规则管理器: ObservableObject {
             .filter { $0.命中次数 > 0 }
             .sorted { $0.命中次数 > $1.命中次数 }
     }
+
+    // MARK: - 连接记录同步（用于规则命中统计）
+
+    /// 从 App Group 读取隧道连接记录，匹配规则并更新命中次数
+    /// 由主应用定期调用（如每5秒），将实际流量命中同步到规则统计
+    func 同步连接记录并更新命中() {
+        guard let 共享默认 = UserDefaults(suiteName: "group.com.newvpn.app"),
+              let 记录列表 = 共享默认.array(forKey: "connectionRecords") as? [[String: Any]] else {
+            return
+        }
+
+        guard !记录列表.isEmpty else { return }
+
+        var 有更新 = false
+
+        for 记录 in 记录列表 {
+            guard let 域名 = 记录["域名"] as? String else { continue }
+
+            // 匹配规则并更新命中
+            for (分组索引, 分组) in 配置.分组列表.enumerated() {
+                guard 分组.启用 else { continue }
+                for (规则索引, 规则) in 分组.规则列表.enumerated() {
+                    guard 规则.启用 else { continue }
+                    if 规则匹配域名(规则, 域名: 域名) {
+                        配置.分组列表[分组索引].规则列表[规则索引].命中次数 += 1
+                        配置.分组列表[分组索引].规则列表[规则索引].最后命中时间 = Date()
+                        有更新 = true
+                        break // 一个域名只匹配第一条规则
+                    }
+                }
+            }
+        }
+
+        if 有更新 {
+            保存配置()
+        }
+
+        // 清空已处理的连接记录，避免重复统计
+        共享默认.removeObject(forKey: "connectionRecords")
+    }
+
+    /// 判断规则是否匹配域名
+    private func 规则匹配域名(_ 规则: 分流规则项, 域名: String) -> Bool {
+        let 匹配值 = 规则.匹配值.lowercased()
+        let 目标域名 = 域名.lowercased()
+
+        switch 规则.类型 {
+        case .域名后缀:
+            return 目标域名.hasSuffix(匹配值) || 目标域名 == 匹配值
+        case .域名关键字:
+            return 目标域名.contains(匹配值)
+        case .域名完整:
+            return 目标域名 == 匹配值
+        case .IP地址:
+            return 目标域名 == 匹配值
+        case .IP段:
+            // IP段匹配较复杂，这里简化处理
+            return false
+        case .端口:
+            return false
+        case .进程名:
+            return false
+        case .网络类型:
+            return false
+        }
+    }
 }

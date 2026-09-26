@@ -665,6 +665,68 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         }
     }
 
+    // MARK: - 连接记录（用于规则命中统计）
+
+    /// 解析 sing-box 连接日志并记录目标域名/IP到共享 UserDefaults
+    /// 支持的日志格式：
+    /// - connection: inbound connection from 10.0.0.2:12345 to example.com:443
+    /// - connection: outbound connection to example.com:443
+    private func 解析并记录连接(_ 日志内容: String) {
+        // 只处理连接相关日志
+        guard 日志内容.contains("connection:") else { return }
+
+        // 提取目标地址（域名或IP:端口）
+        var 目标地址: String?
+
+        // 格式1：inbound connection from ... to example.com:443
+        if let 范围 = 日志内容.range(of: "to ") {
+            let 剩余 = String(日志内容[范围.upperBound...])
+            if let 空格范围 = 剩余.rangeOfCharacter(from: .whitespacesAndNewlines) {
+                目标地址 = String(剩余[..<空格范围.lowerBound])
+            } else {
+                目标地址 = 剩余.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+        }
+
+        guard let 地址 = 目标地址, !地址.isEmpty else { return }
+
+        // 提取域名或IP（去掉端口）
+        let 域名或IP: String
+        if let 冒号范围 = 地址.range(of: ":", options: .backwards) {
+            域名或IP = String(地址[..<冒号范围.lowerBound])
+        } else {
+            域名或IP = 地址
+        }
+
+        // 过滤掉无效地址和内网地址
+        guard !域名或IP.isEmpty,
+              !域名或IP.hasPrefix("10."),
+              !域名或IP.hasPrefix("192.168."),
+              !域名或IP.hasPrefix("172.16.") else { return }
+
+        // 串行化写入
+        共享队列.async { [weak self] in
+            guard let self = self, let 共享默认 = self.共享默认 else { return }
+
+            var 记录列表 = 共享默认.array(forKey: "connectionRecords") as? [[String: Any]] ?? []
+
+            // 去重：最近10条内相同域名不重复记录
+            let 最近域名 = Set(记录列表.prefix(10).compactMap { $0["域名"] as? String })
+            guard !最近域名.contains(域名或IP) else { return }
+
+            let 连接记录: [String: Any] = [
+                "域名": 域名或IP,
+                "时间": Date().timeIntervalSince1970
+            ]
+
+            记录列表.insert(连接记录, at: 0)
+            if 记录列表.count > 100 {
+                记录列表 = Array(记录列表.prefix(100))
+            }
+            共享默认.set(记录列表, forKey: "connectionRecords")
+        }
+    }
+
     // MARK: - 配置管理
 
     /// 加载隧道配置
@@ -845,6 +907,8 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             }
             // 解析 DNS 查询日志并记录（独立于调试日志开关）
             self.解析并记录DNS查询(内容)
+            // 解析连接日志并记录（用于规则命中统计）
+            self.解析并记录连接(内容)
         }
         记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "日志回调已设置")
 

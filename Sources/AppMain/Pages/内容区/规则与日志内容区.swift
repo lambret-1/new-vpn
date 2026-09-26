@@ -75,6 +75,8 @@ struct 分流规则内容区: View {
     @State private var 显示添加分组 = false
     @State private var 重命名的分组: 分流规则分组?
     @State private var 重命名名称 = ""
+    @State private var 预设导入目标分组: 分流规则分组?
+    @State private var 显示预设到分组 = false
 
     /// 统计数据
     private var 统计: (分组数: Int, 总规则数: Int, 启用规则数: Int, 总命中数: Int) {
@@ -194,6 +196,10 @@ struct 分流规则内容区: View {
                             },
                             删除分组: {
                                 分流管理.删除分组(分组)
+                            },
+                            导入预设到分组: {
+                                预设导入目标分组 = 分组
+                                显示预设到分组 = true
                             }
                         )
                     }
@@ -243,7 +249,28 @@ struct 分流规则内容区: View {
         } message: {
             Text("请输入新的分组名称")
         }
+        .sheet(isPresented: $显示预设到分组) {
+            if let 目标分组 = 预设导入目标分组 {
+                预设规则选择页面(目标分组: 目标分组)
+                    .environmentObject(分流管理)
+            }
+        }
+        .onAppear {
+            // 页面出现时立即同步一次连接记录
+            分流管理.同步连接记录并更新命中()
+            // 启动定时器，每5秒同步一次连接记录（用于规则命中统计）
+            命中同步定时器 = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { _ in
+                分流管理.同步连接记录并更新命中()
+            }
+        }
+        .onDisappear {
+            命中同步定时器?.invalidate()
+            命中同步定时器 = nil
+        }
     }
+
+    /// 命中统计同步定时器
+    @State private var 命中同步定时器: Timer?
 
     /// 统计项
     private func 统计项(数值: Int, 标签: String, 颜色: Color) -> some View {
@@ -296,6 +323,7 @@ private struct 分组卡片: View {
     let 切换展开: () -> Void
     let 重命名分组: () -> Void
     let 删除分组: () -> Void
+    let 导入预设到分组: () -> Void
     @EnvironmentObject private var 分流管理: 分流规则管理器
     @State private var 当前显示数量 = 30
     private let 每页规则数 = 30
@@ -362,12 +390,17 @@ private struct 分组卡片: View {
                 .frame(width: 45)
                 .padding(.trailing, 40)
             }
-            // 长按菜单：重命名、删除
+            // 长按菜单：重命名、导入预设、删除
             .contextMenu {
                 Button {
                     重命名分组()
                 } label: {
                     Label("重命名分组", systemImage: "pencil")
+                }
+                Button {
+                    导入预设到分组()
+                } label: {
+                    Label("导入预设规则集", systemImage: "square.stack.3d.down.forward")
                 }
                 Button(role: .destructive) {
                     删除分组()
@@ -603,6 +636,60 @@ private struct 分组名称输入页面: View {
                         }
                     }
                     .disabled(分组名称.isEmpty)
+                }
+            }
+        }
+    }
+}
+
+// MARK: - 预设规则选择页面（导入到指定分组）
+
+/// 预设规则选择页面（用于分组长按菜单导入预设到指定分组）
+private struct 预设规则选择页面: View {
+    @EnvironmentObject private var 分流管理: 分流规则管理器
+    @Environment(\.dismiss) private var 关闭
+    let 目标分组: 分流规则分组
+
+    var body: some View {
+        NavigationStack {
+            List {
+                ForEach(预设规则集.所有预设) { 预设 in
+                    Button {
+                        分流管理.导入预设规则(预设, 追加到分组: 目标分组)
+                        关闭()
+                    } label: {
+                        HStack(spacing: 12) {
+                            ZStack {
+                                Circle()
+                                    .fill(Color.主题色.opacity(0.15))
+                                    .frame(width: 40, height: 40)
+                                Image(systemName: 预设.图标)
+                                    .font(.system(size: 18))
+                                    .foregroundColor(.主题色)
+                            }
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(预设.名称)
+                                    .font(.system(size: 15, weight: .medium))
+                                Text("\(预设.规则列表.count) 条规则")
+                                    .font(.system(size: 11))
+                                    .foregroundColor(.主题色)
+                            }
+                            Spacer()
+                            Image(systemName: "plus.circle")
+                                .font(.system(size: 18))
+                                .foregroundColor(.主题色)
+                        }
+                        .padding(.vertical, 4)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                }
+            }
+            .listStyle(.insetGrouped)
+            .navigationTitle("导入到「\(目标分组.名称)」")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("取消") { 关闭() }
                 }
             }
         }

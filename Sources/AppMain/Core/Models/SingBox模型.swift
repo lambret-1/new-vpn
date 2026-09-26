@@ -120,10 +120,10 @@ struct SingBoxDNS配置: Codable, Equatable {
     var rules: [SingBoxDNS规则]?
 
     /// 默认配置（兼容当前 libbox 版本，detour 避免 DNS 回环）
-    /// dns_resolver 用 TCP 而非 UDP：iOS NE 下 DIRECT 出站 bind_interface 后 UDP 回包失败
+    /// dns_resolver 用 DoT(tls://) 而非 UDP/tcp：iOS NE 下 UDP 回包失败，tcp:// 被误判为 HTTP 返回 403
     static let 默认 = SingBoxDNS配置(
         servers: [
-            SingBoxDNS服务器.tcp服务器(标签: "dns_resolver", 地址: "223.5.5.5", 出站: "DIRECT"),
+            SingBoxDNS服务器.tls服务器(标签: "dns_resolver", 地址: "223.5.5.5", 出站: "DIRECT"),
             SingBoxDNS服务器.tls服务器(标签: "dns_proxy", 地址: "8.8.8.8", 出站: "proxy")
         ],
         final: "dns_proxy",

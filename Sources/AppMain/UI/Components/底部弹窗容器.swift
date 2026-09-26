@@ -187,6 +187,10 @@ private struct 设置视图: View {
     @EnvironmentObject private var 分流管理: 分流规则管理器
     /// 是否显示证书与描述文件页面
     @State private var 显示证书页面 = false
+    /// 是否显示 DNS 设置页面
+    @State private var 显示DNS设置 = false
+    /// 是否显示分流规则页面
+    @State private var 显示分流规则 = false
 
     var body: some View {
         List {
@@ -197,9 +201,8 @@ private struct 设置视图: View {
             }
             Section("网络") {
                 // DNS 设置：显示当前策略，点击进入 DNS 设置页面
-                NavigationLink {
-                    DNS设置页面()
-                        .environmentObject(DNS管理)
+                Button {
+                    显示DNS设置 = true
                 } label: {
                     HStack {
                         Label("DNS 设置", systemImage: "network")
@@ -207,8 +210,12 @@ private struct 设置视图: View {
                         Text(DNS管理.配置.策略.rawValue)
                             .font(.system(size: 12))
                             .foregroundColor(.secondary)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 13))
+                            .foregroundColor(.secondary)
                     }
                 }
+                .buttonStyle(PlainButtonStyle())
 
                 // 代理模式：显示当前运行模式，点击切换
                 Button {
@@ -228,9 +235,8 @@ private struct 设置视图: View {
                 .buttonStyle(PlainButtonStyle())
 
                 // 分流规则：显示启用规则数量，点击进入分流规则页面
-                NavigationLink {
-                    分流规则页面()
-                        .environmentObject(分流管理)
+                Button {
+                    显示分流规则 = true
                 } label: {
                     HStack {
                         Label("分流规则", systemImage: "arrow.triangle.branch")
@@ -238,8 +244,12 @@ private struct 设置视图: View {
                         Text("\(分流管理.配置.所有规则.count) 条启用")
                             .font(.system(size: 12))
                             .foregroundColor(.secondary)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 13))
+                            .foregroundColor(.secondary)
                     }
                 }
+                .buttonStyle(PlainButtonStyle())
             }
             Section("安全") {
                 Button {
@@ -284,6 +294,22 @@ private struct 设置视图: View {
         .sheet(isPresented: $显示证书页面) {
             证书与描述文件页面()
                 .environmentObject(证书管理)
+        }
+        .sheet(isPresented: $显示DNS设置) {
+            NavigationStack {
+                DNS设置页面()
+                    .environmentObject(DNS管理)
+                    .navigationTitle("DNS 设置")
+                    .navigationBarTitleDisplayMode(.inline)
+            }
+        }
+        .sheet(isPresented: $显示分流规则) {
+            NavigationStack {
+                分流规则页面()
+                    .environmentObject(分流管理)
+                    .navigationTitle("分流规则")
+                    .navigationBarTitleDisplayMode(.inline)
+            }
         }
     }
 

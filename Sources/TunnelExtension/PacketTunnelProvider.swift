@@ -42,10 +42,16 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     private var 是否运行中 = false
 
     /// DNS 查询开始时间追踪（域名: 开始时间），用于计算响应耗时
+    /// 注意：sing-box 日志回调在 Go 运行时的多个并发线程上触发，访问此字典必须经过 扩展数据队列 串行化
     private var DNS查询开始时间: [String: Date] = [:]
 
     /// sing-box 内核是否运行中
     private var singBox运行中 = false
+
+    /// 扩展内共享可变状态的串行队列
+    /// sing-box 日志回调会在多个 Go 线程并发回调，同时主线程 Timer 也会清理 DNS 记录，
+    /// 无锁并发读写字典/UserDefaults 数组会触发 Swift 独占检查崩溃或堆损坏（对应 commit eb043b4 提到的数据竞争）
+    private let 扩展数据队列 = DispatchQueue(label: "com.newvpn.app.tunnel.sharedstate", qos: .utility)
 
     /// sing-box 内核桥接
     private let singBox桥接 = SingBox内核桥接.共享
@@ -344,9 +350,11 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     /// 清理超过 30 秒的 DNS 查询开始时间记录，防止字典无限增长导致内存超限
     private func 清理超时的DNS查询开始时间() {
         let 超时阈值: TimeInterval = 30
-        let 现在 = Date()
-        DNS查询开始时间 = DNS查询开始时间.filter { _, 开始时间 in
-            现在.timeIntervalSince(开始时间) <= 超时阈值
+        扩展数据队列.async {
+            let 现在 = Date()
+            self.DNS查询开始时间 = self.DNS查询开始时间.filter { _, 开始时间 in
+                现在.timeIntervalSince(开始时间) <= 超时阈值
+            }
         }
     }
 
@@ -397,7 +405,10 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                 .trimmingCharacters(in: .whitespaces)
             let 域名 = 剩余部分.components(separatedBy: .whitespaces).first ?? 剩余部分
             if !域名.isEmpty {
-                DNS查询开始时间[域名] = Date()
+                // 串行化写：与主线程清理 Timer、以及 exchanged 分支的读取在同一队列
+                扩展数据队列.async {
+                    self.DNS查询开始时间[域名] = Date()
+                }
             }
             return
         }
@@ -480,10 +491,15 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
     /// 计算 DNS 响应耗时（毫秒），查找不到开始时间则返回 nil
     private func 计算DNS响应时间(域名: String) -> Int? {
-        guard let 开始时间 = DNS查询开始时间[域名] else { return nil }
-        DNS查询开始时间.removeValue(forKey: 域名)
-        let 耗时 = Int(Date().timeIntervalSince(开始时间) * 1000)
-        return 耗时 > 0 ? 耗时 : nil
+        var 耗时: Int?
+        // 与写入、清理在同一串行队列，保证读-删原子
+        扩展数据队列.sync {
+            guard let 开始时间 = self.DNS查询开始时间[域名] else { return }
+            self.DNS查询开始时间.removeValue(forKey: 域名)
+            let ms = Int(Date().timeIntervalSince(开始时间) * 1000)
+            耗时 = ms > 0 ? ms : nil
+        }
+        return 耗时
     }
 
     /// 保存 DNS 记录到共享 UserDefaults
@@ -565,7 +581,9 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         let 条目 = 扩展日志条目(id: UUID(), 时间: Date(), 级别: 级别, 模块: 模块, 内容: 内容)
 
         // 保存到共享 UserDefaults（格式与主 App 读取一致）
-        if let 共享默认 = 共享默认 {
+        // 必须串行化：日志回调来自多个 Go 线程，并发 decode-insert-encode-set 会丢日志并可能损坏
+        扩展数据队列.async { [weak self] in
+            guard let 自 = self, let 共享默认 = 自.共享默认 else { return }
             var 日志列表: [扩展日志条目] = []
             if let 日志数据 = 共享默认.data(forKey: "tunnelLogs"),
                let 已存列表 = try? JSONDecoder().decode([扩展日志条目].self, from: 日志数据) {

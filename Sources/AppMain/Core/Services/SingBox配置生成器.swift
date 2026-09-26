@@ -374,8 +374,8 @@ final class SingBox配置生成器 {
         // 阻止 QUIC（UDP 443）：TikTok 等应用大量使用 QUIC/HTTP3，代理环境下 QUIC 常出问题
         // 阻止后应用会自动降级到 TCP 443（HTTPS），确保兼容性
         规则列表.append(SingBox路由规则(
-            network: ["udp"],
             port: [443],
+            network: ["udp"],
             outbound: "REJECT"
         ))
 

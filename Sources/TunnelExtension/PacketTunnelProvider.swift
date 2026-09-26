@@ -267,8 +267,9 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     /// 因此这里用 SO_BINDTODEVICE 把探测 socket 钉在物理网卡（en0 / pdp_ip0）上，
     /// 让 SYN 从物理网卡直连节点服务器、SYN-ACK 从物理网卡回来，测到真实 RTT。
     private func 测试TCP延迟(地址: String, 端口: Int, 完成: @escaping (Int?) -> Void) {
-        DispatchQueue.global(qos: .userInitiated).async {
-            let ms = 物理接口TCP连接RTT(地址: 地址, 端口: 端口, 超时: 5.0)
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { 完成(nil); return }
+            let ms = self.物理接口TCP连接RTT(地址: 地址, 端口: 端口, 超时: 5.0)
             完成(ms)
         }
     }
@@ -296,10 +297,10 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         defer { 关闭fd() }
 
         // 3. 关键：把 socket 钉到物理出接口，绕过本 TUN
+        // SO_BINDTODEVICE 在 iOS SDK 中 Swift 桥接未导出该符号，其数值为 25
         guard let 接口名 = 首个物理接口名() else { return nil }
         接口名.withCString { 名 in
-            var 长度 = socklen_t(strlen(名))
-            setsockopt(fd, SOL_SOCKET, SO_BINDTODEVICE, 名, &长度)
+            setsockopt(fd, SOL_SOCKET, 25, 名, socklen_t(strlen(名)))
         }
 
         // 4. 设为非阻塞
@@ -331,11 +332,11 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         写源.resume()
 
         DispatchQueue.global().asyncAfter(deadline: .now() + 超时) {
-            if !已完成 { 最终错误 = ETIMEDOUT }
+            if !已完成 { 最终错误 = Int(ETIMEDOUT) }
             信号.signal()
         }
 
-        _ = 信号.wait()
+        信号.wait()
         写源.cancel()
         if 最终错误 != 0 { return nil }
 

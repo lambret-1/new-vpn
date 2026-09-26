@@ -191,6 +191,8 @@ private struct 设置视图: View {
     @State private var 显示DNS设置 = false
     /// 是否显示分流规则页面
     @State private var 显示分流规则 = false
+    /// 是否显示代理模式选择页面
+    @State private var 显示代理模式选择 = false
 
     var body: some View {
         List {
@@ -217,9 +219,9 @@ private struct 设置视图: View {
                 }
                 .buttonStyle(PlainButtonStyle())
 
-                // 代理模式：显示当前运行模式，点击切换
+                // 代理模式：显示当前运行模式，点击打开选择页面
                 Button {
-                    切换运行模式()
+                    显示代理模式选择 = true
                 } label: {
                     HStack {
                         Label("代理模式", systemImage: "arrow.left.arrow.right")
@@ -311,28 +313,64 @@ private struct 设置视图: View {
                     .navigationBarTitleDisplayMode(.inline)
             }
         }
+        .sheet(isPresented: $显示代理模式选择) {
+            NavigationStack {
+                代理模式选择页面(当前模式: 隧道管理.配置.运行模式) { 新模式 in
+                    隧道管理.配置.运行模式 = 新模式
+                    隧道管理.保存运行模式偏好()
+                    if 隧道管理.当前状态 == .已连接 {
+                        隧道管理.重新加载配置()
+                    }
+                    显示代理模式选择 = false
+                }
+                .environmentObject(隧道管理)
+                .navigationTitle("代理模式")
+                .navigationBarTitleDisplayMode(.inline)
+            }
+        }
     }
+}
 
-    // MARK: - 运行模式切换
+// MARK: - 代理模式选择页面
 
-    /// 循环切换运行模式：规则分流 → 全局代理 → 全局直连 → 规则分流
-    private func 切换运行模式() {
-        let 当前模式 = 隧道管理.配置.运行模式
-        let 新模式: 隧道运行模式
-        switch 当前模式 {
-        case .规则分流:
-            新模式 = .全局代理
-        case .全局代理:
-            新模式 = .全局直连
-        case .全局直连:
-            新模式 = .规则分流
+/// 代理模式选择页面
+private struct 代理模式选择页面: View {
+    /// 当前选中的模式
+    let 当前模式: 隧道运行模式
+    /// 选择回调
+    let 选择回调: (隧道运行模式) -> Void
+    /// 隧道管理器（用于显示模式描述）
+    @EnvironmentObject private var 隧道管理: 隧道管理器
+
+    var body: some View {
+        List {
+            ForEach(隧道运行模式.allCases, id: \.self) { 模式 in
+                Button {
+                    选择回调(模式)
+                } label: {
+                    HStack(spacing: 12) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(模式.rawValue)
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundColor(.primary)
+                            Text(模式.描述)
+                                .font(.system(size: 12))
+                                .foregroundColor(.secondary)
+                                .lineLimit(2)
+                        }
+                        Spacer()
+                        if 模式 == 当前模式 {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.system(size: 20))
+                                .foregroundColor(.主题色)
+                        }
+                    }
+                    .padding(.vertical, 6)
+                }
+                .buttonStyle(PlainButtonStyle())
+            }
         }
-        隧道管理.配置.运行模式 = 新模式
-        隧道管理.保存运行模式偏好()
-        // 如果隧道正在运行，重新加载配置使新模式生效
-        if 隧道管理.当前状态 == .已连接 {
-            隧道管理.重新加载配置()
-        }
+        .listStyle(.insetGrouped)
     }
 }
 

@@ -287,18 +287,12 @@ private struct 可滑动节点行视图: View {
             // 上层：节点卡片内容
             节点卡片内容(节点: 节点, 是否选中: 是否选中)
                 .offset(x: 偏移量)
-                .contentShape(Rectangle())
-                // 使用 simultaneousGesture 让滑动和点击同时识别，避免 DragGesture 拦截点击
-                .simultaneousGesture(
-                    DragGesture(minimumDistance: 0, coordinateSpace: .local)
+                .gesture(
+                    DragGesture(minimumDistance: 10, coordinateSpace: .local)
                         .onChanged { 值 in
                             if 拖拽起始偏移 == 0 {
                                 拖拽起始偏移 = 偏移量
                             }
-                            // 点击时（移动很小）不更新偏移量，避免卡片微动
-                            let 总移动 = abs(值.translation.width) + abs(值.translation.height)
-                            guard 总移动 > 5 else { return }
-
                             let 目标偏移 = 拖拽起始偏移 + 值.translation.width
                             // 限制滑动范围，添加阻尼效果
                             if 目标偏移 < 0 {
@@ -310,15 +304,6 @@ private struct 可滑动节点行视图: View {
                             }
                         }
                         .onEnded { 值 in
-                            // 只处理滑动（移动大于 20 点），点击由 onTapGesture 处理
-                            let 水平移动 = abs(值.translation.width)
-                            let 垂直移动 = abs(值.translation.height)
-                            guard 水平移动 >= 20 || 垂直移动 >= 20 else {
-                                拖拽起始偏移 = 0
-                                return
-                            }
-
-                            // 滑动操作，根据偏移量决定展开或收起
                             let 最终速度 = 值.predictedEndTranslation.width - 值.translation.width
                             withAnimation(.easeOut(duration: 0.25)) {
                                 if 偏移量 > 展开宽度 / 2 || 最终速度 > 50 {
@@ -331,13 +316,12 @@ private struct 可滑动节点行视图: View {
                         }
                 )
                 .onTapGesture {
-                    if 偏移量 > 5 {
+                    if 偏移量 > 0 {
                         // 已展开时点击收起
                         withAnimation(.easeOut(duration: 0.2)) {
                             偏移量 = 0
                         }
                     } else {
-                        // 未展开时点击选中节点
                         选中节点()
                     }
                 }
@@ -349,7 +333,7 @@ private struct 可滑动节点行视图: View {
     /// 选中节点
     private func 选中节点() {
         withAnimation(.easeInOut(duration: 0.2)) {
-            状态.保存选中节点(节点)
+            状态.保存选中节点(节点ID: 节点.id)
         }
     }
 }

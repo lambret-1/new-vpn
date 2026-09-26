@@ -316,9 +316,9 @@ private struct 规则简要行: View {
     /// 动作颜色
     private var 动作颜色: Color {
         switch 规则.动作 {
-        case .代理: return .主题色
+        case .代理, .全局代理: return .主题色
         case .直连: return .成功色
-        case .拦截: return .危险色
+        case .拦截, .拒绝: return .危险色
         case .放行: return .警告色
         }
     }

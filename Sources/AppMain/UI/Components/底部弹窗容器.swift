@@ -179,6 +179,12 @@ private struct 设置视图: View {
     @ObservedObject private var 更新管理器 = AppUpdateManager.共享
     /// 证书与描述文件管理器
     @EnvironmentObject private var 证书管理: 证书与描述文件管理器
+    /// 隧道管理器
+    @EnvironmentObject private var 隧道管理: 隧道管理器
+    /// DNS 管理器
+    @EnvironmentObject private var DNS管理: DNS管理器
+    /// 分流规则管理器
+    @EnvironmentObject private var 分流管理: 分流规则管理器
     /// 是否显示证书与描述文件页面
     @State private var 显示证书页面 = false
 
@@ -190,9 +196,50 @@ private struct 设置视图: View {
                 Label("启动时自动连接", systemImage: "power")
             }
             Section("网络") {
-                Label("DNS 设置", systemImage: "network")
-                Label("代理模式", systemImage: "arrow.left.arrow.right")
-                Label("分流规则", systemImage: "arrow.triangle.branch")
+                // DNS 设置：显示当前策略，点击进入 DNS 设置页面
+                NavigationLink {
+                    DNS设置页面()
+                        .environmentObject(DNS管理)
+                } label: {
+                    HStack {
+                        Label("DNS 设置", systemImage: "network")
+                        Spacer()
+                        Text(DNS管理.配置.策略.rawValue)
+                            .font(.system(size: 12))
+                            .foregroundColor(.secondary)
+                    }
+                }
+
+                // 代理模式：显示当前运行模式，点击切换
+                Button {
+                    切换运行模式()
+                } label: {
+                    HStack {
+                        Label("代理模式", systemImage: "arrow.left.arrow.right")
+                        Spacer()
+                        Text(隧道管理.配置.运行模式.rawValue)
+                            .font(.system(size: 12))
+                            .foregroundColor(.secondary)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 13))
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .buttonStyle(PlainButtonStyle())
+
+                // 分流规则：显示启用规则数量，点击进入分流规则页面
+                NavigationLink {
+                    分流规则页面()
+                        .environmentObject(分流管理)
+                } label: {
+                    HStack {
+                        Label("分流规则", systemImage: "arrow.triangle.branch")
+                        Spacer()
+                        Text("\(分流管理.配置.所有规则.count) 条启用")
+                            .font(.system(size: 12))
+                            .foregroundColor(.secondary)
+                    }
+                }
             }
             Section("安全") {
                 Button {
@@ -237,6 +284,28 @@ private struct 设置视图: View {
         .sheet(isPresented: $显示证书页面) {
             证书与描述文件页面()
                 .environmentObject(证书管理)
+        }
+    }
+
+    // MARK: - 运行模式切换
+
+    /// 循环切换运行模式：规则分流 → 全局代理 → 全局直连 → 规则分流
+    private func 切换运行模式() {
+        let 当前模式 = 隧道管理.配置.运行模式
+        let 新模式: 隧道运行模式
+        switch 当前模式 {
+        case .规则分流:
+            新模式 = .全局代理
+        case .全局代理:
+            新模式 = .全局直连
+        case .全局直连:
+            新模式 = .规则分流
+        }
+        隧道管理.配置.运行模式 = 新模式
+        隧道管理.保存运行模式偏好()
+        // 如果隧道正在运行，重新加载配置使新模式生效
+        if 隧道管理.当前状态 == .已连接 {
+            隧道管理.重新加载配置()
         }
     }
 }

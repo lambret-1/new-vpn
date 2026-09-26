@@ -304,27 +304,71 @@ final class AppState: ObservableObject {
 
     /// UserDefaults 键：上次选中节点的稳定标识
     private let 上次选中节点键 = "上次选中节点稳定标识"
+    private let 上次选中节点名称键 = "上次选中节点名称"
+    private let 上次选中节点地址键 = "上次选中节点地址"
+    private let 上次选中节点端口键 = "上次选中节点端口"
 
     /// 恢复上次选中的节点
     private func 恢复上次选中节点() {
-        guard let 稳定标识 = UserDefaults.standard.string(forKey: 上次选中节点键),
-              !稳定标识.isEmpty else {
-            // 没有记录，选中第一个
+        let 保存的稳定标识 = UserDefaults.standard.string(forKey: 上次选中节点键)
+        let 保存的名称 = UserDefaults.standard.string(forKey: 上次选中节点名称键)
+        let 保存的地址 = UserDefaults.standard.string(forKey: 上次选中节点地址键)
+        let 保存的端口 = UserDefaults.standard.integer(forKey: 上次选中节点端口键)
+
+        // 没有任何记录，选中第一个
+        guard 保存的稳定标识 != nil || 保存的名称 != nil || 保存的地址 != nil else {
             当前节点ID = 节点列表.first?.id
             return
         }
 
-        // 先在主节点列表中查找
-        if let 节点 = 节点列表.first(where: { $0.稳定标识 == 稳定标识 }) {
-            当前节点ID = 节点.id
-            return
-        }
-
-        // 主列表找不到，遍历分组列表查找
-        for 分组 in 节点分组列表 {
-            if let 节点 = 分组.节点列表.first(where: { $0.稳定标识 == 稳定标识 }) {
+        // 第一级：按稳定标识精确匹配
+        if let 标识 = 保存的稳定标识, !标识.isEmpty {
+            if let 节点 = 节点列表.first(where: { $0.稳定标识 == 标识 }) {
                 当前节点ID = 节点.id
                 return
+            }
+            for 分组 in 节点分组列表 {
+                if let 节点 = 分组.节点列表.first(where: { $0.稳定标识 == 标识 }) {
+                    当前节点ID = 节点.id
+                    return
+                }
+            }
+        }
+
+        // 第二级：按地址+端口匹配
+        if let 地址 = 保存的地址, !地址.isEmpty, 保存的端口 > 0 {
+            if let 节点 = 节点列表.first(where: { $0.地址 == 地址 && $0.端口 == 保存的端口 }) {
+                当前节点ID = 节点.id
+                // 用新节点的稳定标识更新保存
+                UserDefaults.standard.set(节点.稳定标识, forKey: 上次选中节点键)
+                UserDefaults.standard.synchronize()
+                return
+            }
+            for 分组 in 节点分组列表 {
+                if let 节点 = 分组.节点列表.first(where: { $0.地址 == 地址 && $0.端口 == 保存的端口 }) {
+                    当前节点ID = 节点.id
+                    UserDefaults.standard.set(节点.稳定标识, forKey: 上次选中节点键)
+                    UserDefaults.standard.synchronize()
+                    return
+                }
+            }
+        }
+
+        // 第三级：按节点名称匹配
+        if let 名称 = 保存的名称, !名称.isEmpty {
+            if let 节点 = 节点列表.first(where: { $0.名称 == 名称 }) {
+                当前节点ID = 节点.id
+                UserDefaults.standard.set(节点.稳定标识, forKey: 上次选中节点键)
+                UserDefaults.standard.synchronize()
+                return
+            }
+            for 分组 in 节点分组列表 {
+                if let 节点 = 分组.节点列表.first(where: { $0.名称 == 名称 }) {
+                    当前节点ID = 节点.id
+                    UserDefaults.standard.set(节点.稳定标识, forKey: 上次选中节点键)
+                    UserDefaults.standard.synchronize()
+                    return
+                }
             }
         }
 
@@ -337,15 +381,13 @@ final class AppState: ObservableObject {
         当前节点ID = 节点ID
         // 先在主节点列表中查找
         if let 节点 = 节点列表.first(where: { $0.id == 节点ID }) {
-            UserDefaults.standard.set(节点.稳定标识, forKey: 上次选中节点键)
-            UserDefaults.standard.synchronize()
+            保存节点信息到UserDefaults(节点)
             return
         }
         // 主列表找不到，遍历分组列表查找
         for 分组 in 节点分组列表 {
             if let 节点 = 分组.节点列表.first(where: { $0.id == 节点ID }) {
-                UserDefaults.standard.set(节点.稳定标识, forKey: 上次选中节点键)
-                UserDefaults.standard.synchronize()
+                保存节点信息到UserDefaults(节点)
                 return
             }
         }
@@ -354,7 +396,15 @@ final class AppState: ObservableObject {
     /// 保存当前选中节点（直接传入节点对象，更可靠）
     func 保存选中节点(_ 节点: 节点模型) {
         当前节点ID = 节点.id
+        保存节点信息到UserDefaults(节点)
+    }
+
+    /// 保存节点信息到 UserDefaults（内部方法）
+    private func 保存节点信息到UserDefaults(_ 节点: 节点模型) {
         UserDefaults.standard.set(节点.稳定标识, forKey: 上次选中节点键)
+        UserDefaults.standard.set(节点.名称, forKey: 上次选中节点名称键)
+        UserDefaults.standard.set(节点.地址, forKey: 上次选中节点地址键)
+        UserDefaults.standard.set(节点.端口, forKey: 上次选中节点端口键)
         UserDefaults.standard.synchronize()
     }
 

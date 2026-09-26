@@ -193,6 +193,8 @@ private struct 设置视图: View {
     @State private var 显示分流规则 = false
     /// 是否显示代理模式选择页面
     @State private var 显示代理模式选择 = false
+    /// 是否显示 MITM 设置页面
+    @State private var 显示MITM设置 = false
 
     var body: some View {
         List {
@@ -246,6 +248,23 @@ private struct 设置视图: View {
                         Text("\(分流管理.配置.所有规则.count) 条启用")
                             .font(.system(size: 12))
                             .foregroundColor(.secondary)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 13))
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .buttonStyle(PlainButtonStyle())
+
+                // MITM 解密：显示启用状态，点击进入 MITM 设置页面
+                Button {
+                    显示MITM设置 = true
+                } label: {
+                    HStack {
+                        Label("MITM 解密", systemImage: "lock.shield")
+                        Spacer()
+                        Text(MITM管理器.共享.启用 ? "已启用" : "未启用")
+                            .font(.system(size: 12))
+                            .foregroundColor(MITM管理器.共享.启用 ? .成功色 : .secondary)
                         Image(systemName: "chevron.right")
                             .font(.system(size: 13))
                             .foregroundColor(.secondary)
@@ -327,6 +346,10 @@ private struct 设置视图: View {
                 .navigationTitle("代理模式")
                 .navigationBarTitleDisplayMode(.inline)
             }
+        }
+        .sheet(isPresented: $显示MITM设置) {
+            MITM设置页面()
+                .environmentObject(MITM管理器.共享)
         }
     }
 }

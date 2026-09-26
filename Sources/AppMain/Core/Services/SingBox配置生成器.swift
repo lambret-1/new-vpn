@@ -28,13 +28,15 @@ final class SingBox配置生成器 {
     ///   - DNS配置: DNS 配置
     ///   - 运行模式: 隧道运行模式（规则分流/全局代理/全局直连）
     ///   - 日志级别: 日志级别
+    ///   - MITM配置: MITM 配置（nil 表示不启用）
     /// - Returns: sing-box 配置
     func 生成配置(节点: 节点模型?,
                   节点列表: [节点模型] = [],
                   分流规则: [分流规则项] = [],
                   DNS配置: DNS配置模型? = nil,
                   运行模式: 隧道运行模式 = .规则分流,
-                  日志级别: String = "debug") -> SingBox配置 {
+                  日志级别: String = "debug",
+                  MITM配置: (证书: String, 私钥: String)? = nil) -> SingBox配置 {
         var 配置 = SingBox配置()
 
         // 日志配置
@@ -50,10 +52,10 @@ final class SingBox配置生成器 {
         配置.inbounds = 生成入站配置()
 
         // 出站配置
-        配置.outbounds = 生成出站配置(节点: 节点, 节点列表: 节点列表)
+        配置.outbounds = 生成出站配置(节点: 节点, 节点列表: 节点列表, MITM配置: MITM配置)
 
         // 路由配置
-        配置.route = 生成路由配置(分流规则: 分流规则, 节点: 节点, 运行模式: 运行模式)
+        配置.route = 生成路由配置(分流规则: 分流规则, 节点: 节点, 运行模式: 运行模式, MITM启用: MITM配置 != nil)
 
         // 实验配置（缓存文件）
         配置.experimental = SingBox实验配置(
@@ -181,7 +183,7 @@ final class SingBox配置生成器 {
     // MARK: - 生成出站配置
 
     /// 生成出站配置
-    private func 生成出站配置(节点: 节点模型?, 节点列表: [节点模型]) -> [SingBox出站配置] {
+    private func 生成出站配置(节点: 节点模型?, 节点列表: [节点模型], MITM配置: (证书: String, 私钥: String)? = nil) -> [SingBox出站配置] {
         var 出站列表: [SingBox出站配置] = []
 
         // 当前节点出站
@@ -243,6 +245,17 @@ final class SingBox配置生成器 {
         // DNS 出站：将目标端口 53 的流量交给 sing-box DNS 模块处理
         // libbox 版本不支持 TUN 入站 dns_address 字段，必须用路由规则 + dns-out 方式拦截 DNS
         出站列表.append(SingBox出站配置(type: "dns", tag: "dns-out"))
+
+        // MITM 出站：HTTPS 中间人解密（启用时添加）
+        if let mitm = MITM配置 {
+            出站列表.append(SingBox出站配置.mitm出站(
+                标签: "mitm-out",
+                CA证书: mitm.证书,
+                CA私钥: mitm.私钥,
+                域名策略: "ipv4_only",
+                嗅探: true
+            ))
+        }
 
         return 出站列表
     }
@@ -356,7 +369,8 @@ final class SingBox配置生成器 {
     ///   - 分流规则: 用户自定义分流规则
     ///   - 节点: 当前节点（用于代理服务器 IP 直连）
     ///   - 运行模式: 隧道运行模式，决定最终出站
-    private func 生成路由配置(分流规则: [分流规则项], 节点: 节点模型?, 运行模式: 隧道运行模式) -> SingBox路由配置 {
+    ///   - MITM启用: 是否启用 MITM（HTTPS 解密）
+    private func 生成路由配置(分流规则: [分流规则项], 节点: 节点模型?, 运行模式: 隧道运行模式, MITM启用: Bool = false) -> SingBox路由配置 {
         var 规则列表: [SingBox路由规则] = []
 
         // DNS 拦截：目标端口 53 的流量转发到 dns-out 出站，交给 sing-box DNS 模块处理
@@ -365,6 +379,16 @@ final class SingBox配置生成器 {
             port: [53],
             outbound: "dns-out"
         ))
+
+        // MITM 拦截：HTTP(80)和HTTPS(443)的TCP流量转发到 mitm-out 出站进行解密
+        // 注意：只拦截 TCP，不拦截 UDP（QUIC已被下面的规则阻止）
+        if MITM启用 {
+            规则列表.append(SingBox路由规则(
+                port: [80, 443],
+                network: ["tcp"],
+                outbound: "mitm-out"
+            ))
+        }
 
         // 阻止 QUIC（UDP 443）：TikTok 等应用大量使用 QUIC/HTTP3，代理环境下 QUIC 常出问题
         // 阻止后应用会自动降级到 TCP 443（HTTPS），确保兼容性

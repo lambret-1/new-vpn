@@ -448,6 +448,14 @@ struct SingBox出站配置: Codable, Equatable {
     var packetEncoding: String?
     /// 绑定物理网卡接口名（en0=WiFi, pdp_ip0=蜂窝），直连出站必须设置避免回环
     var bindInterface: String?
+    /// MITM CA 证书（PEM格式）
+    var caCertificate: String?
+    /// MITM CA 私钥（PEM格式）
+    var caPrivateKey: String?
+    /// MITM 域名策略（ipv4_only/ipv6_only/prefer_ipv4等）
+    var domainStrategy: String?
+    /// MITM 是否嗅探域名
+    var sniffEnabled: Bool?
 
     /// 创建 VLESS 出站
     static func vless出站(标签: String,
@@ -531,6 +539,20 @@ struct SingBox出站配置: Codable, Equatable {
     /// 创建 Block 出站（标签大写对齐官方客户端）
     static func block出站(标签: String = "REJECT") -> SingBox出站配置 {
         SingBox出站配置(type: "block", tag: 标签)
+    }
+
+    /// 创建 MITM 出站（HTTPS 中间人解密）
+    static func mitm出站(标签: String = "mitm-out",
+                         CA证书: String,
+                         CA私钥: String,
+                         域名策略: String = "ipv4_only",
+                         嗅探: Bool = true) -> SingBox出站配置 {
+        var 配置 = SingBox出站配置(type: "mitm", tag: 标签)
+        配置.caCertificate = CA证书
+        配置.caPrivateKey = CA私钥
+        配置.domainStrategy = 域名策略
+        配置.sniffEnabled = 嗅探
+        return 配置
     }
 
     /// 创建 Selector 出站

@@ -793,15 +793,15 @@ struct 预设规则页面: View {
     @EnvironmentObject private var 分流管理: 分流规则管理器
     @Environment(\.dismiss) private var 关闭
     @State private var 选中的预设: 预设规则集?
-    @State private var 显示确认导入 = false
+    @State private var 显示导入选项 = false
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             List {
                 ForEach(预设规则集.所有预设) { 预设 in
                     Button {
                         选中的预设 = 预设
-                        显示确认导入 = true
+                        显示导入选项 = true
                     } label: {
                         HStack(spacing: 12) {
                             ZStack {
@@ -844,27 +844,143 @@ struct 预设规则页面: View {
                     Button("关闭") { 关闭() }
                 }
             }
-            .alert("导入预设规则", isPresented: $显示确认导入) {
-                Button("创建新分组") {
-                    if let 预设 = 选中的预设 {
-                        分流管理.应用预设规则集(预设)
-                        关闭()
-                    }
-                }
-                Button("追加到默认分组") {
-                    if let 预设 = 选中的预设,
-                       let 第一个分组 = 分流管理.配置.分组列表.first {
-                        分流管理.导入预设规则(预设, 追加到分组: 第一个分组)
-                        关闭()
-                    }
-                }
-                Button("取消", role: .cancel) {}
-            } message: {
+            .sheet(isPresented: $显示导入选项) {
                 if let 预设 = 选中的预设 {
-                    Text("将导入「\(预设.名称)」的 \(预设.规则列表.count) 条规则")
+                    导入预设选项页面(预设: 预设)
+                        .environmentObject(分流管理)
                 }
             }
         }
+    }
+}
+
+// MARK: - 导入预设选项页面
+
+/// 导入预设规则选项页面
+private struct 导入预设选项页面: View {
+    @EnvironmentObject private var 分流管理: 分流规则管理器
+    @Environment(\.dismiss) private var 关闭
+    let 预设: 预设规则集
+    @State private var 选中的导入方式: 导入方式 = .创建新分组
+    @State private var 选中的分组索引 = 0
+
+    /// 导入方式
+    enum 导入方式: String, CaseIterable {
+        case 创建新分组 = "创建新分组"
+        case 追加到分组 = "追加到指定分组"
+        case 覆盖所有规则 = "覆盖所有规则"
+        case 合并去重 = "合并去重"
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("预设信息") {
+                    HStack {
+                        Text("名称")
+                        Spacer()
+                        Text(预设.名称)
+                            .foregroundColor(.secondary)
+                    }
+                    HStack {
+                        Text("规则数量")
+                        Spacer()
+                        Text("\(预设.规则列表.count) 条")
+                            .foregroundColor(.secondary)
+                    }
+                }
+
+                Section("导入方式") {
+                    Picker("选择方式", selection: $选中的导入方式) {
+                        ForEach(导入方式.allCases, id: \.self) { 方式 in
+                            Text(方式.rawValue).tag(方式)
+                        }
+                    }
+                    .pickerStyle(.inline)
+
+                    if 选中的导入方式 == .追加到分组 {
+                        Picker("目标分组", selection: $选中的分组索引) {
+                            ForEach(Array(分流管理.配置.分组列表.enumerated()), id: \.element.id) { 索引, 分组 in
+                                Text(分组.名称).tag(索引)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                    }
+                }
+
+                Section("说明") {
+                    Text(导入说明)
+                        .font(.system(size: 13))
+                        .foregroundColor(.secondary)
+                }
+            }
+            .navigationTitle("导入预设规则")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("取消") { 关闭() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("导入") {
+                        执行导入()
+                        关闭()
+                    }
+                }
+            }
+        }
+    }
+
+    /// 导入说明
+    private var 导入说明: String {
+        switch 选中的导入方式 {
+        case .创建新分组:
+            return "以预设名称创建新分组，将所有规则导入新分组中。"
+        case .追加到分组:
+            return "将预设规则追加到选中的现有分组中，保留原有规则。"
+        case .覆盖所有规则:
+            return "清空所有现有规则和分组，然后导入预设规则。此操作不可撤销！"
+        case .合并去重:
+            return "将预设规则合并到现有规则中，自动去重（按匹配值判断）。"
+        }
+    }
+
+    /// 执行导入
+    private func 执行导入() {
+        switch 选中的导入方式 {
+        case .创建新分组:
+            分流管理.应用预设规则集(预设)
+        case .追加到分组:
+            if 选中的分组索引 < 分流管理.配置.分组列表.count {
+                let 目标分组 = 分流管理.配置.分组列表[选中的分组索引]
+                分流管理.导入预设规则(预设, 追加到分组: 目标分组)
+            }
+        case .覆盖所有规则:
+            分流管理.配置.分组列表.removeAll()
+            分流管理.应用预设规则集(预设)
+        case .合并去重:
+            合并去重导入()
+        }
+    }
+
+    /// 合并去重导入
+    private func 合并去重导入() {
+        // 获取所有现有规则的匹配值集合
+        let 现有匹配值 = Set(分流管理.配置.分组列表.flatMap { $0.规则列表.map { $0.匹配值 } })
+
+        // 过滤出不重复的规则
+        let 新规则 = 预设.规则列表.filter { !现有匹配值.contains($0.匹配值) }
+
+        if 新规则.isEmpty {
+            return
+        }
+
+        // 创建新分组存放不重复的规则
+        let 新分组 = 分流规则分组(
+            名称: "\(预设.名称)-合并",
+            图标: 预设.图标,
+            规则列表: 新规则
+        )
+        分流管理.添加分组(新分组)
     }
 }
 

@@ -72,6 +72,9 @@ struct 分流规则内容区: View {
     @State private var 显示添加规则 = false
     @State private var 显示预设规则 = false
     @State private var 显示规则测试 = false
+    @State private var 显示添加分组 = false
+    @State private var 重命名的分组: 分流规则分组?
+    @State private var 重命名名称 = ""
 
     /// 统计数据
     private var 统计: (分组数: Int, 总规则数: Int, 启用规则数: Int, 总命中数: Int) {
@@ -144,6 +147,18 @@ struct 分流规则内容区: View {
                 .buttonStyle(PlainButtonStyle())
 
                 Button {
+                    显示添加分组 = true
+                } label: {
+                    Image(systemName: "folder.badge.plus")
+                        .font(.system(size: 18))
+                        .foregroundColor(.主题色)
+                        .frame(width: 36, height: 36)
+                        .background(Color.卡片背景)
+                        .cornerRadius(8)
+                }
+                .buttonStyle(PlainButtonStyle())
+
+                Button {
                     显示添加规则 = true
                 } label: {
                     Image(systemName: "plus.circle.fill")
@@ -172,6 +187,13 @@ struct 分流规则内容区: View {
                                 } else {
                                     展开的分组ID = 分组.id
                                 }
+                            },
+                            重命名分组: {
+                                重命名的分组 = 分组
+                                重命名名称 = 分组.名称
+                            },
+                            删除分组: {
+                                分流管理.删除分组(分组)
                             }
                         )
                     }
@@ -198,6 +220,28 @@ struct 分流规则内容区: View {
                     .navigationTitle("规则测试")
                     .navigationBarTitleDisplayMode(.inline)
             }
+        }
+        .sheet(isPresented: $显示添加分组) {
+            分组名称输入页面(标题: "添加分组", 初始名称: "") { 名称 in
+                let 新分组 = 分流规则分组(名称: 名称, 图标: "folder", 规则列表: [])
+                分流管理.添加分组(新分组)
+            }
+            .environmentObject(分流管理)
+        }
+        .alert("重命名分组", isPresented: Binding(
+            get: { 重命名的分组 != nil },
+            set: { if !$0 { 重命名的分组 = nil } }
+        )) {
+            TextField("分组名称", text: $重命名名称)
+            Button("取消", role: .cancel) {}
+            Button("确定") {
+                if let 分组 = 重命名的分组, !重命名名称.isEmpty {
+                    分流管理.重命名分组(分组, 新名称: 重命名名称)
+                }
+                重命名的分组 = nil
+            }
+        } message: {
+            Text("请输入新的分组名称")
         }
     }
 
@@ -250,6 +294,8 @@ private struct 分组卡片: View {
     let 已展开: Bool
     let 搜索关键词: String
     let 切换展开: () -> Void
+    let 重命名分组: () -> Void
+    let 删除分组: () -> Void
     @EnvironmentObject private var 分流管理: 分流规则管理器
     @State private var 当前显示数量 = 30
     private let 每页规则数 = 30
@@ -315,6 +361,19 @@ private struct 分组卡片: View {
                 .toggleStyle(SwitchToggleStyle(tint: .主题色))
                 .frame(width: 45)
                 .padding(.trailing, 40)
+            }
+            // 长按菜单：重命名、删除
+            .contextMenu {
+                Button {
+                    重命名分组()
+                } label: {
+                    Label("重命名分组", systemImage: "pencil")
+                }
+                Button(role: .destructive) {
+                    删除分组()
+                } label: {
+                    Label("删除分组", systemImage: "trash")
+                }
             }
 
             // 展开的规则列表（无动画，避免重影）
@@ -501,6 +560,51 @@ private struct 日志行: View {
         case .信息: return .主题色
         case .调试: return .secondary
         case .追踪: return .secondary
+        }
+    }
+}
+
+// MARK: - 分组名称输入页面
+
+/// 分组名称输入页面（用于添加分组）
+private struct 分组名称输入页面: View {
+    @Environment(\.dismiss) private var 关闭
+    @State private var 分组名称 = ""
+    let 标题: String
+    let 初始名称: String
+    let 完成: (String) -> Void
+
+    init(标题: String, 初始名称: String, 完成: @escaping (String) -> Void) {
+        self.标题 = 标题
+        self.初始名称 = 初始名称
+        self.完成 = 完成
+        _分组名称 = State(initialValue: 初始名称)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("分组信息") {
+                    TextField("请输入分组名称", text: $分组名称)
+                        .autocapitalization(.none)
+                }
+            }
+            .navigationTitle(标题)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("取消") { 关闭() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("确定") {
+                        if !分组名称.isEmpty {
+                            完成(分组名称)
+                            关闭()
+                        }
+                    }
+                    .disabled(分组名称.isEmpty)
+                }
+            }
         }
     }
 }

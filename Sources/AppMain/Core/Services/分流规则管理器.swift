@@ -73,6 +73,14 @@ final class 分流规则管理器: ObservableObject {
         保存配置()
     }
 
+    /// 重命名分组
+    func 重命名分组(_ 分组: 分流规则分组, 新名称: String) {
+        if let 索引 = 配置.分组列表.firstIndex(where: { $0.id == 分组.id }) {
+            配置.分组列表[索引].名称 = 新名称
+            保存配置()
+        }
+    }
+
     /// 切换分组展开状态
     func 切换分组展开(_ 分组: 分流规则分组) {
         if let 索引 = 配置.分组列表.firstIndex(where: { $0.id == 分组.id }) {

@@ -50,43 +50,11 @@ final class 测速管理器: ObservableObject {
 
     // MARK: - 单节点测速
 
-    /// 测单个节点的真实延迟：
-    /// 隧道已连时，App 自身 TCP 会被 TUN 截获（假 5ms），改走扩展进程测速（扩展出站绕过 TUN，真实 RTT）；
-    /// 隧道未连时，App 本地直连测试即可。
+    /// 测单个节点延迟：统一由 App 进程本地做 TCP 连接测速。
+    /// 注：隧道已连时 App 的连接会被 TUN 截获，测到的是经隧道的握手延迟（非到节点的裸 RTT），
+    /// 但这是当前唯一能稳定回包的路径；扩展进程直连被墙节点在本项目 DNS/路由下全部超时，故回退。
     private func 测速节点真实(_ 节点: 节点模型) -> 测速结果模型 {
-        var 结果 = 测速结果模型.空结果(节点ID: 节点.id)
-
-        if 隧道管理器.共享.当前状态.是否活动 {
-            let 信号 = DispatchSemaphore(value: 0)
-            var 延迟ms: Int?
-            var 扩展错误: String?
-            隧道管理器.共享.发送消息到扩展(
-                ["action": "testLatency", "address": 节点.地址, "port": 节点.端口]
-            ) { 响应, _ in
-                if let ms = 响应?["latency"] as? Int {
-                    延迟ms = ms
-                } else if let 错误 = 响应?["error"] as? String {
-                    扩展错误 = 错误
-                }
-                信号.signal()
-            }
-            _ = 信号.wait(timeout: .now() + 6)
-
-            if let ms = 延迟ms {
-                结果.延迟毫秒 = ms
-                结果.成功 = true
-            } else {
-                结果.成功 = false
-                结果.错误信息 = 扩展错误 ?? "扩展测速超时"
-                结果.丢包率 = 100
-            }
-        } else {
-            // 未连接：本地直连，测的是真实网络 RTT
-            return 测速服务.共享.测速节点(节点, 配置: self.配置)
-        }
-
-        结果.测速时间 = Date()
-        return 结果
+        测速服务.共享.测速节点(节点, 配置: self.配置)
     }
 
     /// 测速单个节点

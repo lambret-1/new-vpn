@@ -12,11 +12,19 @@ import SwiftUI
 struct 网络活动内容区: View {
     /// 全局应用状态
     @EnvironmentObject private var 状态: AppState
+    /// 隧道管理器（获取真实流量统计）
+    @EnvironmentObject private var 隧道管理: 隧道管理器
 
     var body: some View {
         VStack(spacing: 16) {
             // TCP/UDP 统计区
-            流量统计区(连接列表: 状态.网络连接列表)
+            流量统计区(
+                tcp数量: tcp数量,
+                udp数量: udp数量,
+                活跃数量: 活跃数量,
+                总下行: 隧道管理.流量统计.下行字节,
+                总上行: 隧道管理.流量统计.上行字节
+            )
 
             // 连接记录列表
             if 状态.网络连接列表.isEmpty {
@@ -37,91 +45,73 @@ struct 网络活动内容区: View {
         }
         .padding(.horizontal, 15)
     }
-}
-
-// MARK: - 流量统计区
-
-/// TCP/UDP 流量统计区
-private struct 流量统计区: View {
-    /// 连接列表
-    let 连接列表: [网络连接模型]
 
     /// TCP 连接数
     private var tcp数量: Int {
-        连接列表.filter { $0.协议 == "TCP" }.count
+        状态.网络连接列表.filter { $0.协议 == "TCP" }.count
     }
 
     /// UDP 连接数
     private var udp数量: Int {
-        连接列表.filter { $0.协议 == "UDP" }.count
+        状态.网络连接列表.filter { $0.协议 == "UDP" }.count
     }
 
     /// 活跃连接数
     private var 活跃数量: Int {
-        连接列表.filter { !$0.已关闭 }.count
+        状态.网络连接列表.filter { !$0.已关闭 }.count
     }
+}
 
-    /// 总下行流量
-    private var 总下行: Int64 {
-        连接列表.reduce(0) { $0 + $1.下行字节 }
-    }
+// MARK: - 流量统计区
+
+/// TCP/UDP 流量统计区（四宫格整齐布局）
+private struct 流量统计区: View {
+    let tcp数量: Int
+    let udp数量: Int
+    let 活跃数量: Int
+    let 总下行: UInt64
+    let 总上行: UInt64
 
     var body: some View {
-        HStack(spacing: 0) {
-            // TCP 统计
-            VStack(spacing: 8) {
-                HStack(spacing: 8) {
-                    Text("TCP")
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 4)
-                        .background(Color(red: 0.91, green: 0.36, blue: 0.20))
-                        .cornerRadius(6)
-                    Spacer()
-                }
-                Text("\(tcp数量)")
-                    .font(.system(size: 36, weight: .bold))
-                Text("UDP")
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
-                    .background(Color(red: 0.91, green: 0.36, blue: 0.20).opacity(0.7))
-                    .cornerRadius(6)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                Text("\(udp数量)")
-                    .font(.system(size: 36, weight: .bold))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .frame(maxWidth: .infinity)
+        LazyVGrid(columns: [
+            GridItem(.flexible(), spacing: 12),
+            GridItem(.flexible(), spacing: 12)
+        ], spacing: 12) {
+            // TCP 连接数
+            统计卡片(
+                图标: "rectangle.connected.to.line.below",
+                图标颜色: Color(red: 0.91, green: 0.36, blue: 0.20),
+                标题: "TCP",
+                数值: "\(tcp数量)",
+                单位: "连接"
+            )
 
-            // 中间分割线
-            Rectangle()
-                .fill(Color.分割线)
-                .frame(width: 1)
-                .padding(.vertical, 8)
+            // UDP 连接数
+            统计卡片(
+                图标: "dot.radiowaves.left.and.right",
+                图标颜色: Color(red: 0.20, green: 0.55, blue: 0.91),
+                标题: "UDP",
+                数值: "\(udp数量)",
+                单位: "连接"
+            )
 
-            // 活跃/流量统计
-            VStack(spacing: 8) {
-                HStack(spacing: 8) {
-                    Image(systemName: "bolt.fill")
-                        .font(.system(size: 20))
-                        .foregroundColor(.成功色)
-                    Text("\(活跃数量)")
-                        .font(.system(size: 28, weight: .bold))
-                    Spacer()
-                }
-                HStack(spacing: 8) {
-                    Image(systemName: "arrow.down.circle")
-                        .font(.system(size: 20))
-                        .foregroundColor(.主题色)
-                    Text(格式化字节(总下行))
-                        .font(.system(size: 20, weight: .bold))
-                    Spacer()
-                }
-            }
-            .frame(maxWidth: .infinity)
+            // 活跃连接数
+            统计卡片(
+                图标: "bolt.fill",
+                图标颜色: .成功色,
+                标题: "活跃",
+                数值: "\(活跃数量)",
+                单位: "连接"
+            )
+
+            // 总流量
+            统计卡片(
+                图标: "arrow.down.circle.fill",
+                图标颜色: .主题色,
+                标题: "下载",
+                数值: 格式化字节(总下行),
+                单位: "上传 \(格式化字节(总上行))"
+            )
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 16)
@@ -129,14 +119,44 @@ private struct 流量统计区: View {
         .cornerRadius(12)
     }
 
+    /// 单个统计卡片
+    private func 统计卡片(图标: String, 图标颜色: Color, 标题: String, 数值: String, 单位: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Image(systemName: 图标)
+                    .font(.system(size: 14))
+                    .foregroundColor(图标颜色)
+                Text(标题)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.secondary)
+            }
+            Text(数值)
+                .font(.system(size: 24, weight: .bold))
+                .foregroundColor(.primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.5)
+            Text(单位)
+                .font(.system(size: 11))
+                .foregroundColor(.secondary)
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(Color.页面背景)
+        .cornerRadius(10)
+    }
+
     /// 格式化字节数
-    private func 格式化字节(_ 字节: Int64) -> String {
+    private func 格式化字节(_ 字节: UInt64) -> String {
         if 字节 < 1024 {
             return "\(字节)B"
         } else if 字节 < 1024 * 1024 {
-            return String(format: "%.1fKB", Double(字节) / 1024)
+            return String(format: "%.1fK", Double(字节) / 1024)
+        } else if 字节 < 1024 * 1024 * 1024 {
+            return String(format: "%.1fM", Double(字节) / (1024 * 1024))
         } else {
-            return String(format: "%.1fMB", Double(字节) / (1024 * 1024))
+            return String(format: "%.1fG", Double(字节) / (1024 * 1024 * 1024))
         }
     }
 }

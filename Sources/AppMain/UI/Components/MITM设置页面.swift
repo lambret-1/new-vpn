@@ -209,7 +209,7 @@ private struct 证书导出视图: View {
                     .foregroundColor(.secondary)
 
                 // 分享按钮
-                ShareLink(item: 证书数据, preview: SharePreview("CA证书.cer", image: Image(systemName: "doc.text.fill"))) {
+                ShareLink(item: 证书数据, preview: SharePreview("CA证书.crt", image: Image(systemName: "doc.text.fill"))) {
                     HStack {
                         Image(systemName: "square.and.arrow.up")
                         Text("分享证书")
@@ -254,7 +254,7 @@ private struct 证书导出视图: View {
 
     /// 保存到文件（临时目录）
     private func 保存到文件() {
-        let 临时路径 = FileManager.default.temporaryDirectory.appendingPathComponent("CA证书.cer")
+        let 临时路径 = FileManager.default.temporaryDirectory.appendingPathComponent("CA证书.crt")
         do {
             try 证书数据.write(to: 临时路径)
             // 这里可以调用文档选择器保存，简化处理

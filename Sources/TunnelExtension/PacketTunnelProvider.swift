@@ -1117,56 +1117,57 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             throw NSError(domain: "HotUpdate", code: 2, userInfo: [NSLocalizedDescriptionKey: "配置文件格式错误"])
         }
 
-        // 处理入站配置
-        if var 入站列表 = 配置字典["inbounds"] as? [[String: Any]] {
+        // 处理出站配置：capture-proxy 是出站（HTTP代理指向127.0.0.1:8888），不是入站
+        if var 出站列表 = 配置字典["outbounds"] as? [[String: Any]] {
             if 抓包启用 {
-                // 检查是否已存在抓包入站
-                let 已有抓包入站 = 入站列表.contains { ($0["tag"] as? String) == "capture-proxy" }
-                if !已有抓包入站 {
-                    // 添加抓包入站
-                    let 抓包入站: [String: Any] = [
+                // 检查是否已存在抓包代理出站
+                let 已有抓包出站 = 出站列表.contains { ($0["tag"] as? String) == "capture-proxy" }
+                if !已有抓包出站 {
+                    // 添加抓包代理出站：HTTP代理指向本地127.0.0.1:8888
+                    let 抓包出站: [String: Any] = [
                         "type": "http",
                         "tag": "capture-proxy",
-                        "listen": "127.0.0.1",
-                        "listen_port": 8888
+                        "server": "127.0.0.1",
+                        "server_port": 8888
                     ]
-                    入站列表.append(抓包入站)
-                    配置字典["inbounds"] = 入站列表
-                    记录扩展日志(级别: "信息", 模块: "热更新", 内容: "已添加抓包入站 capture-proxy")
+                    出站列表.append(抓包出站)
+                    配置字典["outbounds"] = 出站列表
+                    记录扩展日志(级别: "信息", 模块: "热更新", 内容: "已添加抓包代理出站 capture-proxy(127.0.0.1:8888)")
                 }
             } else {
-                // 移除抓包入站
-                let 过滤后 = 入站列表.filter { ($0["tag"] as? String) != "capture-proxy" }
-                配置字典["inbounds"] = 过滤后
-                记录扩展日志(级别: "信息", 模块: "热更新", 内容: "已移除抓包入站 capture-proxy")
+                // 移除抓包代理出站
+                let 过滤后 = 出站列表.filter { ($0["tag"] as? String) != "capture-proxy" }
+                配置字典["outbounds"] = 过滤后
+                记录扩展日志(级别: "信息", 模块: "热更新", 内容: "已移除抓包代理出站 capture-proxy")
             }
         }
 
-        // 处理路由规则
+        // 处理路由规则：80(HTTP)和443(HTTPS)端口TCP流量转发到capture-proxy
         if var 路由 = 配置字典["route"] as? [String: Any],
-           var 规则列表 = 路由["rules"] as? [[String: Any]] {
+           let 规则数组 = 路由["rules"] as? [[String: Any]] {
+            var 规则列表 = 规则数组
             if 抓包启用 {
-                // 检查是否已存在抓包路由规则
+                // 检查是否已存在抓包路由规则（80或443端口转发到capture-proxy）
                 let 已有抓包规则 = 规则列表.contains { rule in
-                    if let 出站 = rule["outbound"] as? String, 出站 == "capture-proxy",
-                       let 端口 = rule["port"] as? Int, 端口 == 80 {
-                        return true
-                    }
+                    guard let 出站 = rule["outbound"] as? String, 出站 == "capture-proxy" else { return false }
+                    if let 端口 = rule["port"] as? Int, (端口 == 80 || 端口 == 443) { return true }
+                    if let 端口列表 = rule["port"] as? [Int], 端口列表.contains(80) || 端口列表.contains(443) { return true }
                     return false
                 }
                 if !已有抓包规则 {
-                    // 添加 HTTP(80) 流量转发到抓包代理的规则
+                    // 添加 HTTP(80)+HTTPS(443) 流量转发到抓包代理的规则
                     let 抓包规则: [String: Any] = [
-                        "port": 80,
+                        "port": [80, 443],
+                        "network": ["tcp"],
                         "outbound": "capture-proxy"
                     ]
                     规则列表.insert(抓包规则, at: 0)
                     路由["rules"] = 规则列表
                     配置字典["route"] = 路由
-                    记录扩展日志(级别: "信息", 模块: "热更新", 内容: "已添加抓包路由规则(端口80)")
+                    记录扩展日志(级别: "信息", 模块: "热更新", 内容: "已添加抓包路由规则(端口80+443)")
                 }
             } else {
-                // 移除抓包路由规则
+                // 移除所有抓包路由规则（outbound为capture-proxy的规则）
                 let 过滤后 = 规则列表.filter { rule in
                     if let 出站 = rule["outbound"] as? String, 出站 == "capture-proxy" {
                         return false
@@ -1175,7 +1176,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                 }
                 路由["rules"] = 过滤后
                 配置字典["route"] = 路由
-                记录扩展日志(级别: "信息", 模块: "热更新", 内容: "已移除抓包路由规则")
+                记录扩展日志(级别: "信息", 模块: "热更新", 内容: "已移除全部抓包路由规则(\(规则列表.count - 过滤后.count)条)")
             }
         }
 

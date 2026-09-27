@@ -63,10 +63,12 @@ struct 证书元数据: Codable, Equatable {
     var 过期时间: Date
     /// 证书文件路径（沙盒内）
     var 文件路径: String
-    /// 用户是否已确认安装描述文件
-    var 用户确认已安装: Bool
-    /// 用户是否已确认在设置中信任
-    var 用户确认已信任: Bool
+    /// 系统探测是否失败（失败时启用手动确认兜底）
+    var 系统探测失败: Bool
+    /// 手动兜底确认已安装（仅系统探测失败时使用）
+    var 手动确认已安装: Bool
+    /// 手动兜底确认已信任（仅系统探测失败时使用）
+    var 手动确认已信任: Bool
 
     /// 剩余有效天数
     var 剩余天数: Int {
@@ -195,6 +197,35 @@ FxBzaz833X+KGgOv4VBtDcY=
         return !元数据.已过期
     }
 
+    // MARK: - 自动探测状态
+
+    /// 自动探测：证书是否已安装到系统（nil表示探测失败）
+    private(set) var 探测已安装: Bool?
+
+    /// 自动探测：证书是否已在系统中完全信任（nil表示探测失败）
+    private(set) var 探测已信任: Bool?
+
+    /// 综合安装状态（自动探测优先，失败时用手动兜底）
+    var 综合已安装: Bool {
+        if let 探测 = 探测已安装 {
+            return 探测
+        }
+        return 元数据?.手动确认已安装 ?? false
+    }
+
+    /// 综合信任状态（自动探测优先，失败时用手动兜底）
+    var 综合已信任: Bool {
+        if let 探测 = 探测已信任 {
+            return 探测
+        }
+        return 元数据?.手动确认已信任 ?? false
+    }
+
+    /// 是否使用手动兜底模式（系统探测失败）
+    var 使用手动兜底: Bool {
+        探测已安装 == nil || 探测已信任 == nil
+    }
+
     // MARK: - UserDefaults 键
 
     private let 启用键 = "mitmEnabled"
@@ -252,6 +283,135 @@ FxBzaz833X+KGgOv4VBtDcY=
         if let 数据 = try? JSONEncoder().encode(元数据) {
             默认.set(数据, forKey: 元数据键)
         }
+    }
+
+    // MARK: - 证书自动探测
+
+    /// 解析 PEM 证书为 Security framework 证书对象
+    /// - Returns: SecCertificate?，解析失败返回 nil
+    private func 解析PEM证书() -> SecCertificate? {
+        guard !CA证书.isEmpty else {
+            添加证书日志(类型: "error", 消息: "PEM解析失败：证书内容为空")
+            return nil
+        }
+
+        // 移除 PEM 头尾，获取 Base64 内容
+        var 内容 = CA证书
+            .replacingOccurrences(of: "-----BEGIN CERTIFICATE-----", with: "")
+            .replacingOccurrences(of: "-----END CERTIFICATE-----", with: "")
+            .replacingOccurrences(of: "\n", with: "")
+            .replacingOccurrences(of: "\r", with: "")
+            .trimmingCharacters(in: .whitespaces)
+
+        guard let 数据 = Data(base64Encoded: 内容) else {
+            添加证书日志(类型: "error", 消息: "PEM解析失败：Base64解码失败")
+            return nil
+        }
+
+        guard let 证书 = SecCertificateCreateWithData(nil, 数据 as CFData) else {
+            添加证书日志(类型: "error", 消息: "PEM解析失败：SecCertificateCreateWithData返回nil")
+            return nil
+        }
+
+        添加证书日志(类型: "success", 消息: "PEM证书解析成功，DER数据大小=\(数据.count)字节")
+        return 证书
+    }
+
+    /// 探测证书是否已安装到系统描述文件
+    /// iOS沙盒限制：无法直接读取系统描述文件列表，通过钥匙串查询间接判断
+    /// - Returns: true=已安装，false=未安装，nil=探测失败（权限限制）
+    private func 探测证书安装状态() -> Bool? {
+        guard let 证书 = 解析PEM证书() else {
+            添加证书日志(类型: "warning", 消息: "安装状态探测：证书解析失败，无法探测")
+            return nil
+        }
+
+        // 通过钥匙串查询是否存在该证书（间接判断是否已安装）
+        let 查询: [String: Any] = [
+            kSecClass as String: kSecClassCertificate,
+            kSecMatchItemList as String: [证书],
+            kSecReturnAttributes as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+
+        var 结果: AnyObject?
+        let 状态 = SecItemCopyMatching(查询 as CFDictionary, &结果)
+
+        if 状态 == errSecSuccess {
+            添加证书日志(类型: "success", 消息: "安装状态探测：钥匙串中找到匹配证书，判定已安装")
+            return true
+        } else if 状态 == errSecItemNotFound {
+            // 注意：iOS应用无法访问系统全局钥匙串，这里可能误判
+            // 应用自己导入的证书才能在钥匙串中找到
+            添加证书日志(类型: "info", 消息: "安装状态探测：钥匙串中未找到证书（iOS沙盒限制，可能误判）")
+            return false
+        } else {
+            添加证书日志(类型: "warning", 消息: "安装状态探测：SecItemCopyMatching失败，错误码=\(状态)")
+            return nil
+        }
+    }
+
+    /// 探测证书是否已在系统中完全信任
+    /// iOS沙盒限制：无法读取用户在设置中手动开启的根证书信任状态
+    /// 通过 SecTrustEvaluate 评估证书链信任（仅能评估系统默认信任策略）
+    /// - Returns: true=已信任，false=未信任，nil=探测失败（权限限制）
+    private func 探测证书信任状态() -> Bool? {
+        guard let 证书 = 解析PEM证书() else {
+            添加证书日志(类型: "warning", 消息: "信任状态探测：证书解析失败，无法探测")
+            return nil
+        }
+
+        // 构造信任对象进行评估
+        var 信任: SecTrust?
+        let 策略 = SecPolicyCreateBasicX509()
+        let 创建状态 = SecTrustCreateWithCertificates([证书] as CFArray, 策略, &信任)
+
+        guard 创建状态 == errSecSuccess, let 信任对象 = 信任 else {
+            添加证书日志(类型: "warning", 消息: "信任状态探测：SecTrustCreateWithCertificates失败，错误码=\(创建状态)")
+            return nil
+        }
+
+        // 评估信任（注意：这只能评估系统默认策略，无法检测用户手动开启的完全信任）
+        var 错误: CFError?
+        let 可信 = SecTrustEvaluateWithError(信任对象, &错误)
+
+        if 可信 {
+            添加证书日志(类型: "success", 消息: "信任状态探测：SecTrust评估通过，证书受系统信任")
+            return true
+        } else {
+            let 错误描述 = 错误?.localizedDescription ?? "未知错误"
+            添加证书日志(类型: "info", 消息: "信任状态探测：SecTrust评估未通过（iOS沙盒限制，无法检测用户手动完全信任设置），错误=\(错误描述)")
+            // iOS限制：自签名根证书默认不受系统信任，需要用户在设置中手动开启
+            // 这里返回nil表示无法确定，启用手动兜底
+            return nil
+        }
+    }
+
+    /// 执行全部自动探测（安装+信任）
+    func 执行自动探测() {
+        添加证书日志(类型: "info", 消息: "===== 开始证书状态自动探测 =====")
+
+        // 探测安装状态
+        探测已安装 = 探测证书安装状态()
+        if 探测已安装 == nil {
+            添加证书日志(类型: "warning", 消息: "安装状态探测失败，将启用手动确认兜底")
+        }
+
+        // 探测信任状态
+        探测已信任 = 探测证书信任状态()
+        if 探测已信任 == nil {
+            添加证书日志(类型: "warning", 消息: "信任状态探测失败（iOS沙盒限制），将启用手动确认兜底")
+        }
+
+        // 更新元数据中的探测失败标记
+        if var 元数据 = 元数据 {
+            元数据.系统探测失败 = 使用手动兜底
+            self.元数据 = 元数据
+            保存证书元数据()
+        }
+
+        添加证书日志(类型: "info", 消息: "自动探测结果：已安装=\(探测已安装 == nil ? "未知" : (探测已安装! ? "是" : "否"))，已信任=\(探测已信任 == nil ? "未知" : (探测已信任! ? "是" : "否"))，使用手动兜底=\(使用手动兜底 ? "是" : "否")")
+        添加证书日志(类型: "info", 消息: "===== 证书状态自动探测完成 =====")
     }
 
     // MARK: - MITM证书状态检测
@@ -334,17 +494,17 @@ FxBzaz833X+KGgOv4VBtDcY=
             return .临近过期(剩余天数: 元数据.剩余天数)
         }
 
-        // 8. 检查用户是否确认已安装
-        guard 元数据.用户确认已安装 else {
+        // 8. 检查证书是否已安装（自动探测优先，失败时用手动兜底）
+        guard 综合已安装 else {
             当前状态 = .未安装
-            添加证书日志(类型: "info", 消息: "证书状态检测结果：未安装")
+            添加证书日志(类型: "info", 消息: "证书状态检测结果：未安装（自动探测=\(探测已安装 == nil ? "失败" : (探测已安装! ? "已安装" : "未安装"))，手动兜底=\(元数据.手动确认已安装 ? "是" : "否")）")
             return .未安装
         }
 
-        // 9. 检查用户是否确认已信任
-        guard 元数据.用户确认已信任 else {
+        // 9. 检查证书是否已信任（自动探测优先，失败时用手动兜底）
+        guard 综合已信任 else {
             当前状态 = .未信任
-            添加证书日志(类型: "info", 消息: "证书状态检测结果：未信任")
+            添加证书日志(类型: "info", 消息: "证书状态检测结果：未信任（自动探测=\(探测已信任 == nil ? "失败" : (探测已信任! ? "已信任" : "未信任"))，手动兜底=\(元数据.手动确认已信任 ? "是" : "否")）")
             return .未信任
         }
 
@@ -362,13 +522,15 @@ FxBzaz833X+KGgOv4VBtDcY=
         添加证书日志(类型: "info", 消息: "证书文件完整路径：\(证书文件URL.path)")
         添加证书日志(类型: "info", 消息: "读取持久化状态：证书已生成=\(证书已生成 ? "是" : "否")，元数据存在=\(元数据 != nil ? "是" : "否")，MITM开关=\(启用 ? "开" : "关")")
         if let 元数据 = 元数据 {
-            添加证书日志(类型: "info", 消息: "持久化元数据：文件存在标记=\(元数据.文件存在 ? "是" : "否")，已安装=\(元数据.用户确认已安装 ? "是" : "否")，已信任=\(元数据.用户确认已信任 ? "是" : "否")")
+            添加证书日志(类型: "info", 消息: "持久化元数据：文件存在标记=\(元数据.文件存在 ? "是" : "否")，系统探测失败=\(元数据.系统探测失败 ? "是" : "否")，手动兜底已安装=\(元数据.手动确认已安装 ? "是" : "否")，手动兜底已信任=\(元数据.手动确认已信任 ? "是" : "否")")
             添加证书日志(类型: "info", 消息: "证书元数据：指纹=\(String(元数据.指纹.prefix(16)))...，创建=\(格式化日期(元数据.创建时间))，过期=\(格式化日期(元数据.过期时间))，剩余\(元数据.剩余天数)天")
         }
         // 检查沙盒目录是否存在
         var 是目录: ObjCBool = false
         let 目录存在 = FileManager.default.fileExists(atPath: 证书目录.path, isDirectory: &是目录)
         添加证书日志(类型: "info", 消息: "证书目录存在=\(目录存在 ? "是" : "否")，是目录=\(是目录.boolValue ? "是" : "否")")
+        // 执行自动探测（安装+信任状态）
+        执行自动探测()
         检测证书状态()
         添加证书日志(类型: "info", 消息: "===== 页面加载检测完成，最终状态：\(当前状态.描述) =====")
     }
@@ -381,24 +543,24 @@ FxBzaz833X+KGgOv4VBtDcY=
         添加证书日志(类型: "info", 消息: "已完全重置证书元数据（内存+持久化）")
     }
 
-    /// 标记用户已安装证书
+    /// 手动兜底确认已安装（仅系统探测失败时使用）
     func 标记已安装() {
         guard var 元数据 = 元数据 else { return }
-        元数据.用户确认已安装 = true
+        元数据.手动确认已安装 = true
         self.元数据 = 元数据
         保存证书元数据()
         检测证书状态()
-        添加证书日志(类型: "info", 消息: "用户确认已安装证书")
+        添加证书日志(类型: "info", 消息: "手动兜底确认：已安装证书（系统探测失败备用方案）")
     }
 
-    /// 标记用户已信任证书
+    /// 手动兜底确认已信任（仅系统探测失败时使用）
     func 标记已信任() {
         guard var 元数据 = 元数据 else { return }
-        元数据.用户确认已信任 = true
+        元数据.手动确认已信任 = true
         self.元数据 = 元数据
         保存证书元数据()
         检测证书状态()
-        添加证书日志(类型: "info", 消息: "用户确认已信任证书")
+        添加证书日志(类型: "info", 消息: "手动兜底确认：已信任证书（系统探测失败备用方案）")
     }
 
     // MARK: - CA 证书管理
@@ -441,8 +603,9 @@ FxBzaz833X+KGgOv4VBtDcY=
             创建时间: 创建时间,
             过期时间: 过期时间,
             文件路径: 证书文件URL.path,
-            用户确认已安装: false,
-            用户确认已信任: false
+            系统探测失败: false,
+            手动确认已安装: false,
+            手动确认已信任: false
         )
         保存证书元数据()
 

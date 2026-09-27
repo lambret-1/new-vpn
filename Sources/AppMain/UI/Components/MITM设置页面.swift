@@ -75,33 +75,35 @@ struct MITM设置页面: View {
                             }
                         }
 
-                        // 标记已安装（仅未安装时显示）
-                        if !(mitm管理.元数据?.用户确认已安装 ?? false) {
-                            Button {
-                                mitm管理.标记已安装()
-                            } label: {
-                                HStack {
-                                    Image(systemName: "checkmark.circle")
-                                        .foregroundColor(.blue)
-                                    Text("我已安装描述文件")
-                                        .foregroundColor(.blue)
-                                    Spacer()
+                        // 手动兜底确认按钮（仅系统探测失败时显示）
+                        if mitm管理.使用手动兜底 {
+                            // 标记已安装（仅未安装时显示）
+                            if !mitm管理.综合已安装 {
+                                Button {
+                                    mitm管理.标记已安装()
+                                } label: {
+                                    HStack {
+                                        Image(systemName: "checkmark.circle")
+                                            .foregroundColor(.blue)
+                                        Text("我已安装描述文件（手动确认）")
+                                            .foregroundColor(.blue)
+                                        Spacer()
+                                    }
                                 }
                             }
-                        }
 
-                        // 标记已信任（仅已安装但未信任时显示）
-                        if (mitm管理.元数据?.用户确认已安装 ?? false) &&
-                           !(mitm管理.元数据?.用户确认已信任 ?? false) {
-                            Button {
-                                mitm管理.标记已信任()
-                            } label: {
-                                HStack {
-                                    Image(systemName: "hand.thumbsup")
-                                        .foregroundColor(.green)
-                                    Text("我已在设置中信任证书")
-                                        .foregroundColor(.green)
-                                    Spacer()
+                            // 标记已信任（仅已安装但未信任时显示）
+                            if mitm管理.综合已安装 && !mitm管理.综合已信任 {
+                                Button {
+                                    mitm管理.标记已信任()
+                                } label: {
+                                    HStack {
+                                        Image(systemName: "hand.thumbsup")
+                                            .foregroundColor(.green)
+                                        Text("我已在设置中信任证书（手动确认）")
+                                            .foregroundColor(.green)
+                                        Spacer()
+                                    }
                                 }
                             }
                         }
@@ -346,8 +348,8 @@ struct MITM设置页面: View {
             // 独立状态标签（替代单选圆圈，避免用户误解）
             HStack(spacing: 8) {
                 状态标签(标题: "已生成", 完成: mitm管理.证书文件存在 && mitm管理.证书已生成)
-                状态标签(标题: "已安装", 完成: mitm管理.元数据?.用户确认已安装 ?? false)
-                状态标签(标题: "已信任", 完成: mitm管理.元数据?.用户确认已信任 ?? false)
+                状态标签(标题: "已安装", 完成: mitm管理.综合已安装)
+                状态标签(标题: "已信任", 完成: mitm管理.综合已信任)
             }
         }
         .padding(14)

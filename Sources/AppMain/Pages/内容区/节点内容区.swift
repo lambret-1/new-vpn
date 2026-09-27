@@ -750,7 +750,7 @@ private struct 编辑节点页面: View {
 
                 // Toast 层
                 if 显示Toast {
-                    Toast视图(消息: Toast消息, 成功: Toast成功)
+                    带状态Toast视图(消息: Toast消息, 成功: Toast成功)
                         .transition(.opacity.combined(with: .move(edge: .bottom)))
                         .zIndex(100)
                 }
@@ -941,7 +941,7 @@ private struct 标签文本行: View {
 
 // MARK: - Toast 视图（带成功/失败样式）
 
-private struct Toast视图: View {
+private struct 带状态Toast视图: View {
     let 消息: String
     let 成功: Bool
 

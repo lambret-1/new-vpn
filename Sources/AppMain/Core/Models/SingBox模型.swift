@@ -448,14 +448,29 @@ struct SingBox出站配置: Codable, Equatable {
     var packetEncoding: String?
     /// 绑定物理网卡接口名（en0=WiFi, pdp_ip0=蜂窝），直连出站必须设置避免回环
     var bindInterface: String?
-    /// MITM CA 证书（PEM格式）
-    var caCertificate: String?
-    /// MITM CA 私钥（PEM格式）
-    var caPrivateKey: String?
+    /// MITM CA 证书列表（PEM格式字符串数组）
+    var caCertificate: [String]?
+    /// MITM CA 私钥列表（PEM格式字符串数组）
+    var caPrivateKey: [String]?
     /// MITM 域名策略（ipv4_only/ipv6_only/prefer_ipv4等）
     var domainStrategy: String?
-    /// MITM 是否嗅探域名
-    var sniffEnabled: Bool?
+    /// MITM 嗅探配置
+    var sniff: SingBox嗅探配置?
+
+    /// MITM 嗅探配置
+    struct SingBox嗅探配置: Codable, Equatable {
+        var enabled: Bool = true
+        var destOverride: [String]?
+        var routeOnly: Bool?
+        var sniffing: Bool?
+
+        enum CodingKeys: String, CodingKey {
+            case enabled
+            case destOverride = "dest_override"
+            case routeOnly = "route_only"
+            case sniffing
+        }
+    }
 
     /// 创建 VLESS 出站
     static func vless出站(标签: String,
@@ -548,10 +563,13 @@ struct SingBox出站配置: Codable, Equatable {
                          域名策略: String = "ipv4_only",
                          嗅探: Bool = true) -> SingBox出站配置 {
         var 配置 = SingBox出站配置(type: "mitm", tag: 标签)
-        配置.caCertificate = CA证书
-        配置.caPrivateKey = CA私钥
+        配置.caCertificate = [CA证书]
+        配置.caPrivateKey = [CA私钥]
         配置.domainStrategy = 域名策略
-        配置.sniffEnabled = 嗅探
+        配置.network = "tcp" // 强制 TCP，避免 UDP 监听权限不足
+        if 嗅探 {
+            配置.sniff = SingBox嗅探配置(enabled: true, destOverride: ["http", "tls", "quic"])
+        }
         return 配置
     }
 
@@ -604,6 +622,10 @@ struct SingBox出站配置: Codable, Equatable {
         case overridePort = "override_port"
         case packetEncoding = "packet_encoding"
         case bindInterface = "bind_interface"
+        case caCertificate = "ca_certificate"
+        case caPrivateKey = "ca_private_key"
+        case domainStrategy = "domain_strategy"
+        case sniff
     }
 }
 
@@ -1000,7 +1022,7 @@ struct SingBox路由规则: Codable, Equatable {
         case outbound
         case ruleSet
         case invert
-        case rewriteUrl
+        case rewriteUrl = "rewrite_url"
     }
 }
 

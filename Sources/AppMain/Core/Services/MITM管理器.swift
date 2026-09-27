@@ -897,7 +897,8 @@ FxBzaz833X+KGgOv4VBtDcY=
     // MARK: - 配置获取
 
     /// 获取 MITM 出站配置（供 sing-box 配置生成器使用）
-    /// 证书有效时直接复用，不重复生成
+    /// 注意：当前 libbox v1.11.0 内核不支持 MITM 功能，暂返回 nil
+    /// 待内核升级到支持 MITM 的版本后启用
     func 获取MITM出站配置() -> (证书: String, 私钥: String, TLS指纹: String, 排除域名: [String])? {
         guard 启用, 证书已生成 else { return nil }
 
@@ -909,8 +910,9 @@ FxBzaz833X+KGgOv4VBtDcY=
             return nil
         }
 
-        添加证书日志(类型: "info", 消息: "内核加载 MITM 出站配置，TLS指纹=\(TLS指纹)，排除域名=\(启用的排除域名.count)个")
-        return (CA证书, CA私钥, TLS指纹, 启用的排除域名)
+        // 当前内核版本不支持 MITM，记录日志并返回 nil
+        添加证书日志(类型: "warning", 消息: "当前 libbox v1.11.0 内核不支持 MITM 功能，配置已跳过，待内核升级后启用")
+        return nil
     }
 
     // MARK: - 证书指纹计算

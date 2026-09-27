@@ -402,15 +402,16 @@ final class SingBox配置生成器 {
             outbound: "REJECT"
         ))
 
-        // HTTP 抓包：端口 80 的 TCP 流量转发到本地抓包代理（127.0.0.1:8888）
-        // 抓包代理记录请求/响应后转发到目标服务器
+        // HTTP/HTTPS 抓包：端口 80 和 443 的 TCP 流量转发到本地抓包代理（127.0.0.1:8888）
+        // 80端口：HTTP 请求记录后转发
+        // 443端口：CONNECT 隧道透传（第一阶段不解密TLS，保证HTTPS可用，记录连接日志）
         if 抓包启用 {
             规则列表.append(SingBox路由规则(
-                port: [80],
+                port: [80, 443],
                 network: ["tcp"],
                 outbound: "capture-proxy"
             ))
-            NSLog("[SingBox配置] HTTP抓包已启用，端口80流量转发到capture-proxy")
+            NSLog("[SingBox配置] 抓包已启用，端口80(HTTP)+443(HTTPS CONNECT透传)流量转发到capture-proxy")
         }
 
         // 注意：MITM 解密在 TUN 入站配置中处理，不需要路由规则转发到 mitm-out

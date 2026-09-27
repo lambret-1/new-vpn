@@ -106,6 +106,17 @@ struct MITM设置页面: View {
                         .tint(.主题色)
                         .disabled(!mitm管理.证书可启用)
 
+                    // 内核不支持提示
+                    HStack(spacing: 6) {
+                        Image(systemName: "info.circle.fill")
+                            .font(.system(size: 12))
+                            .foregroundColor(.蓝色)
+                        Text("当前内核版本暂不支持 TLS 解密，HTTPS 抓包为 CONNECT 隧道透传模式（记录连接日志，不解密内容），待内核升级后启用完整解密。")
+                            .font(.system(size: 12))
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(.vertical, 2)
+
                     // 开关置灰时的提示
                     if !mitm管理.证书可启用 {
                         HStack(spacing: 6) {

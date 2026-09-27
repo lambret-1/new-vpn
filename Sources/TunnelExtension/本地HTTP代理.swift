@@ -106,7 +106,12 @@ final class 本地HTTP代理 {
                 self?.关闭连接(连接)
                 return
             }
-            self.转发请求(请求, 原始连接: 连接)
+            // CONNECT 方法：HTTPS 隧道透传（第一阶段不解密，保证可用）
+            if 请求.方法.uppercased() == "CONNECT" {
+                self.处理CONNECT请求(请求, 原始连接: 连接)
+            } else {
+                self.转发请求(请求, 原始连接: 连接)
+            }
         }
     }
 
@@ -209,6 +214,100 @@ final class 本地HTTP代理 {
             Body已截断: 原始Body大小 > 最大Body大小,
             原始数据: 数据
         )
+    }
+
+    /// 处理 CONNECT 请求（HTTPS 隧道透传）
+    /// 第一阶段：建立 TCP 隧道双向透传，不解密 TLS，保证 HTTPS 可用
+    private func 处理CONNECT请求(_ 请求: HTTP请求, 原始连接: NWConnection) {
+        let 开始时间 = Date()
+        // CONNECT 请求的路径格式为 host:port
+        let 目标部分 = 请求.路径.components(separatedBy: ":")
+        guard 目标部分.count >= 2,
+              let 端口 = Int(目标部分[1]) else {
+            NSLog("[抓包代理] CONNECT 请求格式无效：\(请求.路径)")
+            发送错误响应(原始连接, 状态码: 400, 原因: "Bad Request")
+            关闭连接(原始连接)
+            return
+        }
+        let 主机 = 目标部分[0]
+
+        NSLog("[抓包代理] CONNECT 隧道：\(主机):\(端口)")
+
+        // 记录 HTTPS 连接日志（不解密，仅记录连接信息）
+        var 记录 = 抓包记录(
+            请求方法: "CONNECT",
+            请求URL: "https://\(主机):\(端口)",
+            请求主机: 主机,
+            请求路径: "",
+            请求端口: 端口,
+            是否HTTPS: true
+        )
+        记录.请求头 = 请求.请求头
+        抓包存储管理器.共享.添加记录(记录)
+
+        // 响应 200 Connection Established
+        let 响应 = "HTTP/1.1 200 Connection Established\r\n\r\n"
+        原始连接.send(content: 响应.data(using: .utf8), completion: .contentProcessed { [weak self] _ in
+            // 建立到目标服务器的 TCP 连接
+            let 目标连接 = NWConnection(host: NWEndpoint.Host(主机), port: NWEndpoint.Port(integerLiteral: UInt16(端口)), using: .tcp)
+            目标连接.start(queue: self?.连接队列 ?? DispatchQueue.global())
+
+            目标连接.stateUpdateHandler = { [weak self] 状态 in
+                switch 状态 {
+                case .ready:
+                    NSLog("[抓包代理] CONNECT 隧道已建立：\(主机):\(端口)")
+                    // 双向透传数据
+                    self?.双向透传(原始连接, 目标连接, 记录: 记录, 开始时间: 开始时间)
+                case .failed(let 错误):
+                    NSLog("[抓包代理] CONNECT 目标连接失败：\(主机):\(端口)，错误：\(错误.localizedDescription)")
+                    var 结束记录 = 记录
+                    结束记录.错误信息 = 错误.localizedDescription
+                    结束记录.结束时间 = Date()
+                    结束记录.耗时毫秒 = Int(Date().timeIntervalSince(开始时间) * 1000)
+                    抓包存储管理器.共享.更新记录(结束记录)
+                    self?.关闭连接(原始连接)
+                default:
+                    break
+                }
+            }
+        })
+    }
+
+    /// 双向透传数据（客户端 <-> 目标服务器）
+    private func 双向透传(_ 客户端连接: NWConnection, _ 目标连接: NWConnection, 记录: 抓包记录, 开始时间: Date) {
+        // 客户端 -> 目标
+        转发数据流(从: 客户端连接, 到: 目标连接, 方向: "上行") { [weak self] in
+            self?.关闭连接(目标连接)
+        }
+        // 目标 -> 客户端
+        转发数据流(从: 目标连接, 到: 客户端连接, 方向: "下行") { [weak self] in
+            self?.关闭连接(客户端连接)
+            // 更新记录
+            var 结束记录 = 记录
+            结束记录.响应状态码 = 200
+            结束记录.结束时间 = Date()
+            结束记录.耗时毫秒 = Int(Date().timeIntervalSince(开始时间) * 1000)
+            抓包存储管理器.共享.更新记录(结束记录)
+        }
+    }
+
+    /// 转发数据流（从一个连接到另一个连接）
+    private func 转发数据流(从 源连接: NWConnection, 到 目标连接: NWConnection, 方向: String, 完成: @escaping () -> Void) {
+        源连接.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [weak self] 数据, _, 是否完成, 错误 in
+            if let 错误 = 错误 {
+                NSLog("[抓包代理] \(方向)读取失败：\(错误.localizedDescription)")
+                完成()
+                return
+            }
+            guard let 数据 = 数据, !数据.isEmpty else {
+                完成()
+                return
+            }
+            目标连接.send(content: 数据, completion: .contentProcessed { _ in
+                // 继续读取下一批数据
+                self?.转发数据流(从: 源连接, 到: 目标连接, 方向: 方向, 完成: 完成)
+            })
+        }
     }
 
     /// 转发请求到目标服务器

@@ -239,9 +239,7 @@ final class SingBox配置生成器 {
         // 动态检测当前活动物理网卡并绑定，避免直连流量回环到 TUN 导致 connection refused
         let 活动接口 = 检测当前活动物理网卡()
         NSLog("[SingBox配置] DIRECT 出站绑定物理网卡：%@", 活动接口)
-        var direct出站 = SingBox出站配置.direct出站(标签: "DIRECT", 绑定接口: 活动接口)
-        direct出站.network = "tcp" // 强制 TCP，避免 UDP 监听权限不足
-        出站列表.append(direct出站)
+        出站列表.append(SingBox出站配置.direct出站(标签: "DIRECT", 绑定接口: 活动接口))
 
         // Block 出站
         出站列表.append(SingBox出站配置.block出站(标签: "REJECT"))
@@ -321,8 +319,6 @@ final class SingBox配置生成器 {
         )
         // 出站顶层字段设置 TCP 快速打开（libbox v1.11.0 支持）
         配置.tcpFastOpen = true
-        // 强制仅 TCP，避免 iOS 网络扩展中 UDP 监听权限不足
-        配置.network = "tcp"
         return 配置
     }
 
@@ -338,7 +334,6 @@ final class SingBox配置生成器 {
             传输: 生成传输配置(节点)
         )
         配置.tcpFastOpen = true
-        配置.network = "tcp"
         return 配置
     }
 
@@ -353,7 +348,6 @@ final class SingBox配置生成器 {
             传输: 生成传输配置(节点)
         )
         配置.tcpFastOpen = true
-        配置.network = "tcp"
         return 配置
     }
 
@@ -367,7 +361,6 @@ final class SingBox配置生成器 {
             密码: 节点.用户标识 ?? ""
         )
         配置.tcpFastOpen = true
-        配置.network = "tcp"
         return 配置
     }
 

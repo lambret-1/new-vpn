@@ -62,7 +62,7 @@ final class 本地HTTP代理 {
             switch 状态 {
             case .ready:
                 self?.是否运行中 = true
-                NSLog("[抓包代理] 已启动，监听 127.0.0.1:\(self?.监听端口 ?? 0)")
+                NSLog("[抓包代理] 已启动，监听 0.0.0.0:\(self?.监听端口 ?? 0)（TUN网关10.0.0.1可访问）")
             case .failed(let 错误):
                 NSLog("[抓包代理] 监听器失败：\(错误.localizedDescription)")
                 self?.是否运行中 = false

@@ -155,7 +155,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                     // 检查抓包功能是否启用，启用则启动本地 HTTP 代理
                     if let 共享默认 = UserDefaults(suiteName: "group.com.newvpn.app"),
                        共享默认.bool(forKey: "httpCaptureEnabled") {
-                        self.记录扩展日志(级别: "信息", 模块: "抓包", 内容: "HTTP抓包已启用，启动本地代理 127.0.0.1:8888")
+                        self.记录扩展日志(级别: "信息", 模块: "抓包", 内容: "HTTP抓包已启用，启动本地代理 10.0.0.1:8888")
                         本地HTTP代理.共享.启动()
                     }
                 } else {
@@ -1117,22 +1117,22 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             throw NSError(domain: "HotUpdate", code: 2, userInfo: [NSLocalizedDescriptionKey: "配置文件格式错误"])
         }
 
-        // 处理出站配置：capture-proxy 是出站（HTTP代理指向127.0.0.1:8888），不是入站
+        // 处理出站配置：capture-proxy 是出站（HTTP代理指向TUN网关10.0.0.1:8888），不是入站
         if var 出站列表 = 配置字典["outbounds"] as? [[String: Any]] {
             if 抓包启用 {
                 // 检查是否已存在抓包代理出站
                 let 已有抓包出站 = 出站列表.contains { ($0["tag"] as? String) == "capture-proxy" }
                 if !已有抓包出站 {
-                    // 添加抓包代理出站：HTTP代理指向本地127.0.0.1:8888
+                    // 添加抓包代理出站：HTTP代理指向TUN网关10.0.0.1:8888
                     let 抓包出站: [String: Any] = [
                         "type": "http",
                         "tag": "capture-proxy",
-                        "server": "127.0.0.1",
+                        "server": "10.0.0.1",
                         "server_port": 8888
                     ]
                     出站列表.append(抓包出站)
                     配置字典["outbounds"] = 出站列表
-                    记录扩展日志(级别: "信息", 模块: "热更新", 内容: "已添加抓包代理出站 capture-proxy(127.0.0.1:8888)")
+                    记录扩展日志(级别: "信息", 模块: "热更新", 内容: "已添加抓包代理出站 capture-proxy(10.0.0.1:8888)")
                 }
             } else {
                 // 移除抓包代理出站

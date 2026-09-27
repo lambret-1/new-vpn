@@ -23,14 +23,14 @@ struct 抓包详情页面: View {
     /// 重放状态
     @State private var 正在重放 = false
     /// 重放结果
-    @State private var 重放结果: 重放结果?
+    @State private var 重放结果: 重放结果信息?
     /// 显示编辑重放
     @State private var 显示编辑重放 = false
     /// 编辑后的 URL
     @State private var 编辑URL = ""
 
     /// 重放结果数据结构
-    struct 重放结果 {
+    struct 重放结果信息 {
         let 状态码: Int
         let 耗时毫秒: Int
         let 响应大小: Int
@@ -206,7 +206,7 @@ struct 抓包详情页面: View {
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 10)
-                    .background(正在重放 ? Color.gray : Color.蓝色)
+                    .background(正在重放 ? Color.gray : Color.blue)
                     .cornerRadius(8)
                 }
                 .disabled(正在重放)
@@ -279,7 +279,7 @@ struct 抓包详情页面: View {
 
         let 目标URL = 编辑 ? 编辑URL : 记录.请求URL
         guard let url = URL(string: 目标URL) else {
-            重放结果 = 重放结果(状态码: 0, 耗时毫秒: 0, 响应大小: 0, 错误信息: "无效的 URL")
+            重放结果 = 重放结果信息(状态码: 0, 耗时毫秒: 0, 响应大小: 0, 错误信息: "无效的 URL")
             正在重放 = false
             return
         }
@@ -307,9 +307,9 @@ struct 抓包详情页面: View {
                 let 耗时 = Int(Date().timeIntervalSince(开始时间) * 1000)
 
                 if let 错误 = 错误 {
-                    重放结果 = 重放结果(状态码: 0, 耗时毫秒: 耗时, 响应大小: 0, 错误信息: 错误.localizedDescription)
+                    重放结果 = 重放结果信息(状态码: 0, 耗时毫秒: 耗时, 响应大小: 0, 错误信息: 错误.localizedDescription)
                 } else if let http响应 = 响应 as? HTTPURLResponse {
-                    重放结果 = 重放结果(
+                    重放结果 = 重放结果信息(
                         状态码: http响应.statusCode,
                         耗时毫秒: 耗时,
                         响应大小: 数据?.count ?? 0,

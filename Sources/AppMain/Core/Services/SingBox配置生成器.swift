@@ -255,8 +255,17 @@ final class SingBox配置生成器 {
         // libbox 版本不支持 TUN 入站 dns_address 字段，必须用路由规则 + dns-out 方式拦截 DNS
         出站列表.append(SingBox出站配置(type: "dns", tag: "dns-out"))
 
-        // 注意：libbox v1.11.0 不支持 mitm 出站类型，MITM 解密功能暂不可用
-        // MITM 证书管理和设置页面保留，但内核不执行实际解密
+        // MITM 出站：HTTPS 中间人解密，将解密后的流量转发到 proxy 出站
+        if let mitm = MITM配置 {
+            出站列表.append(SingBox出站配置.mitm出站(
+                标签: "mitm-out",
+                CA证书: mitm.证书,
+                CA私钥: mitm.私钥,
+                域名策略: "ipv4_only",
+                嗅探: true
+            ))
+            NSLog("[SingBox配置] MITM 解密已启用，443端口流量转发到mitm-out")
+        }
 
         // 抓包代理出站：HTTP 代理指向本地 127.0.0.1:8888，用于捕获 HTTP 流量
         if 抓包启用 {
@@ -408,11 +417,18 @@ final class SingBox配置生成器 {
             NSLog("[SingBox配置] HTTP抓包已启用，端口80流量转发到capture-proxy")
         }
 
-        // 注意：libbox v1.11.0 不支持 mitm 出站类型，MITM 解密和域名排除功能暂不可用
-        // HTTPS(443)流量直接走 proxy 出站，不进行中间人解密
+        // MITM 拦截：HTTPS(443)的TCP流量转发到 mitm-out 出站进行解密
+        // 注意：只拦截 TCP，不拦截 UDP（QUIC已被下面的规则阻止）
+        if MITM配置 != nil {
+            规则列表.append(SingBox路由规则(
+                port: [443],
+                network: ["tcp"],
+                outbound: "mitm-out"
+            ))
+        }
 
         // URL 重写规则：将匹配的 URL 重写为指定内容
-        // 注意：重写规则需要 MITM 启用才能生效（需要解密 HTTPS），当前内核不支持 MITM，HTTP 流量可重写
+        // 注意：重写规则需要 MITM 启用才能生效（需要解密 HTTPS）
         for 规则 in 重写规则 where 规则.启用 && 规则.类型 == .URL重写 {
             var 路由规则 = SingBox路由规则(
                 domainRegex: [规则.匹配正则],

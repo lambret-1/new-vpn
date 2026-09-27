@@ -232,15 +232,6 @@ final class MITM证书签发器 {
         NSLog("[MITM证书] SecIdentity 查询失败：\(证书查询状态) (\(标签))")
         return nil
     }
-        let 证书查询状态 = SecItemCopyMatching(证书查询 as CFDictionary, &证书结果)
-        if 证书查询状态 == errSecSuccess, let 身份 = 证书结果 as! SecIdentity? {
-            NSLog("[MITM证书] SecIdentity 查询成功：\(标签)")
-            return 身份
-        }
-
-        NSLog("[MITM证书] SecIdentity 查询失败：\(证书查询状态) (\(标签))")
-        return nil
-    }
 
     // MARK: - PEM 解析工具
 

@@ -68,7 +68,7 @@ final class SingBox配置生成器 {
                 cacheId: "newvpn"
             ),
             clashApi: SingBoxClashAPI配置(
-                enabled: true,
+                enabled: nil,
                 listen: "127.0.0.1:9090",
                 externalController: "127.0.0.1:9090"
             )

@@ -1111,8 +1111,8 @@ struct SingBox缓存文件配置: Codable, Equatable {
 
 /// sing-box Clash API 配置
 struct SingBoxClashAPI配置: Codable, Equatable {
-    /// 是否启用
-    var enabled: Bool
+    /// 是否启用（libbox v1.11.0 不支持此字段，保持nil不编码，仅用external_controller启用）
+    var enabled: Bool?
     /// 监听地址
     var listen: String?
     /// 外部控制器

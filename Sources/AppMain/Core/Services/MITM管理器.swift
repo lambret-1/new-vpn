@@ -552,11 +552,28 @@ FxBzaz833X+KGgOv4VBtDcY=
             return .文件缺失
         }
 
-        // 3. 检查 crt 和 key 是否都存在
-        guard 文件状态.crt存在 && 文件状态.key存在 else {
+        // 3. 检查 crt 和 key 是否都存在，key缺失时自动补写（兼容旧版本升级）
+        if 文件状态.crt存在 && !文件状态.key存在 {
+            添加证书日志(类型: "warning", 消息: "检测到crt存在但key缺失，自动补写私钥文件（兼容旧版本升级）")
+            // 优先从内存/UserDefaults读取私钥，其次使用预生成私钥
+            let 待写入私钥 = !CA私钥.isEmpty ? CA私钥 : MITM管理器.预生成CA私钥
+            do {
+                try 待写入私钥.write(to: 私钥文件URL, atomically: true, encoding: .utf8)
+                CA私钥 = 待写入私钥
+                保存配置()
+                添加证书日志(类型: "success", 消息: "私钥文件已自动补写成功")
+            } catch {
+                添加证书日志(类型: "error", 消息: "私钥文件自动补写失败：\(error.localizedDescription)")
+            }
+        }
+
+        // 重新检测文件状态（补写后）
+        let 最终文件状态 = 检测证书文件状态()
+
+        guard 最终文件状态.crt存在 && 最终文件状态.key存在 else {
             if 元数据 != nil { 完全重置证书元数据() }
             if 启用 { 启用 = false }
-            if !文件状态.crt存在 {
+            if !最终文件状态.crt存在 {
                 添加证书日志(类型: "error", 消息: "检测结果：crt证书文件缺失")
             } else {
                 添加证书日志(类型: "error", 消息: "检测结果：key私钥文件缺失")
@@ -566,7 +583,7 @@ FxBzaz833X+KGgOv4VBtDcY=
         }
 
         // 4. 检查 crt 和 key 是否都能正常解析
-        guard 文件状态.crt解析成功 && 文件状态.key解析成功 else {
+        guard 最终文件状态.crt解析成功 && 最终文件状态.key解析成功 else {
             if 元数据 != nil { 完全重置证书元数据() }
             if 启用 { 启用 = false }
             添加证书日志(类型: "error", 消息: "检测结果：证书文件损坏或私钥丢失（PEM解析失败）")

@@ -23,12 +23,6 @@ final class 隧道管理器: NSObject, ObservableObject {
     @Published var 当前状态: 隧道状态 = .已断开
     /// 隧道配置
     @Published var 配置: 隧道配置模型 = .默认
-    /// 是否禁用出站UDP（普通模式下iOS沙盒不支持出站packet监听，禁用UDP避免报错；TUN模式下为false）
-    @Published var 禁用出站UDP: Bool = false {
-        didSet {
-            UserDefaults.standard.set(禁用出站UDP, forKey: "disableOutboundUDP")
-        }
-    }
     /// 流量统计
     @Published var 流量统计: 隧道流量统计 = 隧道流量统计()
     /// 隧道日志
@@ -66,8 +60,6 @@ final class 隧道管理器: NSObject, ObservableObject {
         加载运行模式偏好()
         加载配置()
         注册通知监听()
-        // 加载出站UDP禁用设置
-        禁用出站UDP = UserDefaults.standard.bool(forKey: "disableOutboundUDP")
         // 首次初始化时先请求 VPN 权限，再检测描述文件状态
         初始化VPN权限()
     }
@@ -561,8 +553,7 @@ final class 隧道管理器: NSObject, ObservableObject {
             运行模式: 配置.运行模式,
             MITM配置: MITM管理器.共享.获取MITM出站配置(),
             重写规则: 重写规则管理器.共享.配置.所有启用规则,
-            抓包启用: 抓包存储管理器.共享.是否启用,
-            禁用出站UDP: 禁用出站UDP
+            抓包启用: 抓包存储管理器.共享.是否启用
         )
 
         // 保存配置到 App Group 共享目录（必须使用完整路径）

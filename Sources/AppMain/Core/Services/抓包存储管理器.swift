@@ -7,9 +7,10 @@
 //
 
 import Foundation
+import Combine
 
 /// 抓包存储管理器（单例，主 App 和扩展进程共用）
-final class 抓包存储管理器 {
+final class 抓包存储管理器: ObservableObject {
     // MARK: - 单例
 
     /// 共享实例
@@ -182,5 +183,9 @@ final class 抓包存储管理器 {
         }
         共享默认.set(数据, forKey: 抓包记录键)
         共享默认.synchronize()
+        // 通知 UI 刷新
+        DispatchQueue.main.async { [weak self] in
+            self?.objectWillChange.send()
+        }
     }
 }

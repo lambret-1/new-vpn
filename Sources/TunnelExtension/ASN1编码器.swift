@@ -38,7 +38,7 @@ final class ASN1编码器 {
     static func 编码(标签: 标签, 值: Data) -> Data {
         var 结果 = Data()
         结果.append(标签.rawValue)
-        结果.append(内容: 编码长度(值.count))
+        结果.append(编码长度(值.count))
         结果.append(值)
         return 结果
     }

@@ -60,20 +60,18 @@ final class SingBox配置生成器 {
         // 路由配置
         配置.route = 生成路由配置(分流规则: 分流规则, 节点: 节点, 运行模式: 运行模式, MITM配置: MITM配置, 重写规则: 重写规则, 抓包启用: 抓包启用)
 
-        // 实验配置（缓存文件）
+        // 实验配置（缓存文件 + Clash API）
         配置.experimental = SingBox实验配置(
             cacheFile: SingBox缓存文件配置(
                 enabled: true,
                 path: "cache.db",
                 cacheId: "newvpn"
+            ),
+            clashApi: SingBoxClashAPI配置(
+                enabled: true,
+                listen: "127.0.0.1:9090",
+                externalController: "127.0.0.1:9090"
             )
-        )
-
-        // Clash API：启用外部控制器，供网络活动模块获取实时连接列表
-        配置.clashApi = SingBoxClashAPI配置(
-            enabled: true,
-            listen: "127.0.0.1:9090",
-            externalController: "127.0.0.1:9090"
         )
         NSLog("[SingBox配置] Clash API 已启用：127.0.0.1:9090")
 

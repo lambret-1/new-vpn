@@ -25,6 +25,10 @@ struct 抓包列表页面: View {
     @State private var 显示列表: [抓包记录] = []
     /// 是否显示筛选面板
     @State private var 显示筛选 = false
+    /// 是否显示分享面板
+    @State private var 显示分享 = false
+    /// 分享文件 URL
+    @State private var 分享文件URL: URL?
 
     var body: some View {
         NavigationStack {
@@ -51,24 +55,34 @@ struct 抓包列表页面: View {
                     }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
-                        存储.清空记录()
-                        刷新列表()
-                    } label: {
-                        Image(systemName: "trash")
-                            .foregroundColor(.red)
+                    HStack(spacing: 16) {
+                        Button {
+                            导出HAR()
+                        } label: {
+                            Image(systemName: "square.and.arrow.up")
+                                .foregroundColor(.primary)
+                        }
+                        .disabled(存储.记录总数 == 0)
+
+                        Button {
+                            存储.清空记录()
+                            刷新列表()
+                        } label: {
+                            Image(systemName: "trash")
+                                .foregroundColor(.red)
+                        }
+                        .disabled(存储.记录总数 == 0)
                     }
-                    .disabled(存储.记录总数 == 0)
                 }
-            }
-            .searchable(text: $搜索词, prompt: "搜索 URL / 域名 / 路径")
-            .onChange(of: 搜索词) { _ in
-                筛选.关键词 = 搜索词
-                刷新列表()
             }
             .sheet(isPresented: $显示筛选) {
                 筛选面板(筛选: $筛选) {
                     刷新列表()
+                }
+            }
+            .sheet(isPresented: $显示分享) {
+                if let 文件URL = 分享文件URL {
+                    分享视图(活动项: [文件URL])
                 }
             }
             .onAppear {
@@ -274,6 +288,41 @@ struct 抓包列表页面: View {
     private func 刷新列表() {
         显示列表 = 存储.获取筛选记录(筛选)
     }
+
+    // MARK: - HAR 导出
+
+    private func 导出HAR() {
+        let 所有记录 = 存储.获取所有记录()
+        let har内容 = 抓包记录.导出HAR(所有记录)
+
+        // 写入临时文件
+        let 日期格式化器 = DateFormatter()
+        日期格式化器.dateFormat = "yyyyMMdd_HHmmss"
+        let 文件名 = "newvpn_capture_\(日期格式化器.string(from: Date())).har"
+        let 临时目录 = FileManager.default.temporaryDirectory
+        let 文件URL = 临时目录.appendingPathComponent(文件名)
+
+        do {
+            try har内容.write(to: 文件URL, atomically: true, encoding: .utf8)
+            分享文件URL = 文件URL
+            显示分享 = true
+        } catch {
+            NSLog("[抓包] 导出 HAR 失败：\(error.localizedDescription)")
+        }
+    }
+}
+
+// MARK: - 分享视图
+
+/// UIActivityViewController 包装
+private struct 分享视图: UIViewControllerRepresentable {
+    let 活动项: [Any]
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: 活动项, applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
 
 // MARK: - 筛选面板
@@ -312,6 +361,39 @@ private struct 筛选面板: View {
                 Section("状态") {
                     Toggle("仅显示错误请求", isOn: $筛选.仅显示错误)
                     Toggle("仅显示 HTTPS", isOn: $筛选.仅显示HTTPS)
+                    Toggle("仅显示有响应 Body", isOn: $筛选.仅显示有Body)
+                }
+
+                Section("状态码范围") {
+                    ForEach(["2xx", "3xx", "4xx", "5xx"], id: \.self) { 范围 in
+                        Button {
+                            if 筛选.状态码筛选.contains(范围) {
+                                筛选.状态码筛选.remove(范围)
+                            } else {
+                                筛选.状态码筛选.insert(范围)
+                            }
+                        } label: {
+                            HStack {
+                                Text(范围)
+                                    .foregroundColor(.primary)
+                                Spacer()
+                                if 筛选.状态码筛选.contains(范围) {
+                                    Image(systemName: "checkmark")
+                                        .foregroundColor(.成功色)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Section("响应大小") {
+                    Picker("最小响应大小", selection: $筛选.最小响应大小) {
+                        Text("不限制").tag(0)
+                        Text("1KB 以上").tag(1024)
+                        Text("10KB 以上").tag(10240)
+                        Text("100KB 以上").tag(102400)
+                        Text("1MB 以上").tag(1048576)
+                    }
                 }
 
                 Section {

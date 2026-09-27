@@ -20,6 +20,22 @@ struct 抓包详情页面: View {
     @State private var 响应Body格式 = Body格式.自动
     /// 复制提示
     @State private var 显示复制提示 = false
+    /// 重放状态
+    @State private var 正在重放 = false
+    /// 重放结果
+    @State private var 重放结果: 重放结果?
+    /// 显示编辑重放
+    @State private var 显示编辑重放 = false
+    /// 编辑后的 URL
+    @State private var 编辑URL = ""
+
+    /// 重放结果数据结构
+    struct 重放结果 {
+        let 状态码: Int
+        let 耗时毫秒: Int
+        let 响应大小: Int
+        let 错误信息: String?
+    }
 
     /// Body 显示格式枚举
     enum Body格式: String, CaseIterable {
@@ -33,6 +49,9 @@ struct 抓包详情页面: View {
             VStack(spacing: 16) {
                 // 顶部信息栏
                 顶部信息栏
+
+                // 重放操作栏
+                重放操作栏
 
                 // Tab 切换
                 Picker("", selection: $当前Tab) {
@@ -163,6 +182,153 @@ struct 抓包详情页面: View {
         .background(Color.卡片背景)
         .cornerRadius(12)
         .padding(.horizontal, 16)
+    }
+
+    // MARK: - 重放操作栏
+
+    private var 重放操作栏: some View {
+        VStack(spacing: 10) {
+            HStack(spacing: 10) {
+                // 直接重放按钮
+                Button {
+                    执行重放(编辑: false)
+                } label: {
+                    HStack(spacing: 4) {
+                        if 正在重放 {
+                            ProgressView()
+                                .scaleEffect(0.8)
+                        } else {
+                            Image(systemName: "play.fill")
+                        }
+                        Text("重放")
+                            .font(.system(size: 13, weight: .medium))
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .background(正在重放 ? Color.gray : Color.蓝色)
+                    .cornerRadius(8)
+                }
+                .disabled(正在重放)
+
+                // 编辑重放按钮
+                Button {
+                    编辑URL = 记录.请求URL
+                    显示编辑重放 = true
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "square.and.pencil")
+                        Text("编辑重放")
+                            .font(.system(size: 13, weight: .medium))
+                    }
+                    .foregroundColor(.primary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .background(Color.卡片背景)
+                    .cornerRadius(8)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color.secondary.opacity(0.3), lineWidth: 1)
+                    )
+                }
+                .disabled(正在重放)
+            }
+
+            // 重放结果
+            if let 结果 = 重放结果 {
+                HStack(spacing: 12) {
+                    if let 错误 = 结果.错误信息 {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(.red)
+                        Text("重放失败: \(错误)")
+                            .font(.system(size: 12))
+                            .foregroundColor(.red)
+                    } else {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundColor(.green)
+                        Text("状态码: \(结果.状态码)")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(.green)
+                        Text("耗时: \(结果.耗时毫秒)ms")
+                            .font(.system(size: 12))
+                            .foregroundColor(.secondary)
+                        Text("大小: \(字节格式化(结果.响应大小))")
+                            .font(.system(size: 12))
+                            .foregroundColor(.secondary)
+                    }
+                    Spacer()
+                }
+                .padding(10)
+                .background(Color.卡片背景)
+                .cornerRadius(8)
+            }
+        }
+        .padding(.horizontal, 16)
+        .sheet(isPresented: $显示编辑重放) {
+            编辑重放页面(原始URL: 记录.请求URL, 原始方法: 记录.请求方法) { 新URL in
+                编辑URL = 新URL
+                执行重放(编辑: true)
+            }
+        }
+    }
+
+    /// 执行重放
+    private func 执行重放(编辑: Bool) {
+        正在重放 = true
+        重放结果 = nil
+
+        let 目标URL = 编辑 ? 编辑URL : 记录.请求URL
+        guard let url = URL(string: 目标URL) else {
+            重放结果 = 重放结果(状态码: 0, 耗时毫秒: 0, 响应大小: 0, 错误信息: "无效的 URL")
+            正在重放 = false
+            return
+        }
+
+        let 开始时间 = Date()
+        var 请求 = URLRequest(url: url)
+        请求.httpMethod = 记录.请求方法
+
+        // 复制请求头
+        for 头 in 记录.请求头 {
+            let 跳过头 = ["host", "connection", "content-length"]
+            if !跳过头.contains(头.名称.lowercased()) {
+                请求.setValue(头.值, forHTTPHeaderField: 头.名称)
+            }
+        }
+
+        // 复制请求 Body
+        if let body = 记录.请求Body内容, let body数据 = body.data(using: .utf8) {
+            请求.httpBody = body数据
+        }
+
+        URLSession.shared.dataTask(with: 请求) { 数据, 响应, 错误 in
+            DispatchQueue.main.async {
+                正在重放 = false
+                let 耗时 = Int(Date().timeIntervalSince(开始时间) * 1000)
+
+                if let 错误 = 错误 {
+                    重放结果 = 重放结果(状态码: 0, 耗时毫秒: 耗时, 响应大小: 0, 错误信息: 错误.localizedDescription)
+                } else if let http响应 = 响应 as? HTTPURLResponse {
+                    重放结果 = 重放结果(
+                        状态码: http响应.statusCode,
+                        耗时毫秒: 耗时,
+                        响应大小: 数据?.count ?? 0,
+                        错误信息: nil
+                    )
+                }
+            }
+        }.resume()
+    }
+
+    /// 字节格式化
+    private func 字节格式化(_ 字节数: Int) -> String {
+        if 字节数 < 1024 {
+            return "\(字节数)B"
+        } else if 字节数 < 1024 * 1024 {
+            return String(format: "%.1fKB", Double(字节数) / 1024.0)
+        } else {
+            return String(format: "%.2fMB", Double(字节数) / (1024.0 * 1024.0))
+        }
     }
 
     // MARK: - 请求内容
@@ -407,6 +573,73 @@ private extension Date {
         格式化器.dateFormat = "yyyy-MM-dd HH:mm:ss"
         格式化器.locale = Locale(identifier: "zh_CN")
         return 格式化器.string(from: self)
+    }
+}
+
+// MARK: - 编辑重放页面
+
+/// 编辑重放页面
+private struct 编辑重放页面: View {
+    /// 原始 URL
+    let 原始URL: String
+    /// 原始方法
+    let 原始方法: String
+    /// 确认回调
+    var 确认回调: (String) -> Void
+
+    /// 编辑后的 URL
+    @State private var 编辑URL: String
+    /// 环境变量
+    @Environment(\.dismiss) private var dismiss
+
+    init(原始URL: String, 原始方法: String, 确认回调: @escaping (String) -> Void) {
+        self.原始URL = 原始URL
+        self.原始方法 = 原始方法
+        self.确认回调 = 确认回调
+        self._编辑URL = State(initialValue: 原始URL)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("请求方法") {
+                    Text(原始方法.uppercased())
+                        .foregroundColor(.secondary)
+                }
+
+                Section("请求 URL") {
+                    TextField("请求 URL", text: $编辑URL, axis: .vertical)
+                        .lineLimit(3...6)
+                        .font(.system(size: 14, design: .monospaced))
+                }
+
+                Section {
+                    Button(role: .destructive) {
+                        编辑URL = 原始URL
+                    } label: {
+                        Text("恢复原始 URL")
+                            .foregroundColor(.red)
+                    }
+                }
+            }
+            .navigationTitle("编辑重放")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("取消") {
+                        dismiss()
+                    }
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("发送") {
+                        确认回调(编辑URL)
+                        dismiss()
+                    }
+                    .fontWeight(.medium)
+                    .disabled(编辑URL.isEmpty)
+                }
+            }
+        }
     }
 }
 

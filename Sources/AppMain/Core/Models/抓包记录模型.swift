@@ -137,6 +137,96 @@ struct 抓包记录: Codable, Equatable, Identifiable {
         return 命令
     }
 
+    /// 转换为 HAR 格式的 entry 字典
+    var har条目: [String: Any] {
+        let 日期格式化器 = ISO8601DateFormatter()
+        日期格式化器.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+
+        // 请求头
+        var 请求头数组: [[String: String]] = []
+        for 头 in 请求头 {
+            请求头数组.append(["name": 头.名称, "value": 头.值])
+        }
+
+        // 响应头
+        var 响应头数组: [[String: String]] = []
+        if let 响应头 = 响应头 {
+            for 头 in 响应头 {
+                响应头数组.append(["name": 头.名称, "value": 头.值])
+            }
+        }
+
+        // 请求部分
+        var 请求字典: [String: Any] = [
+            "method": 请求方法.uppercased(),
+            "url": 请求URL,
+            "httpVersion": "HTTP/1.1",
+            "headers": 请求头数组,
+            "queryString": [],
+            "cookies": [],
+            "headersSize": -1,
+            "bodySize": 请求Body大小
+        ]
+        if let body = 请求Body内容 {
+            请求字典["postData"] = [
+                "mimeType": 请求Body类型 ?? "application/octet-stream",
+                "text": body
+            ]
+        }
+
+        // 响应部分
+        var 响应字典: [String: Any] = [
+            "status": 响应状态码 ?? 0,
+            "statusText": 响应状态文本 ?? "",
+            "httpVersion": "HTTP/1.1",
+            "headers": 响应头数组,
+            "cookies": [],
+            "content": [
+                "size": 响应Body大小 ?? 0,
+                "mimeType": 响应Body类型 ?? ""
+            ],
+            "redirectURL": "",
+            "headersSize": -1,
+            "bodySize": 响应Body大小 ?? 0
+        ]
+        if let body = 响应Body内容 {
+            响应字典["content"]?["text"] = body
+        }
+
+        // 完整 entry
+        return [
+            "startedDateTime": 日期格式化器.string(from: 开始时间),
+            "time": 耗时毫秒 ?? 0,
+            "request": 请求字典,
+            "response": 响应字典,
+            "cache": [:],
+            "timings": [
+                "send": 0,
+                "wait": 耗时毫秒 ?? 0,
+                "receive": 0
+            ]
+        ]
+    }
+
+    /// 将多条记录导出为 HAR 格式 JSON 字符串
+    static func 导出HAR(_ 记录列表: [抓包记录]) -> String {
+        let har字典: [String: Any] = [
+            "log": [
+                "version": "1.2",
+                "creator": [
+                    "name": "NewVPN",
+                    "version": "1.0"
+                ],
+                "entries": 记录列表.map { $0.har条目 }
+            ]
+        ]
+        if let 数据 = try? JSONSerialization.data(withJSONObject: har字典, options: [.prettyPrinted]),
+           let 字符串 = String(data: 数据, encoding: .utf8) {
+            return 字符串
+        }
+        return "{}"
+    }
+
     // MARK: - 初始化
 
     /// 创建新的抓包记录（请求开始时调用）
@@ -199,10 +289,17 @@ struct 抓包筛选条件: Equatable {
     var 仅显示错误: Bool = false
     /// 仅显示 HTTPS
     var 仅显示HTTPS: Bool = false
+    /// 状态码筛选（空=全部，可选 2xx/3xx/4xx/5xx）
+    var 状态码筛选: Set<String> = []
+    /// 最小响应大小（字节，0=不限制）
+    var 最小响应大小: Int = 0
+    /// 仅显示有响应 Body 的记录
+    var 仅显示有Body: Bool = false
 
     /// 是否无筛选条件
     var 是否空: Bool {
         关键词.isEmpty && 方法筛选.isEmpty && !仅显示错误 && !仅显示HTTPS
+        && 状态码筛选.isEmpty && 最小响应大小 == 0 && !仅显示有Body
     }
 
     /// 判断记录是否符合筛选条件
@@ -223,6 +320,20 @@ struct 抓包筛选条件: Equatable {
         if 仅显示错误 && !记录.是否失败 { return false }
         // 仅 HTTPS
         if 仅显示HTTPS && !记录.是否HTTPS { return false }
+        // 状态码筛选
+        if !状态码筛选.isEmpty {
+            guard let 状态码 = 记录.响应状态码 else { return false }
+            let 类别 = "\(状态码 / 100)xx"
+            if !状态码筛选.contains(类别) { return false }
+        }
+        // 最小响应大小
+        if 最小响应大小 > 0 {
+            if (记录.响应Body大小 ?? 0) < 最小响应大小 { return false }
+        }
+        // 仅显示有 Body
+        if 仅显示有Body {
+            if (记录.响应Body大小 ?? 0) == 0 { return false }
+        }
         return true
     }
 }

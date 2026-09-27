@@ -625,6 +625,7 @@ private struct 编辑节点页面: View {
     @EnvironmentObject private var 状态: AppState
     @Environment(\.dismiss) private var 关闭
 
+    // 输入字段
     @State private var 名称: String
     @State private var 地址: String
     @State private var 端口: String
@@ -636,6 +637,17 @@ private struct 编辑节点页面: View {
     @State private var ws主机: String
     @State private var 分组: String
     @State private var 备注: String
+
+    // 校验错误
+    @State private var 名称错误: String?
+    @State private var 地址错误: String?
+    @State private var 端口错误: String?
+    @State private var UUID错误: String?
+
+    // Toast
+    @State private var 显示Toast = false
+    @State private var Toast消息 = ""
+    @State private var Toast成功 = true
 
     init(节点: 节点模型) {
         self.节点 = 节点
@@ -652,54 +664,95 @@ private struct 编辑节点页面: View {
         _备注 = State(initialValue: 节点.备注 ?? "")
     }
 
+    /// 是否有修改
+    private var 有修改: Bool {
+        名称 != 节点.名称 ||
+        地址 != 节点.地址 ||
+        端口 != "\(节点.端口)" ||
+        用户标识 != (节点.用户标识 ?? "") ||
+        选中传输类型 != 节点.传输类型 ||
+        启用TLS != 节点.启用TLS ||
+        服务器名称 != (节点.服务器名称 ?? "") ||
+        ws路径 != (节点.ws路径 ?? "") ||
+        ws主机 != (节点.ws主机 ?? "") ||
+        分组 != 节点.分组 ||
+        备注 != (节点.备注 ?? "")
+    }
+
+    /// 是否需要UUID字段
+    private var 需要UUID: Bool {
+        节点.协议 == .vless || 节点.协议 == .vmess || 节点.协议 == .trojan
+    }
+
     var body: some View {
         NavigationStack {
-            Form {
-                Section("基本信息") {
-                    HStack {
-                        Text("协议")
-                        Spacer()
-                        Text(节点.协议.rawValue)
-                            .foregroundColor(.secondary)
+            ZStack {
+                Form {
+                    // 基本信息模块
+                    Section {
+                        标签文本行(标签: "协议", 内容: 节点.协议.rawValue)
+                        标签输入行(标签: "节点名称", 占位: "请输入节点名称", 文本: $名称, 错误: $名称错误)
+                        标签输入行(标签: "地址", 占位: "域名/IP", 文本: $地址, 错误: $地址错误, 键盘类型: .URL)
+                        标签输入行(标签: "端口", 占位: "1~65535", 文本: $端口, 错误: $端口错误, 键盘类型: .numberPad)
+                        if 需要UUID {
+                            标签输入行(标签: "UUID", 占位: 节点.协议 == .trojan ? "Trojan密码" : "VLESS UUID", 文本: $用户标识, 错误: $UUID错误)
+                        }
+                    } header: {
+                        Text("基本信息")
                     }
-                    TextField("节点名称", text: $名称)
-                    TextField("服务器地址", text: $地址)
-                        .autocapitalization(.none)
-                        .keyboardType(.URL)
-                    HStack {
-                        Text("端口")
-                        TextField("端口", text: $端口)
-                            .keyboardType(.numberPad)
-                            .multilineTextAlignment(.trailing)
-                    }
-                    if 节点.协议 == .vless || 节点.协议 == .vmess || 节点.协议 == .trojan {
-                        TextField("UUID / 密码", text: $用户标识)
-                            .autocapitalization(.none)
-                    }
-                }
 
-                Section("传输设置") {
-                    Picker("传输类型", selection: $选中传输类型) {
-                        ForEach(传输类型.allCases, id: \.self) { 类型 in
-                            Text(类型.rawValue).tag(类型)
+                    // 传输设置模块
+                    Section {
+                        Picker("传输类型", selection: $选中传输类型) {
+                            ForEach(传输类型.allCases, id: \.self) { 类型 in
+                                Text(类型.rawValue).tag(类型)
+                            }
+                        }
+                    } header: {
+                        Text("传输设置")
+                    }
+
+                    // TLS 设置模块（仅启用TLS时显示）
+                    if 启用TLS {
+                        Section {
+                            标签输入行(标签: "SNI", 占位: "TLS服务器名称", 文本: $服务器名称, 错误: .constant(nil), 键盘类型: .URL)
+                        } header: {
+                            Text("TLS 设置")
                         }
                     }
-                    Toggle("启用 TLS", isOn: $启用TLS)
-                    if 启用TLS {
-                        TextField("SNI 服务器名称", text: $服务器名称)
-                            .autocapitalization(.none)
-                    }
+
+                    // WebSocket 设置模块（仅ws传输时显示）
                     if 选中传输类型 == .ws {
-                        TextField("WebSocket 路径", text: $ws路径)
-                            .autocapitalization(.none)
-                        TextField("WebSocket Host", text: $ws主机)
-                            .autocapitalization(.none)
+                        Section {
+                            标签输入行(标签: "路径", 占位: "WebSocket路径，如 /ws", 文本: $ws路径, 错误: .constant(nil), 键盘类型: .URL)
+                            标签输入行(标签: "Host", 占位: "WebSocket Host头", 文本: $ws主机, 错误: .constant(nil), 键盘类型: .URL)
+                        } header: {
+                            Text("WebSocket 设置")
+                        }
+                    }
+
+                    // TLS 开关（独立模块）
+                    Section {
+                        Toggle("启用 TLS", isOn: $启用TLS)
+                            .tint(.主题色)
+                    } header: {
+                        Text("安全设置")
+                    }
+
+                    // 分组与备注模块
+                    Section {
+                        标签输入行(标签: "分组", 占位: "分组名称", 文本: $分组, 错误: .constant(nil))
+                        标签输入行(标签: "备注", 占位: "可选备注信息", 文本: $备注, 错误: .constant(nil))
+                    } header: {
+                        Text("分组与备注")
                     }
                 }
 
-                Section("分组与备注") {
-                    TextField("分组名称", text: $分组)
-                    TextField("备注", text: $备注)
+                // Toast 层
+                if 显示Toast {
+                    Toast视图(消息: Toast消息, 成功: Toast成功)
+                        .transition(.opacity.combined(with: .move(edge: .bottom)))
+                        .zIndex(100)
                 }
             }
             .navigationTitle("编辑节点")
@@ -712,19 +765,82 @@ private struct 编辑节点页面: View {
                     Button("保存") {
                         保存节点()
                     }
-                    .disabled(名称.isEmpty || 地址.isEmpty || 端口.isEmpty)
+                    .disabled(!有修改)
                 }
             }
         }
     }
 
+    // MARK: - 校验与保存
+
+    /// 校验所有字段
+    private func 校验字段() -> Bool {
+        var 校验通过 = true
+
+        // 名称校验
+        if 名称.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            名称错误 = "节点名称不能为空"
+            校验通过 = false
+        } else {
+            名称错误 = nil
+        }
+
+        // 地址校验
+        if 地址.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            地址错误 = "地址不能为空"
+            校验通过 = false
+        } else {
+            地址错误 = nil
+        }
+
+        // 端口校验
+        if let 端口号 = Int(端口), 端口号 >= 1, 端口号 <= 65535 {
+            端口错误 = nil
+        } else {
+            端口错误 = "端口必须为1~65535的数字"
+            校验通过 = false
+        }
+
+        // UUID校验（仅需要时）
+        if 需要UUID {
+            if 节点.协议 == .vless || 节点.协议 == .vmess {
+                // UUID格式校验：8-4-4-4-12
+                let uuid正则 = "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+                if 用户标识.range(of: uuid正则, options: .regularExpression) == nil {
+                    UUID错误 = "UUID格式不正确"
+                    校验通过 = false
+                } else {
+                    UUID错误 = nil
+                }
+            } else if 节点.协议 == .trojan {
+                if 用户标识.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    UUID错误 = "密码不能为空"
+                    校验通过 = false
+                } else {
+                    UUID错误 = nil
+                }
+            }
+        }
+
+        return 校验通过
+    }
+
     /// 保存节点修改
     private func 保存节点() {
-        guard let 端口号 = Int(端口), 端口号 > 0, 端口号 <= 65535 else { return }
+        // 先校验
+        guard 校验字段() else {
+            显示Toast消息("请修正标红的字段", 成功: false)
+            return
+        }
+
+        guard let 端口号 = Int(端口) else {
+            显示Toast消息("端口格式错误", 成功: false)
+            return
+        }
 
         var 修改后节点 = 节点
-        修改后节点.名称 = 名称
-        修改后节点.地址 = 地址
+        修改后节点.名称 = 名称.trimmingCharacters(in: .whitespacesAndNewlines)
+        修改后节点.地址 = 地址.trimmingCharacters(in: .whitespacesAndNewlines)
         修改后节点.端口 = 端口号
         修改后节点.用户标识 = 用户标识.isEmpty ? nil : 用户标识
         修改后节点.传输类型 = 选中传输类型
@@ -732,11 +848,122 @@ private struct 编辑节点页面: View {
         修改后节点.服务器名称 = 服务器名称.isEmpty ? nil : 服务器名称
         修改后节点.ws路径 = ws路径.isEmpty ? nil : ws路径
         修改后节点.ws主机 = ws主机.isEmpty ? nil : ws主机
-        修改后节点.分组 = 分组
+        修改后节点.分组 = 分组.isEmpty ? "默认分组" : 分组
         修改后节点.备注 = 备注.isEmpty ? nil : 备注
 
         状态.更新节点(修改后节点)
-        关闭()
+        显示Toast消息("节点保存成功", 成功: true)
+
+        // 延迟关闭，让用户看到Toast
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+            关闭()
+        }
+    }
+
+    /// 显示 Toast 消息
+    private func 显示Toast消息(_ 消息: String, 成功: Bool) {
+        Toast消息 = 消息
+        Toast成功 = 成功
+        withAnimation(.easeInOut(duration: 0.2)) {
+            显示Toast = true
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+            withAnimation(.easeInOut(duration: 0.3)) {
+                显示Toast = false
+            }
+        }
+    }
+}
+
+// MARK: - 标签输入行组件
+
+/// 标签+输入框成行组件（带错误提示）
+private struct 标签输入行: View {
+    let 标签: String
+    let 占位: String
+    @Binding var 文本: String
+    @Binding var 错误: String?
+    var 键盘类型: UIKeyboardType = .default
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 12) {
+                Text(标签)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(.primary)
+                    .frame(width: 70, alignment: .leading)
+                TextField(占位, text: $文本)
+                    .font(.system(size: 14))
+                    .autocapitalization(.none)
+                    .keyboardType(键盘类型)
+                    .multilineTextAlignment(.leading)
+            }
+            .padding(.vertical, 6)
+
+            // 错误提示
+            if let 错误 = 错误, !错误.isEmpty {
+                HStack(spacing: 4) {
+                    Image(systemName: "exclamationmark.circle.fill")
+                        .font(.system(size: 11))
+                        .foregroundColor(.危险色)
+                    Text(错误)
+                        .font(.system(size: 11))
+                        .foregroundColor(.危险色)
+                }
+                .padding(.leading, 82)
+                .padding(.bottom, 2)
+            }
+        }
+        .padding(.vertical, 2)
+    }
+}
+
+// MARK: - 标签文本行组件（只读）
+
+private struct 标签文本行: View {
+    let 标签: String
+    let 内容: String
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Text(标签)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(.primary)
+                .frame(width: 70, alignment: .leading)
+            Text(内容)
+                .font(.system(size: 14))
+                .foregroundColor(.secondary)
+            Spacer()
+        }
+        .padding(.vertical, 8)
+    }
+}
+
+// MARK: - Toast 视图（带成功/失败样式）
+
+private struct Toast视图: View {
+    let 消息: String
+    let 成功: Bool
+
+    var body: some View {
+        VStack {
+            Spacer()
+            HStack(spacing: 8) {
+                Image(systemName: 成功 ? "checkmark.circle.fill" : "xmark.circle.fill")
+                    .foregroundColor(.white)
+                    .font(.system(size: 16))
+                Text(消息)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(.white)
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
+            .background(成功 ? Color.green.opacity(0.9) : Color.危险色.opacity(0.9))
+            .cornerRadius(20)
+            .padding(.bottom, 20)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .allowsHitTesting(false)
     }
 }
 

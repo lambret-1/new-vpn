@@ -285,6 +285,30 @@ struct SingBox入站配置: Codable, Equatable {
     var sniffOverrideDestination: Bool?
     /// 嗅探超时
     var sniffTimeout: String?
+    /// MITM 配置（TUN入站启用HTTPS中间人解密）
+    var mitm: SingBoxMITM配置?
+
+    /// sing-box MITM 配置
+    struct SingBoxMITM配置: Codable, Equatable {
+        /// 是否启用
+        var enabled: Bool
+        /// CA 证书路径
+        var caCertificatePath: String?
+        /// CA 私钥路径
+        var caPrivateKeyPath: String?
+        /// 域名策略
+        var domainStrategy: String?
+        /// 排除域名列表（这些域名跳过MITM解密，直接透传原始TLS）
+        var excludeDomain: [String]?
+
+        enum CodingKeys: String, CodingKey {
+            case enabled
+            case caCertificatePath = "ca_certificate_path"
+            case caPrivateKeyPath = "ca_private_key_path"
+            case domainStrategy = "domain_strategy"
+            case excludeDomain = "exclude_domain"
+        }
+    }
 
     /// 创建 TUN 入站
     static func tun入站(标签: String = "tun-in",
@@ -294,7 +318,8 @@ struct SingBox入站配置: Codable, Equatable {
                         严格路由: Bool = true,
                         网络栈: String = "system",
                         DNS地址: String? = nil,
-                        启用嗅探: Bool = true) -> SingBox入站配置 {
+                        启用嗅探: Bool = true,
+                        MITM配置: SingBoxMITM配置? = nil) -> SingBox入站配置 {
         var 配置 = SingBox入站配置(type: "tun", tag: 标签)
         配置.address = [地址]
         配置.mtu = MTU
@@ -307,6 +332,7 @@ struct SingBox入站配置: Codable, Equatable {
         配置.sniff = 启用嗅探
         配置.sniffOverrideDestination = false
         配置.sniffTimeout = "300ms"
+        配置.mitm = MITM配置
         return 配置
     }
 
@@ -373,6 +399,7 @@ struct SingBox入站配置: Codable, Equatable {
         case sniff
         case sniffOverrideDestination = "sniff_override_destination"
         case sniffTimeout = "sniff_timeout"
+        case mitm
     }
 }
 

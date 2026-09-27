@@ -52,10 +52,10 @@ final class SingBox配置生成器 {
         配置.dns = 生成DNS配置(DNS配置, 节点: 节点, 运行模式: 运行模式)
 
         // 入站配置
-        配置.inbounds = 生成入站配置()
+        配置.inbounds = 生成入站配置(MITM配置: MITM配置)
 
         // 出站配置
-        配置.outbounds = 生成出站配置(节点: 节点, 节点列表: 节点列表, MITM配置: MITM配置, 抓包启用: 抓包启用)
+        配置.outbounds = 生成出站配置(节点: 节点, 节点列表: 节点列表, 抓包启用: 抓包启用)
 
         // 路由配置
         配置.route = 生成路由配置(分流规则: 分流规则, 节点: 节点, 运行模式: 运行模式, MITM配置: MITM配置, 重写规则: 重写规则, 抓包启用: 抓包启用)
@@ -155,14 +155,29 @@ final class SingBox配置生成器 {
     // MARK: - 生成入站配置
 
     /// 生成入站配置
-    private func 生成入站配置() -> [SingBox入站配置] {
-        [
+    private func 生成入站配置(MITM配置: (证书: String, 私钥: String, TLS指纹: String, 排除域名: [String])? = nil) -> [SingBox入站配置] {
+        // MITM 配置（TUN入站启用HTTPS中间人解密）
+        var mitm配置: SingBox入站配置.SingBoxMITM配置?
+        if let mitm = MITM配置 {
+            // 将证书和私钥写入临时文件，供 sing-box 读取
+            let 临时目录 = FileManager.default.temporaryDirectory
+            let 证书路径 = 临时目录.appendingPathComponent("mitm_ca.crt").path
+            let 私钥路径 = 临时目录.appendingPathComponent("mitm_ca.key").path
+            try? mitm.证书.write(toFile: 证书路径, atomically: true, encoding: .utf8)
+            try? mitm.私钥.write(toFile: 私钥路径, atomically: true, encoding: .utf8)
+
+            mitm配置 = SingBox入站配置.SingBoxMITM配置(
+                enabled: true,
+                caCertificatePath: 证书路径,
+                caPrivateKeyPath: 私钥路径,
+                domainStrategy: "ipv4_only",
+                excludeDomain: mitm.排除域名.isEmpty ? nil : mitm.排除域名
+            )
+            NSLog("[SingBox配置] MITM已启用（TUN入站），TLS指纹=\(mitm.TLS指纹)，排除域名=\(mitm.排除域名.count)个")
+        }
+
+        return [
             // TUN 入站（iOS 隧道使用）
-            // 注意：Network Extension 中必须用 gvisor 栈，system 栈需要 root 权限
-            // auto_route/strict_route 由系统 NEPacketTunnelNetworkSettings 控制，不需 sing-box 管理
-            // MTU 降低到 1400：避免物理网卡 MTU 差异导致大包分片被丢弃触发 RST
-            // DNS 拦截通过路由规则将目标端口53流量转发到 dns-out 出站实现
-            // 启用协议嗅探（sniff）：从 TLS Client Hello 中提取 SNI 域名，提升分流精度
             SingBox入站配置.tun入站(
                 标签: "tun-in",
                 地址: "10.0.0.2/24",
@@ -170,7 +185,8 @@ final class SingBox配置生成器 {
                 自动路由: false,
                 严格路由: false,
                 网络栈: "gvisor",
-                启用嗅探: true
+                启用嗅探: true,
+                MITM配置: mitm配置
             ),
             // Mixed 入站（HTTP+SOCKS5，用于本地应用）
             SingBox入站配置.mixed入站(
@@ -178,15 +194,13 @@ final class SingBox配置生成器 {
                 地址: "127.0.0.1",
                 端口: 7890
             )
-            // 注意：libbox v1.11.0 不支持 api 入站类型，暂不启用
-            // API 入站用于查询连接列表，待 libbox 升级后启用
         ]
     }
 
     // MARK: - 生成出站配置
 
     /// 生成出站配置
-    private func 生成出站配置(节点: 节点模型?, 节点列表: [节点模型], MITM配置: (证书: String, 私钥: String, TLS指纹: String, 排除域名: [String])? = nil, 抓包启用: Bool = false) -> [SingBox出站配置] {
+    private func 生成出站配置(节点: 节点模型?, 节点列表: [节点模型], 抓包启用: Bool = false) -> [SingBox出站配置] {
         var 出站列表: [SingBox出站配置] = []
 
         // 当前节点出站
@@ -248,19 +262,6 @@ final class SingBox配置生成器 {
         // DNS 出站：将目标端口 53 的流量交给 sing-box DNS 模块处理
         // libbox 版本不支持 TUN 入站 dns_address 字段，必须用路由规则 + dns-out 方式拦截 DNS
         出站列表.append(SingBox出站配置(type: "dns", tag: "dns-out"))
-
-        // MITM 出站：HTTPS 中间人解密（启用时添加）
-        if let mitm = MITM配置 {
-            出站列表.append(SingBox出站配置.mitm出站(
-                标签: "mitm-out",
-                CA证书: mitm.证书,
-                CA私钥: mitm.私钥,
-                域名策略: "ipv4_only",
-                嗅探: true,
-                TLS指纹: mitm.TLS指纹
-            ))
-            NSLog("[SingBox配置] MITM TLS指纹：\(mitm.TLS指纹)，排除域名：\(mitm.排除域名.count)个")
-        }
 
         // 抓包代理出站：HTTP 代理指向本地 127.0.0.1:8888，用于捕获 HTTP 流量
         if 抓包启用 {
@@ -412,27 +413,8 @@ final class SingBox配置生成器 {
             NSLog("[SingBox配置] HTTP抓包已启用，端口80流量转发到capture-proxy")
         }
 
-        // MITM 域名排除：对强WAF防护域名跳过MITM解密，直接透传原始TLS会话
-        // 必须在 MITM 拦截规则之前，优先匹配
-        if let mitm = MITM配置, !mitm.排除域名.isEmpty {
-            规则列表.append(SingBox路由规则(
-                domain: mitm.排除域名,
-                port: [443],
-                network: ["tcp"],
-                outbound: "proxy"
-            ))
-            NSLog("[SingBox配置] MITM域名排除：\(mitm.排除域名.count)个域名直接透传TLS")
-        }
-
-        // MITM 拦截：HTTPS(443)的TCP流量转发到 mitm-out 出站进行解密
-        // 注意：只拦截 TCP，不拦截 UDP（QUIC已被下面的规则阻止）
-        if MITM配置 != nil {
-            规则列表.append(SingBox路由规则(
-                port: [443],
-                network: ["tcp"],
-                outbound: "mitm-out"
-            ))
-        }
+        // 注意：MITM 解密在 TUN 入站配置中处理，不需要路由规则转发到 mitm-out
+        // 域名排除通过入站 MITM 配置的 exclude_domain 实现
 
         // URL 重写规则：将匹配的 URL 重写为指定内容
         // 注意：重写规则需要 MITM 启用才能生效（需要解密 HTTPS）

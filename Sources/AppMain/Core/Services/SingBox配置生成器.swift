@@ -69,7 +69,7 @@ final class SingBox配置生成器 {
             ),
             clashApi: SingBoxClashAPI配置(
                 enabled: nil,
-                listen: "127.0.0.1:9090",
+                listen: nil,
                 externalController: "127.0.0.1:9090"
             )
         )

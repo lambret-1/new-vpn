@@ -255,25 +255,14 @@ final class SingBox配置生成器 {
         // libbox 版本不支持 TUN 入站 dns_address 字段，必须用路由规则 + dns-out 方式拦截 DNS
         出站列表.append(SingBox出站配置(type: "dns", tag: "dns-out"))
 
-        // MITM 出站：HTTPS 中间人解密，将解密后的流量转发到 proxy 出站
-        if let mitm = MITM配置 {
-            出站列表.append(SingBox出站配置.mitm出站(
-                标签: "mitm-out",
-                CA证书: mitm.证书,
-                CA私钥: mitm.私钥,
-                域名策略: "ipv4_only",
-                嗅探: true
-            ))
-            NSLog("[SingBox配置] MITM 解密已启用，443端口流量转发到mitm-out")
-        }
-
-        // 抓包代理出站：HTTP 代理指向本地 127.0.0.1:8888，用于捕获 HTTP 流量
-        if 抓包启用 {
+        // 抓包代理出站：HTTP 代理指向 TUN 网关 10.0.0.1:8888
+        // MITM 解密和 HTTP 抓包都通过本地代理处理（本地代理支持 CONNECT 隧道 + TLS 终结）
+        if 抓包启用 || MITM配置 != nil {
             var 抓包代理 = SingBox出站配置(type: "http", tag: "capture-proxy")
-            抓包代理.server = "127.0.0.1"
+            抓包代理.server = "10.0.0.1"
             抓包代理.serverPort = 8888
             出站列表.append(抓包代理)
-            NSLog("[SingBox配置] 已添加抓包代理出站：127.0.0.1:8888")
+            NSLog("[SingBox配置] 抓包/MITM代理出站：10.0.0.1:8888")
         }
 
         return 出站列表
@@ -417,14 +406,15 @@ final class SingBox配置生成器 {
             NSLog("[SingBox配置] HTTP抓包已启用，端口80流量转发到capture-proxy")
         }
 
-        // MITM 拦截：HTTPS(443)的TCP流量转发到 mitm-out 出站进行解密
-        // 注意：只拦截 TCP，不拦截 UDP（QUIC已被下面的规则阻止）
-        if MITM配置 != nil {
+        // MITM/抓包拦截：HTTPS(443)的TCP流量转发到本地代理(capture-proxy)
+        // 本地代理根据 MITM 开关决定：启用则 TLS 终结解密，未启用则 CONNECT 透传
+        if MITM配置 != nil || 抓包启用 {
             规则列表.append(SingBox路由规则(
                 port: [443],
                 network: ["tcp"],
-                outbound: "mitm-out"
+                outbound: "capture-proxy"
             ))
+            NSLog("[SingBox配置] 443端口流量转发到capture-proxy（本地代理处理MITM/抓包）")
         }
 
         // URL 重写规则：将匹配的 URL 重写为指定内容

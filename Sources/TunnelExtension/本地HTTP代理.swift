@@ -37,6 +37,14 @@ final class 本地HTTP代理 {
         配置.requestCachePolicy = .reloadIgnoringLocalCacheData
         return URLSession(configuration: 配置)
     }()
+    /// MITM 活跃处理器数组
+    private var mitm处理器: [MITM连接处理器] = []
+
+    /// MITM 是否启用（从 App Group UserDefaults 读取）
+    private var MITM启用: Bool {
+        let 共享默认 = UserDefaults(suiteName: "group.com.newvpn.app")
+        return 共享默认?.bool(forKey: "mitmEnabled") ?? false
+    }
 
     // MARK: - 初始化
 
@@ -106,7 +114,14 @@ final class 本地HTTP代理 {
                 self?.关闭连接(连接)
                 return
             }
-            self.转发请求(请求, 原始连接: 连接)
+
+            // 检测 CONNECT 方法（HTTPS 隧道）
+            if 请求.方法.uppercased() == "CONNECT" {
+                self.处理CONNECT请求(请求, 连接: 连接)
+            } else {
+                // 普通 HTTP 请求
+                self.转发请求(请求, 原始连接: 连接)
+            }
         }
     }
 
@@ -209,6 +224,137 @@ final class 本地HTTP代理 {
             Body已截断: 原始Body大小 > 最大Body大小,
             原始数据: 数据
         )
+    }
+
+    // MARK: - CONNECT 请求处理（HTTPS 隧道）
+
+    /// 处理 CONNECT 请求（HTTPS 隧道）
+    private func 处理CONNECT请求(_ 请求: HTTP请求, 连接: NWConnection) {
+        // CONNECT 请求的目标地址在路径字段：host:port
+        let 目标 = 请求.路径
+        var 域名 = 目标
+        var 端口 = 443
+        if let 冒号位置 = 目标.lastIndex(of: ":") {
+            域名 = String(目标[..<冒号位置])
+            if let p = Int(目标[目标.index(after: 冒号位置)...]) {
+                端口 = p
+            }
+        }
+
+        if MITM启用 {
+            // MITM 模式：TLS 终结 + 解密转发
+            NSLog("[抓包代理] MITM 解密：\(域名):\(端口)")
+            let 处理器 = MITM连接处理器(连接: 连接, 域名: 域名, 端口: 端口, 队列: 连接队列, 会话: 转发会话)
+            mitm处理器.append(处理器)
+            处理器.开始处理 { [weak self] in
+                self?.mitm处理器.removeAll { $0 === 处理器 }
+            }
+        } else {
+            // 透传模式：直接建立 TCP 隧道，不解密
+            NSLog("[抓包代理] HTTPS 透传：\(域名):\(端口)")
+            透传CONNECT请求(域名: 域名, 端口: 端口, 连接: 连接)
+        }
+    }
+
+    /// CONNECT 透传模式：建立到目标服务器的 TCP 连接，双向透传
+    private func 透传CONNECT请求(域名: String, 端口: Int, 连接: NWConnection) {
+        // 记录 HTTPS 会话元数据
+        let 开始时间 = Date()
+        var 记录 = 抓包记录(
+            请求方法: "CONNECT",
+            请求URL: "https://\(域名)/",
+            请求主机: 域名,
+            请求路径: "/",
+            请求端口: 端口,
+            是否HTTPS: true
+        )
+        记录.请求头 = [请求头项(名称: "Host", 值: "\(域名):\(端口)")]
+        抓包存储管理器.共享.添加记录(记录)
+
+        // 响应 200 Connection Established
+        let 响应 = "HTTP/1.1 200 Connection Established\r\n\r\n"
+        guard let 响应数据 = 响应.data(using: .utf8) else {
+            关闭连接(连接)
+            return
+        }
+
+        连接.send(content: 响应数据, completion: .contentProcessed { [weak self] _ in
+            guard let self = self else { return }
+
+            // 建立到目标服务器的 TCP 连接
+            let 目标主机 = NWEndpoint.Host(域名)
+            guard let 目标端口 = NWEndpoint.Port(rawValue: UInt16(端口)) else {
+                self.关闭连接(连接)
+                return
+            }
+            let 目标连接 = NWConnection(host: 目标主机, port: 目标端口, using: .tcp)
+            目标连接.start(queue: self.连接队列)
+
+            目标连接.stateUpdateHandler = { [weak self] 状态 in
+                switch 状态 {
+                case .ready:
+                    // 双向透传数据
+                    self?.双向透传(客户端: 连接, 服务器: 目标连接, 记录: &记录, 开始时间: 开始时间)
+                case .failed(let 错误):
+                    var 结束记录 = 记录
+                    结束记录.错误信息 = 错误.localizedDescription
+                    结束记录.结束时间 = Date()
+                    结束记录.耗时毫秒 = Int(Date().timeIntervalSince(开始时间) * 1000)
+                    抓包存储管理器.共享.更新记录(结束记录)
+                    self?.关闭连接(连接)
+                default:
+                    break
+                }
+            }
+        })
+    }
+
+    /// 双向透传数据（客户端 ↔ 服务器）
+    private func 双向透传(客户端: NWConnection, 服务器: NWConnection, 记录: inout 抓包记录, 开始时间: Date) {
+        var 客户端流量 = 0
+        var 服务器流量 = 0
+
+        // 客户端 → 服务器
+        func 读取客户端() {
+            客户端.receive(minimumIncompleteLength: 1, maximumLength: 65536) { 数据, _, _, 错误 in
+                if let 数据 = 数据, !数据.isEmpty {
+                    客户端流量 += 数据.count
+                    服务器.send(content: 数据, completion: .idempotent)
+                    读取客户端()
+                } else {
+                    服务器.cancel()
+                    完成记录()
+                }
+            }
+        }
+
+        // 服务器 → 客户端
+        func 读取服务器() {
+            服务器.receive(minimumIncompleteLength: 1, maximumLength: 65536) { 数据, _, _, 错误 in
+                if let 数据 = 数据, !数据.isEmpty {
+                    服务器流量 += 数据.count
+                    客户端.send(content: 数据, completion: .idempotent)
+                    读取服务器()
+                } else {
+                    客户端.cancel()
+                    完成记录()
+                }
+            }
+        }
+
+        func 完成记录() {
+            var 结束记录 = 记录
+            结束记录.响应状态码 = 200
+            结束记录.响应状态文本 = "Connection Established"
+            结束记录.结束时间 = Date()
+            结束记录.耗时毫秒 = Int(Date().timeIntervalSince(开始时间) * 1000)
+            结束记录.请求Body大小 = 客户端流量
+            结束记录.响应Body大小 = 服务器流量
+            抓包存储管理器.共享.更新记录(结束记录)
+        }
+
+        读取客户端()
+        读取服务器()
     }
 
     /// 转发请求到目标服务器

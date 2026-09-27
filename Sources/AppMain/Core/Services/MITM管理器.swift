@@ -376,12 +376,20 @@ FxBzaz833X+KGgOv4VBtDcY=
         CA私钥 = 默认.string(forKey: 私钥键) ?? ""
     }
 
-    /// 保存配置到 UserDefaults
+    /// 保存配置到 UserDefaults（同时同步到 App Group 供隧道扩展读取）
     private func 保存配置() {
         let 默认 = UserDefaults.standard
         默认.set(启用, forKey: 启用键)
         默认.set(CA证书, forKey: 证书键)
         默认.set(CA私钥, forKey: 私钥键)
+
+        // 同步到 App Group UserDefaults，供 Network Extension 隧道扩展读取
+        if let 共享默认 = UserDefaults(suiteName: "group.com.newvpn.app") {
+            共享默认.set(启用, forKey: 启用键)
+            共享默认.set(CA证书, forKey: 证书键)
+            共享默认.set(CA私钥, forKey: 私钥键)
+            共享默认.synchronize()
+        }
     }
 
     /// 加载证书元数据
@@ -833,6 +841,14 @@ FxBzaz833X+KGgOv4VBtDcY=
         guard 文件状态.完全有效 else {
             添加证书日志(类型: "error", 消息: "写入验证失败：crt=\(文件状态.crt存在 ? "存在" : "丢失")，key=\(文件状态.key存在 ? "存在" : "丢失")，crt解析=\(文件状态.crt解析成功 ? "成功" : "失败")，key解析=\(文件状态.key解析成功 ? "成功" : "失败")")
             return false
+        }
+
+        // 同步证书和私钥到 App Group UserDefaults，供 Network Extension 隧道扩展读取
+        if let 共享默认 = UserDefaults(suiteName: "group.com.newvpn.app") {
+            共享默认.set(CA证书, forKey: 证书键)
+            共享默认.set(CA私钥, forKey: 私钥键)
+            共享默认.synchronize()
+            NSLog("[MITM] 证书已同步到 App Group UserDefaults")
         }
 
         // 实时解析证书元数据

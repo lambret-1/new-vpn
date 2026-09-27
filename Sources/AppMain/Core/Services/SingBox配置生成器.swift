@@ -69,6 +69,14 @@ final class SingBox配置生成器 {
             )
         )
 
+        // Clash API：启用外部控制器，供网络活动模块获取实时连接列表
+        配置.clashApi = SingBoxClashAPI配置(
+            enabled: true,
+            listen: "127.0.0.1:9090",
+            externalController: "127.0.0.1:9090"
+        )
+        NSLog("[SingBox配置] Clash API 已启用：127.0.0.1:9090")
+
         return 配置
     }
 

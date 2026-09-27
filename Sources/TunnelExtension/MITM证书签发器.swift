@@ -125,24 +125,30 @@ final class MITM证书签发器 {
             return nil
         }
 
-        // 2. 构建证书基本信息
-        let 现在 = Date()
-        let 过期 = 现在.addingTimeInterval(证书有效期)
+        // 2. 使用 X509 证书签发器动态签发域名证书（CN=域名，SAN=DNS:域名）
+        guard let 证书DER = X509证书签发器.共享.签发服务器证书(
+            域名: 域名,
+            CA证书: ca证书,
+            CA私钥: ca私钥,
+            服务器公钥: 服务器公钥,
+            有效期: 证书有效期
+        ) else {
+            NSLog("[MITM证书] 签发域名证书失败：\(域名)")
+            return nil
+        }
 
-        // 3. 创建证书（使用简化方式：通过临时钥匙串）
-        // 注意：iOS 上动态签发证书需要用 Security framework 的较底层 API
-        // 这里采用一个可行的简化方案：生成自签名证书，然后用 CA 私钥重签
-        // 由于 iOS Security framework 限制，完整的证书签发需要构造 ASN.1 结构
-        // 一期采用替代方案：将 CA 证书直接作为服务器证书返回（通配模式）
-        // 这样客户端需要信任 CA 证书，且不校验域名匹配（大部分浏览器会警告但可继续）
+        // 3. 从 DER 数据创建 SecCertificate
+        guard let 服务器证书 = SecCertificateCreateWithData(nil, 证书DER as CFData) else {
+            NSLog("[MITM证书] 创建 SecCertificate 失败：\(域名)")
+            return nil
+        }
 
-        // 实际上，对于一期验证链路，我们直接返回 CA 证书的身份
-        // 客户端信任 CA 后，即使域名不匹配也可以建立连接（部分应用会拒绝）
-        // 二期再实现完整的动态域名证书签发
+        NSLog("[MITM证书] 域名证书签发成功：\(域名)")
 
-        // 从 CA 证书和私钥创建身份
-        guard let 身份 = 创建身份(证书: ca证书, 私钥: ca私钥) else {
-            NSLog("[MITM证书] 创建 CA 身份失败")
+        // 4. 将服务器证书和私钥添加到钥匙串，创建 SecIdentity
+        let 标签 = "com.newvpn.mitm.\(域名)"
+        guard let 身份 = 创建身份(证书: 服务器证书, 私钥: 服务器私钥, 标签: 标签) else {
+            NSLog("[MITM证书] 创建服务器身份失败：\(域名)")
             return nil
         }
 
@@ -150,20 +156,22 @@ final class MITM证书签发器 {
     }
 
     /// 从证书和私钥创建 SecIdentity
-    private func 创建身份(证书: SecCertificate, 私钥: SecKey) -> SecIdentity? {
+    private func 创建身份(证书: SecCertificate, 私钥: SecKey, 标签: String) -> SecIdentity? {
         // 先清理旧的钥匙串条目
         let 删除查询: [String: Any] = [
             kSecClass as String: kSecClassIdentity,
-            kSecAttrLabel as String: "com.newvpn.mitm.identity"
+            kSecAttrLabel as String: 标签
         ]
         SecItemDelete(删除查询 as CFDictionary)
 
         // 1. 先将私钥添加到钥匙串
+        let 私钥标签 = "\(标签).key"
+        SecItemDelete([kSecClass as String: kSecClassKey, kSecAttrLabel as String: 私钥标签] as CFDictionary)
         let 私钥添加: [String: Any] = [
             kSecClass as String: kSecClassKey,
             kSecAttrKeyClass as String: kSecAttrKeyClassPrivate,
             kSecValueRef as String: 私钥,
-            kSecAttrLabel as String: "com.newvpn.mitm.key",
+            kSecAttrLabel as String: 私钥标签,
             kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlocked
         ]
         let 私钥状态 = SecItemAdd(私钥添加 as CFDictionary, nil)
@@ -172,10 +180,12 @@ final class MITM证书签发器 {
         }
 
         // 2. 再将证书添加到钥匙串（与私钥关联后自动形成 SecIdentity）
+        let 证书标签 = "\(标签).cert"
+        SecItemDelete([kSecClass as String: kSecClassCertificate, kSecAttrLabel as String: 证书标签] as CFDictionary)
         let 证书添加: [String: Any] = [
             kSecClass as String: kSecClassCertificate,
             kSecValueRef as String: 证书,
-            kSecAttrLabel as String: "com.newvpn.mitm.cert",
+            kSecAttrLabel as String: 证书标签,
             kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlocked
         ]
         let 证书状态 = SecItemAdd(证书添加 as CFDictionary, nil)
@@ -183,19 +193,32 @@ final class MITM证书签发器 {
             NSLog("[MITM证书] 添加证书到钥匙串失败：\(证书状态)")
         }
 
-        // 3. 查询 SecIdentity
+        // 3. 查询 SecIdentity（通过证书引用查询）
         let 查询: [String: Any] = [
             kSecClass as String: kSecClassIdentity,
+            kSecAttrLabel as String: 标签,
             kSecReturnRef as String: true,
             kSecMatchLimit as String: kSecMatchLimitOne
         ]
         var 结果: AnyObject?
         let 查询状态 = SecItemCopyMatching(查询 as CFDictionary, &结果)
         if 查询状态 == errSecSuccess, let 身份 = 结果 as! SecIdentity? {
-            NSLog("[MITM证书] SecIdentity 创建成功")
             return 身份
         }
-        NSLog("[MITM证书] 查询 SecIdentity 失败：\(查询状态)")
+
+        // 如果按标签查询失败，尝试通过证书引用查询身份
+        let 证书查询: [String: Any] = [
+            kSecClass as String: kSecClassIdentity,
+            kSecMatchItemList as String: [证书],
+            kSecReturnRef as String: true
+        ]
+        var 证书结果: AnyObject?
+        let 证书查询状态 = SecItemCopyMatching(证书查询 as CFDictionary, &证书结果)
+        if 证书查询状态 == errSecSuccess, let 身份 = 证书结果 as! SecIdentity? {
+            return 身份
+        }
+
+        NSLog("[MITM证书] 查询 SecIdentity 失败：\(查询状态) / \(证书查询状态)")
         return nil
     }
 

@@ -128,17 +128,29 @@ final class 本地HTTP代理 {
             if let 请求 = self?.解析HTTP请求(数据) {
                 完成(请求)
             } else {
-                // 数据不完整，继续读取（第一期简化处理：只读取一次）
                 完成(nil)
             }
         }
     }
 
-    /// 解析 HTTP 请求数据
-    private func 解析HTTP请求(_ 数据: Data) -> HTTP请求? {
-        guard let 请求文本 = String(data: 数据, encoding: .utf8) else { return nil }
+    /// Body 最大记录大小（1MB），超过则截断
+    private let 最大Body大小 = 1024 * 1024
 
-        let 行数组 = 请求文本.components(separatedBy: "\r\n")
+    /// 解析 HTTP 请求数据（正确分离头部和 Body，支持二进制 Body）
+    private func 解析HTTP请求(_ 数据: Data) -> HTTP请求? {
+        // 查找头部和 Body 的分隔符 \r\n\r\n
+        guard let 分隔符范围 = 数据.range(of: Data("\r\n\r\n".utf8)) else {
+            // 没有找到分隔符，可能数据不完整
+            return nil
+        }
+
+        // 分离头部和 Body
+        let 头部数据 = 数据.prefix(upTo: 分隔符范围.lowerBound)
+        var Body数据 = 数据.suffix(from: 分隔符范围.upperBound)
+
+        // 解析头部文本
+        guard let 头部文本 = String(data: 头部数据, encoding: .utf8) else { return nil }
+        let 行数组 = 头部文本.components(separatedBy: "\r\n")
         guard !行数组.isEmpty else { return nil }
 
         // 解析请求行：METHOD PATH HTTP/1.1
@@ -152,28 +164,15 @@ final class 本地HTTP代理 {
         // 解析请求头
         var 头字典: [String: String] = [:]
         var 头列表: [请求头项] = []
-        var 遇到空行 = false
-        var Body数据 = Data()
 
         for i in 1..<行数组.count {
             let 行 = 行数组[i]
-            if 行.isEmpty {
-                遇到空行 = true
-                continue
-            }
-            if 遇到空行 {
-                // Body 部分
-                if let 行数据 = 行.data(using: .utf8) {
-                    Body数据.append(行数据)
-                }
-            } else {
-                // 头部
-                if let 冒号位置 = 行.firstIndex(of: ":") {
-                    let 名称 = String(行[..<冒号位置]).trimmingCharacters(in: .whitespaces)
-                    let 值 = String(行[行.index(after: 冒号位置)...]).trimmingCharacters(in: .whitespaces)
-                    头字典[名称.lowercased()] = 值
-                    头列表.append(请求头项(名称: 名称, 值: 值))
-                }
+            if 行.isEmpty { continue }
+            if let 冒号位置 = 行.firstIndex(of: ":") {
+                let 名称 = String(行[..<冒号位置]).trimmingCharacters(in: .whitespaces)
+                let 值 = String(行[行.index(after: 冒号位置)...]).trimmingCharacters(in: .whitespaces)
+                头字典[名称.lowercased()] = 值
+                头列表.append(请求头项(名称: 名称, 值: 值))
             }
         }
 
@@ -187,6 +186,30 @@ final class 本地HTTP代理 {
                 端口 = p
             }
         }
+
+        // 构造完整 URL
+        let 完整URL = "http://\(主机)\(路径)"
+
+        // Body 大小限制：超过 1MB 截断
+        let 原始Body大小 = Body数据.count
+        if Body数据.count > 最大Body大小 {
+            Body数据 = Body数据.prefix(最大Body大小)
+        }
+
+        return HTTP请求(
+            方法: 方法,
+            完整URL: 完整URL,
+            主机: 主机名,
+            路径: 路径,
+            端口: 端口,
+            请求头: 头列表,
+            头字典: 头字典,
+            Body: Body数据,
+            原始Body大小: 原始Body大小,
+            Body已截断: 原始Body大小 > 最大Body大小,
+            原始数据: 数据
+        )
+    }
 
         // 构造完整 URL
         let 完整URL = "http://\(主机)\(路径)"
@@ -218,7 +241,7 @@ final class 本地HTTP代理 {
             是否HTTPS: false  // MITM 解密后已是 HTTP
         )
         记录.请求头 = 请求.请求头
-        记录.请求Body大小 = 请求.Body.count
+        记录.请求Body大小 = 请求.原始Body大小
         记录.请求Body类型 = 推断Body类型(请求.头字典["content-type"])
         抓包存储管理器.共享.添加记录(记录)
 
@@ -355,5 +378,7 @@ private struct HTTP请求 {
     let 请求头: [请求头项]
     let 头字典: [String: String]
     let Body: Data
+    let 原始Body大小: Int
+    let Body已截断: Bool
     let 原始数据: Data
 }

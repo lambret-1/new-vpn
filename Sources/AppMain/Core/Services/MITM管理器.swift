@@ -12,8 +12,8 @@ import CommonCrypto
 
 // MARK: - MITM证书状态枚举
 
-/// CA MITM证书状态
-enum MITMMITM证书状态: Equatable {
+/// CA 证书状态
+enum MITM证书状态: Equatable {
     /// 证书完全就绪（文件存在 + 未过期 + 用户确认已安装信任）
     case 就绪
     /// 证书文件存在但未安装

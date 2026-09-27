@@ -99,11 +99,19 @@ final class MITM连接处理器 {
         // 设置连接引用（传递 self 指针给回调）
         SSLSetConnection(上下文, Unmanaged.passUnretained(self).toOpaque())
 
-        // 设置证书和私钥
+        // 设置证书和私钥（含完整证书链：服务器身份 + CA 证书）
         if let 身份 = MITM证书签发器.共享.获取服务器身份(域名: 目标域名) {
             // SSLSetCertificate 接受 CFArray，第一个元素是 SecIdentity，后面是证书链
-            let 证书数组: [AnyObject] = [身份]
-            SSLSetCertificate(上下文, 证书数组 as CFArray)
+            var 证书数组: [AnyObject] = [身份]
+            if let ca证书 = MITM证书签发器.共享.获取CA证书() {
+                证书数组.append(ca证书)
+            }
+            let 设置状态 = SSLSetCertificate(上下文, 证书数组 as CFArray)
+            if 设置状态 != errSecSuccess {
+                NSLog("[MITM] SSLSetCertificate 失败：\(设置状态) (\(目标域名))")
+            }
+        } else {
+            NSLog("[MITM] 获取服务器身份失败：\(目标域名)")
         }
 
         // 允许 TLS 1.0 到 1.3（兼容旧客户端）

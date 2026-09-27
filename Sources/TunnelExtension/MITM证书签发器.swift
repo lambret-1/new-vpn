@@ -61,6 +61,11 @@ final class MITM证书签发器 {
         return true
     }
 
+    /// 获取 CA 证书（用于 TLS 证书链）
+    func 获取CA证书() -> SecCertificate? {
+        return ca证书
+    }
+
     // MARK: - 获取服务器身份（用于 TLS）
 
     /// 获取指定域名的服务器身份（含证书和私钥），优先从缓存读取

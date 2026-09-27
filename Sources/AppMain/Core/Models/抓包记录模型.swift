@@ -175,23 +175,25 @@ struct 抓包记录: Codable, Equatable, Identifiable {
         }
 
         // 响应部分
+        var 内容字典: [String: Any] = [
+            "size": 响应Body大小 ?? 0,
+            "mimeType": 响应Body类型 ?? ""
+        ]
+        if let body = 响应Body内容 {
+            内容字典["text"] = body
+        }
+
         var 响应字典: [String: Any] = [
             "status": 响应状态码 ?? 0,
             "statusText": 响应状态文本 ?? "",
             "httpVersion": "HTTP/1.1",
             "headers": 响应头数组,
             "cookies": [],
-            "content": [
-                "size": 响应Body大小 ?? 0,
-                "mimeType": 响应Body类型 ?? ""
-            ],
+            "content": 内容字典,
             "redirectURL": "",
             "headersSize": -1,
             "bodySize": 响应Body大小 ?? 0
         ]
-        if let body = 响应Body内容 {
-            响应字典["content"]?["text"] = body
-        }
 
         // 完整 entry
         return [

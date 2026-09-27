@@ -80,7 +80,7 @@ final class MITM连接处理器 {
     private func 初始化SSL服务端() {
         // 创建 SSL 上下文（服务端，流式，无侧）
         guard let 上下文 = SSLCreateContext(kCFAllocatorDefault, .serverSide, .streamType) else {
-            NSLog("[MITM] 创建 SSL 上下文失败")
+            NSLog("[扩展-MITM] 创建 SSL 上下文失败")
             return
         }
         self.ssl上下文 = 上下文
@@ -108,10 +108,10 @@ final class MITM连接处理器 {
             }
             let 设置状态 = SSLSetCertificate(上下文, 证书数组 as CFArray)
             if 设置状态 != errSecSuccess {
-                NSLog("[MITM] SSLSetCertificate 失败：\(设置状态) (\(目标域名))")
+                NSLog("[扩展-MITM] SSLSetCertificate 失败：\(设置状态) (\(目标域名))")
             }
         } else {
-            NSLog("[MITM] 获取服务器身份失败：\(目标域名)")
+            NSLog("[扩展-MITM] 获取服务器身份失败：\(目标域名)")
         }
 
         // 允许 TLS 1.0 到 1.3（兼容旧客户端）
@@ -153,7 +153,7 @@ final class MITM连接处理器 {
             guard let self = self else { return }
 
             if let 错误 = 错误 {
-                NSLog("[MITM] 读取客户端数据失败：\(错误.localizedDescription)")
+                NSLog("[扩展-MITM] 读取客户端数据失败：\(错误.localizedDescription)")
                 self.清理并完成()
                 return
             }
@@ -185,19 +185,56 @@ final class MITM连接处理器 {
             switch 状态 {
             case errSecSuccess:
                 握手完成 = true
-                NSLog("[MITM] TLS 握手完成：\(目标域名)")
+                NSLog("[扩展-MITM] TLS 握手完成：\(目标域名)")
                 // 握手完成后，读取解密后的应用数据
                 读取解密数据()
             case errSSLWouldBlock:
                 // 需要更多数据，继续读取客户端
                 读取客户端数据()
             default:
-                NSLog("[MITM] TLS 握手失败：\(状态) (\(目标域名))")
+                NSLog("[扩展-MITM] TLS 握手失败：\(状态) (\(目标域名)) - \(描述SSL错误(状态))")
                 清理并完成()
             }
         } else {
             // 已握手完成，读取解密后的应用数据
             读取解密数据()
+        }
+    }
+
+    /// 描述 SSL 错误码
+    private func 描述SSL错误(_ 状态: OSStatus) -> String {
+        switch 状态 {
+        case errSecSuccess: return "成功"
+        case errSSLWouldBlock: return "需要更多数据"
+        case errSSLSessionNotFound: return "会话未找到"
+        case errSSLNegotiation: return "握手协商失败"
+        case errSSLFatalAlert: return "收到致命警报"
+        case errSSLWouldBlockResume: return "会话恢复需要更多数据"
+        case errSSLUnexpectedRecord: return "意外的记录"
+        case errSSLDecompressFail: return "解压失败"
+        case errSSLDecryptionFail: return "解密失败"
+        case errSSLBadRecordMac: return "记录MAC错误"
+        case errSSLProtocol: return "协议错误"
+        case errSSLModuleAttach: return "模块附加失败"
+        case errSSLUnknownRootCert: return "未知根证书"
+        case errSSLNoRootCert: return "无根证书"
+        case errSSLCertExpired: return "证书已过期"
+        case errSSLCertNotYetValid: return "证书尚未生效"
+        case errSSLClosedNoNotify: return "连接关闭无通知"
+        case errSSLBufferOverflow: return "缓冲区溢出"
+        case errSSLBadCipherSuite: return "密码套件错误"
+        case errSSLPeerUnexpectedMsg: return "对端意外消息"
+        case errSSLPeerBadRecordMac: return "对端记录MAC错误"
+        case errSSLPeerDecryptionFail: return "对端解密失败"
+        case errSSLPeerDecompressFail: return "对端解压失败"
+        case errSSLPeerHandshakeFail: return "对端握手失败"
+        case errSSLPeerUserCancelled: return "对端用户取消"
+        case errSSLPeerNoRenegotiation: return "对端不允许重新协商"
+        case errSSLUnknownCertStatus: return "未知证书状态"
+        case errSSLClientHelloReceived: return "收到客户端Hello"
+        case errSSLServerAuthCompleted: return "服务器认证完成"
+        case errSSLClientAuthCompleted: return "客户端认证完成"
+        default: return "未知错误(\(状态))"
         }
     }
 
@@ -232,7 +269,7 @@ final class MITM连接处理器 {
         if 处理状态 == errSSLWouldBlock || 处理状态 == errSecSuccess {
             读取客户端数据()
         } else {
-            NSLog("[MITM] SSLRead 失败：\(处理状态)")
+            NSLog("[扩展-MITM] SSLRead 失败：\(处理状态)")
             清理并完成()
         }
     }
@@ -243,7 +280,7 @@ final class MITM连接处理器 {
     private func 处理解密HTTP请求(_ 数据: Data) {
         // 解析 HTTP 请求（复用本地代理的解析逻辑，这里简化实现）
         guard let 请求 = 解析HTTP请求(数据) else {
-            NSLog("[MITM] 解析 HTTP 请求失败")
+            NSLog("[扩展-MITM] 解析 HTTP 请求失败")
             return
         }
 

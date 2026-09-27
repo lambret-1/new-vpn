@@ -247,7 +247,7 @@ final class 本地HTTP代理 {
 
         if MITM启用 {
             // MITM 模式：TLS 终结 + 解密转发
-            NSLog("[抓包代理] MITM 解密：\(域名):\(端口)")
+            NSLog("[扩展-MITM] 解密：\(域名):\(端口)")
             let 处理器 = MITM连接处理器(连接: 连接, 域名: 域名, 端口: 端口, 队列: 连接队列, 会话: 转发会话)
             mitm处理器.append(处理器)
             处理器.开始处理 { [weak self] in

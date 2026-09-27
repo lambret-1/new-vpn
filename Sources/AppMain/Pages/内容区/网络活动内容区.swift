@@ -17,10 +17,9 @@ struct 网络活动内容区: View {
 
     var body: some View {
         VStack(spacing: 16) {
-            // TCP/UDP 统计区
+            // TCP/MITM/活跃/抓包 统计区
             流量统计区(
                 tcp数量: tcp数量,
-                udp数量: udp数量,
                 活跃数量: 活跃数量,
                 总下行: 隧道管理.流量统计.下行字节,
                 总上行: 隧道管理.流量统计.上行字节
@@ -51,11 +50,6 @@ struct 网络活动内容区: View {
         状态.网络连接列表.filter { $0.协议 == "TCP" }.count
     }
 
-    /// UDP 连接数
-    private var udp数量: Int {
-        状态.网络连接列表.filter { $0.协议 == "UDP" }.count
-    }
-
     /// 活跃连接数
     private var 活跃数量: Int {
         状态.网络连接列表.filter { !$0.已关闭 }.count
@@ -64,10 +58,9 @@ struct 网络活动内容区: View {
 
 // MARK: - 流量统计区
 
-/// TCP/UDP 流量统计区（四宫格整齐布局）
+/// 流量统计区（四宫格：TCP / MITM开关 / 活跃 / HTTP抓包开关）
 private struct 流量统计区: View {
     let tcp数量: Int
-    let udp数量: Int
     let 活跃数量: Int
     let 总下行: UInt64
     let 总上行: UInt64
@@ -86,14 +79,8 @@ private struct 流量统计区: View {
                 单位: "连接"
             )
 
-            // UDP 连接数
-            统计卡片(
-                图标: "dot.radiowaves.left.and.right",
-                图标颜色: Color(red: 0.20, green: 0.55, blue: 0.91),
-                标题: "UDP",
-                数值: "\(udp数量)",
-                单位: "连接"
-            )
+            // MITM 解密快捷开关
+            MITM开关卡片()
 
             // 活跃连接数
             统计卡片(
@@ -104,14 +91,8 @@ private struct 流量统计区: View {
                 单位: "连接"
             )
 
-            // 总流量
-            统计卡片(
-                图标: "arrow.down.circle.fill",
-                图标颜色: .主题色,
-                标题: "下载",
-                数值: 格式化字节(总下行),
-                单位: "上传 \(格式化字节(总上行))"
-            )
+            // HTTP 抓包快捷开关
+            HTTP抓包开关卡片()
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 16)
@@ -295,6 +276,92 @@ private struct 连接记录行: View {
         } else {
             return String(format: "%.1fMB", Double(字节) / (1024 * 1024))
         }
+    }
+}
+
+// MARK: - MITM 开关卡片
+
+/// MITM 解密快捷开关卡片
+private struct MITM开关卡片: View {
+    @EnvironmentObject private var 隧道管理: 隧道管理器
+    @State private var 启用 = MITM管理器.共享.启用
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Image(systemName: "lock.shield")
+                    .font(.system(size: 14))
+                    .foregroundColor(Color(red: 0.55, green: 0.27, blue: 0.91))
+                Text("MITM")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.primary)
+                Spacer()
+            }
+            HStack {
+                Text(启用 ? "解密中" : "已关闭")
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundColor(启用 ? .成功色 : .secondary)
+                Spacer()
+                Toggle("", isOn: Binding(
+                    get: { 启用 },
+                    set: { 新值 in
+                        启用 = 新值
+                        MITM管理器.共享.启用 = 新值
+                        if 隧道管理.当前状态 == .已连接 {
+                            隧道管理.重新加载配置()
+                        }
+                    }
+                ))
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .scaleEffect(0.8)
+                .frame(width: 42)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+// MARK: - HTTP 抓包开关卡片
+
+/// HTTP 抓包快捷开关卡片
+private struct HTTP抓包开关卡片: View {
+    @EnvironmentObject private var 隧道管理: 隧道管理器
+    @State private var 启用 = 抓包存储管理器.共享.是否启用
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Image(systemName: "antenna.radiowaves.left.and.right")
+                    .font(.system(size: 14))
+                    .foregroundColor(Color(red: 0.20, green: 0.55, blue: 0.91))
+                Text("抓包")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.primary)
+                Spacer()
+            }
+            HStack {
+                Text(启用 ? "抓包中" : "已关闭")
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundColor(启用 ? .成功色 : .secondary)
+                Spacer()
+                Toggle("", isOn: Binding(
+                    get: { 启用 },
+                    set: { 新值 in
+                        启用 = 新值
+                        抓包存储管理器.共享.是否启用 = 新值
+                        if 隧道管理.当前状态 == .已连接 {
+                            隧道管理.重新加载配置()
+                        }
+                    }
+                ))
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .scaleEffect(0.8)
+                .frame(width: 42)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

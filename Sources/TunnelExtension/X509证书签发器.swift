@@ -182,8 +182,8 @@ final class X509证书签发器 {
         ])
         扩展列表.append(basicConstraints扩展)
 
-        // keyUsage: digitalSignature + keyEncipherment
-        let keyUsage值 = ASN1编码器.位串(Data([0xA0]), 未使用位: 6) // bit 5(digitalSignature) + bit 6(keyEncipherment) = 0xA0
+        // keyUsage: digitalSignature(bit0=0x80) + keyEncipherment(bit2=0x20) = 0xA0，未使用位5
+        let keyUsage值 = ASN1编码器.位串(Data([0xA0]), 未使用位: 5)
         let keyUsage扩展 = ASN1编码器.序列([
             ASN1编码器.对象标识符(ASN1编码器.OID.keyUsage),
             ASN1编码器.编码(标签: .boolean, 值: Data([0xFF])), // critical=TRUE

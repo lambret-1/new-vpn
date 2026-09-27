@@ -187,7 +187,7 @@ struct 抓包详情页面: View {
                             HStack(alignment: .top) {
                                 Text(头.名称)
                                     .font(.system(size: 12, weight: .medium, design: .monospaced))
-                                    .foregroundColor(.蓝色)
+                                    .foregroundColor(.blue)
                                     .frame(width: 120, alignment: .leading)
                                 Text(头.值)
                                     .font(.system(size: 12, design: .monospaced))
@@ -270,7 +270,7 @@ struct 抓包详情页面: View {
                             HStack(alignment: .top) {
                                 Text(头.名称)
                                     .font(.system(size: 12, weight: .medium, design: .monospaced))
-                                    .foregroundColor(.紫色)
+                                    .foregroundColor(.purple)
                                     .frame(width: 120, alignment: .leading)
                                 Text(头.值)
                                     .font(.system(size: 12, design: .monospaced))

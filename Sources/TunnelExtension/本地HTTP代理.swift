@@ -227,6 +227,13 @@ final class 本地HTTP代理 {
         记录.请求头 = 请求.请求头
         记录.请求Body大小 = 请求.原始Body大小
         记录.请求Body类型 = 推断Body类型(请求.头字典["content-type"])
+        // 记录文本类型 Body 内容（限 64KB）
+        if 请求.原始Body大小 <= 65536,
+           let body文本 = String(data: 请求.Body, encoding: .utf8),
+           !body文本.isEmpty {
+            记录.请求Body内容 = body文本
+            记录.请求Body已截断 = 请求.Body已截断
+        }
         抓包存储管理器.共享.添加记录(记录)
 
         // 构造 URLRequest
@@ -287,6 +294,20 @@ final class 本地HTTP代理 {
             结束记录.响应头 = 响应头列表
             结束记录.响应Body大小 = 数据?.count ?? 0
             结束记录.响应Body类型 = self.推断Body类型(http响应.allHeaderFields["Content-Type"] as? String)
+            // 记录文本类型响应 Body 内容（限 64KB）
+            if let 响应数据 = 数据, 响应数据.count <= 65536,
+               let body文本 = String(data: 响应数据, encoding: .utf8),
+               !body文本.isEmpty {
+                结束记录.响应Body内容 = body文本
+                结束记录.响应Body已截断 = false
+            } else if let 响应数据 = 数据, 响应数据.count > 65536 {
+                // 超过 64KB，截断记录
+                let 截断数据 = 响应数据.prefix(65536)
+                if let body文本 = String(data: 截断数据, encoding: .utf8) {
+                    结束记录.响应Body内容 = body文本
+                    结束记录.响应Body已截断 = true
+                }
+            }
             抓包存储管理器.共享.更新记录(结束记录)
 
             // 将响应写回客户端

@@ -40,6 +40,10 @@ struct 抓包记录: Codable, Equatable, Identifiable {
     var 请求Body大小: Int
     /// 请求 Body 类型（json/form/text/binary/...）
     var 请求Body类型: String?
+    /// 请求 Body 内容（仅文本类型，限 64KB）
+    var 请求Body内容: String?
+    /// 请求 Body 是否已截断
+    var 请求Body已截断: Bool
 
     // MARK: - 响应信息
 
@@ -53,6 +57,10 @@ struct 抓包记录: Codable, Equatable, Identifiable {
     var 响应Body大小: Int?
     /// 响应 Body 类型
     var 响应Body类型: String?
+    /// 响应 Body 内容（仅文本类型，限 64KB）
+    var 响应Body内容: String?
+    /// 响应 Body 是否已截断
+    var 响应Body已截断: Bool
 
     // MARK: - 连接信息
 
@@ -108,6 +116,27 @@ struct 抓包记录: Codable, Equatable, Identifiable {
         return 字节格式化(size)
     }
 
+    /// 导出为 cURL 命令
+    var cURL命令: String {
+        var 命令 = "curl -X \(请求方法.uppercased())"
+
+        // URL
+        命令 += " '\(请求URL)'"
+
+        // 请求头
+        for 头 in 请求头 {
+            命令 += " \\\n  -H '\(头.名称): \(头.值)'"
+        }
+
+        // 请求 Body
+        if let body = 请求Body内容, !body.isEmpty {
+            let 转义Body = body.replacingOccurrences(of: "'", with: "'\\''")
+            命令 += " \\\n  -d '\(转义Body)'"
+        }
+
+        return 命令
+    }
+
     // MARK: - 初始化
 
     /// 创建新的抓包记录（请求开始时调用）
@@ -122,6 +151,8 @@ struct 抓包记录: Codable, Equatable, Identifiable {
         self.是否HTTPS = 是否HTTPS
         self.请求头 = []
         self.请求Body大小 = 0
+        self.请求Body已截断 = false
+        self.响应Body已截断 = false
     }
 
     // MARK: - 私有方法

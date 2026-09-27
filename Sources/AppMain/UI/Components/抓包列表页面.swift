@@ -100,9 +100,14 @@ struct 抓包列表页面: View {
 
                     // 记录列表
                     ForEach(显示列表) { 记录 in
-                        抓包记录卡片(记录: 记录)
-                            .padding(.horizontal, 16)
-                            .padding(.bottom, 8)
+                        NavigationLink {
+                            抓包详情页面(记录: 记录)
+                        } label: {
+                            抓包记录卡片(记录: 记录)
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 8)
                     }
                 } header: {
                     // 列表头（固定）

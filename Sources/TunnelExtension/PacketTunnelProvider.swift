@@ -157,8 +157,12 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                             let 证书PEM = 共享默认?.string(forKey: "mitmCACertificate") ?? ""
                             let 私钥PEM = 共享默认?.string(forKey: "mitmCAPrivateKey") ?? ""
                             if !证书PEM.isEmpty && !私钥PEM.isEmpty {
-                                MITM证书签发器.共享.加载CA证书(证书PEM: 证书PEM, 私钥PEM: 私钥PEM)
-                                self.记录扩展日志(级别: "信息", 模块: "MITM", 内容: "MITM CA证书已加载，本地代理启动 127.0.0.1:8888")
+                                let 加载成功 = MITM证书签发器.共享.加载CA证书(证书PEM: 证书PEM, 私钥PEM: 私钥PEM)
+                                if 加载成功 {
+                                    self.记录扩展日志(级别: "信息", 模块: "MITM", 内容: "MITM CA证书和私钥加载成功，本地代理启动 127.0.0.1:8888")
+                                } else {
+                                    self.记录扩展日志(级别: "错误", 模块: "MITM", 内容: "MITM CA证书或私钥加载失败，TLS解密功能不可用")
+                                }
                             } else {
                                 self.记录扩展日志(级别: "错误", 模块: "MITM", 内容: "MITM CA证书为空，解密功能不可用")
                             }

@@ -246,18 +246,40 @@ final class MITM证书签发器 {
         return Data(base64Encoded: 内容)
     }
 
-    /// 解析 PEM 格式私钥为 SecKey
+    /// 解析 PEM 格式私钥为 SecKey（支持 PKCS#8 和 PKCS#1 格式）
     private func 解析PEM私钥(_ pem: String) -> SecKey? {
-        var 内容 = pem
-        内容 = 内容.replacingOccurrences(of: "-----BEGIN PRIVATE KEY-----", with: "")
-        内容 = 内容.replacingOccurrences(of: "-----END PRIVATE KEY-----", with: "")
-        内容 = 内容.replacingOccurrences(of: "-----BEGIN RSA PRIVATE KEY-----", with: "")
-        内容 = 内容.replacingOccurrences(of: "-----END RSA PRIVATE KEY-----", with: "")
-        内容 = 内容.replacingOccurrences(of: "\n", with: "")
-        内容 = 内容.replacingOccurrences(of: "\r", with: "")
-        内容 = 内容.trimmingCharacters(in: .whitespaces)
+        // 检测私钥格式
+        let 是PKCS8 = ASN1解码器.是PKCS8格式(pem)
+        let 是PKCS1 = ASN1解码器.是PKCS1格式(pem)
 
-        guard let 数据 = Data(base64Encoded: 内容) else { return nil }
+        var 私钥数据: Data?
+
+        if 是PKCS8 {
+            // PKCS#8 格式：需要解析 ASN.1 结构，提取 PKCS#1 私钥
+            扩展日志记录器.共享.追踪("MITM", "检测到 PKCS#8 格式私钥，正在转换为 PKCS#1 格式")
+            私钥数据 = ASN1解码器.解析PKCS8PEM并转换为PKCS1(pem)
+            if 私钥数据 == nil {
+                扩展日志记录器.共享.错误("MITM", "PKCS#8 私钥转换为 PKCS#1 失败")
+            }
+        } else if 是PKCS1 {
+            // PKCS#1 格式：直接 base64 解码
+            扩展日志记录器.共享.追踪("MITM", "检测到 PKCS#1 格式私钥")
+            var 内容 = pem
+            内容 = 内容.replacingOccurrences(of: "-----BEGIN RSA PRIVATE KEY-----", with: "")
+            内容 = 内容.replacingOccurrences(of: "-----END RSA PRIVATE KEY-----", with: "")
+            内容 = 内容.replacingOccurrences(of: "\n", with: "")
+            内容 = 内容.replacingOccurrences(of: "\r", with: "")
+            内容 = 内容.trimmingCharacters(in: .whitespaces)
+            私钥数据 = Data(base64Encoded: 内容)
+        } else {
+            扩展日志记录器.共享.错误("MITM", "未知私钥格式（既不是 PKCS#8 也不是 PKCS#1）")
+            return nil
+        }
+
+        guard let 数据 = 私钥数据, !数据.isEmpty else {
+            扩展日志记录器.共享.错误("MITM", "私钥数据解码失败或为空")
+            return nil
+        }
 
         let 属性: [String: Any] = [
             kSecAttrKeyType as String: kSecAttrKeyTypeRSA,
@@ -265,7 +287,15 @@ final class MITM证书签发器 {
             kSecAttrKeySizeInBits as String: 2048
         ]
         var 错误: Unmanaged<CFError>?
-        return SecKeyCreateWithData(数据 as CFData, 属性 as CFDictionary, &错误)
+        guard let 私钥 = SecKeyCreateWithData(数据 as CFData, 属性 as CFDictionary, &错误) else {
+            if let 错误 = 错误?.takeRetainedValue() {
+                扩展日志记录器.共享.错误("MITM", "SecKeyCreateWithData 失败：\(错误.localizedDescription)")
+            }
+            return nil
+        }
+
+        扩展日志记录器.共享.追踪("MITM", "私钥解析成功，数据长度=\(数据.count)")
+        return 私钥
     }
 
     // MARK: - 清空缓存

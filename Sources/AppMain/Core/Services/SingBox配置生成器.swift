@@ -59,8 +59,8 @@ final class SingBox配置生成器 {
         配置.outbounds = 生成出站配置(节点: 节点, 节点列表: 节点列表, 抓包启用: 抓包启用)
 
         // 普通模式前置预检：禁用出站UDP，避免iOS沙盒packet权限报错
-        if 禁用出站UDP {
-            配置.outbounds = 配置.outbounds.map { 出站 in
+        if 禁用出站UDP, let 出站列表 = 配置.outbounds {
+            配置.outbounds = 出站列表.map { 出站 in
                 var 修改出站 = 出站
                 // 仅对代理协议出站禁用UDP，dns/block/selector等不受影响
                 if ["vless", "vmess", "trojan", "shadowsocks", "direct", "http"].contains(出站.type) {

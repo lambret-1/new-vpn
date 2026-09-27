@@ -491,7 +491,7 @@ final class AppState: ObservableObject {
     }
 
     /// 移动节点到其他分组
-    func 移动节点(_ 节点ID: UUID, 到目标分组: String) {
+    func 移动节点(_ 节点ID: UUID, 到目标分组 目标分组: String) {
         guard let 索引 = 节点列表.firstIndex(where: { $0.id == 节点ID }) else { return }
         节点列表[索引].分组 = 目标分组
         节点分组列表 = Mock数据.生成节点分组(节点列表: 节点列表)

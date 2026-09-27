@@ -165,9 +165,12 @@ final class 网络活动管理器 {
             )
         }
 
+        // 限制最多保留100条连接记录，超过自动删除最旧的
+        let 限制列表 = Array(连接列表.suffix(100))
+
         // 在主线程更新 UI
         DispatchQueue.main.async {
-            AppState.共享.网络连接列表 = 连接列表
+            AppState.共享.网络连接列表 = 限制列表
         }
     }
 

@@ -211,22 +211,6 @@ final class 本地HTTP代理 {
         )
     }
 
-        // 构造完整 URL
-        let 完整URL = "http://\(主机)\(路径)"
-
-        return HTTP请求(
-            方法: 方法,
-            完整URL: 完整URL,
-            主机: 主机名,
-            路径: 路径,
-            端口: 端口,
-            请求头: 头列表,
-            头字典: 头字典,
-            Body: Body数据,
-            原始数据: 数据
-        )
-    }
-
     /// 转发请求到目标服务器
     private func 转发请求(_ 请求: HTTP请求, 原始连接: NWConnection) {
         let 开始时间 = Date()

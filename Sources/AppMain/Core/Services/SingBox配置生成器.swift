@@ -255,14 +255,15 @@ final class SingBox配置生成器 {
         // libbox 版本不支持 TUN 入站 dns_address 字段，必须用路由规则 + dns-out 方式拦截 DNS
         出站列表.append(SingBox出站配置(type: "dns", tag: "dns-out"))
 
-        // 抓包代理出站：HTTP 代理指向 TUN 网关 10.0.0.1:8888
+        // 抓包代理出站：HTTP 代理指向本地回环 127.0.0.1:8888
         // MITM 解密和 HTTP 抓包都通过本地代理处理（本地代理支持 CONNECT 隧道 + TLS 终结）
+        // 用 127.0.0.1 而非 10.0.0.1：避免 TUN 虚拟网卡捕获形成回环导致连接超时
         if 抓包启用 || MITM配置 != nil {
             var 抓包代理 = SingBox出站配置(type: "http", tag: "capture-proxy")
-            抓包代理.server = "10.0.0.1"
+            抓包代理.server = "127.0.0.1"
             抓包代理.serverPort = 8888
             出站列表.append(抓包代理)
-            NSLog("[SingBox配置] 抓包/MITM代理出站：10.0.0.1:8888")
+            NSLog("[SingBox配置] 抓包/MITM代理出站：127.0.0.1:8888")
         }
 
         return 出站列表

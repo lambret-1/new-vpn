@@ -250,6 +250,9 @@ private struct 可滑动节点行视图: View {
     @State private var 显示移动分组 = false
     /// 显示编辑节点
     @State private var 显示编辑节点 = false
+    /// Toast 提示
+    @State private var 显示Toast = false
+    @State private var Toast消息 = ""
 
     /// 展开宽度（测速按钮宽度）
     private let 展开宽度: CGFloat = 70
@@ -338,12 +341,17 @@ private struct 可滑动节点行视图: View {
                         选中节点()
                     }
                 }
-                // 长按上下文菜单（仅有效节点显示）
+                // 长按上下文菜单（所有正常节点均启用，不移除无效节点前置判断但菜单内做校验）
                 .contextMenu {
-                    if 节点有效 {
-                        上下文菜单内容
-                    }
+                    上下文菜单内容
                 }
+
+            // Toast 提示层
+            if 显示Toast {
+                Toast视图(消息: Toast消息)
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+                    .zIndex(100)
+            }
         }
         .frame(height: 60)
         .clipped()
@@ -357,6 +365,10 @@ private struct 可滑动节点行视图: View {
         }
         .sheet(isPresented: $显示移动分组) {
             移动分组页面(节点: 节点)
+                .environmentObject(状态)
+        }
+        .sheet(isPresented: $显示编辑节点) {
+            编辑节点页面(节点: 节点)
                 .environmentObject(状态)
         }
     }
@@ -379,7 +391,7 @@ private struct 可滑动节点行视图: View {
             Label("复制节点链接", systemImage: "doc.on.doc")
         }
 
-        // 编辑节点
+        // 编辑节点（所有正常节点均启用）
         Button {
             显示编辑节点 = true
         } label: {
@@ -401,11 +413,103 @@ private struct 可滑动节点行视图: View {
         }
     }
 
-    /// 复制节点链接到剪贴板
+    /// 复制节点链接到剪贴板（生成完整标准节点分享链接）
     private func 复制节点链接() {
-        // 生成节点分享链接（简化为协议格式）
-        let 链接 = "\(节点.协议.rawValue)://\(节点.地址):\(节点.端口)"
+        let 链接 = 生成标准节点链接()
         UIPasteboard.general.string = 链接
+        显示Toast消息("节点链接已复制")
+    }
+
+    /// 生成完整标准节点分享链接
+    private func 生成标准节点链接() -> String {
+        let 名称编码 = 节点.名称.addingPercentEncoding(withAllowedCharacters: .urlFragmentAllowed) ?? 节点.名称
+
+        switch 节点.协议 {
+        case .vless:
+            // vless://uuid@address:port?encryption=none&type=ws&path=...&host=...&security=tls&sni=...#name
+            var 参数 = [String]()
+            参数.append("encryption=none")
+            参数.append("type=\(节点.传输类型 == .ws ? "ws" : "tcp")")
+            if let 路径 = 节点.ws路径, !路径.isEmpty {
+                参数.append("path=\(路径.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? 路径)")
+            }
+            if let 主机 = 节点.ws主机, !主机.isEmpty {
+                参数.append("host=\(主机)")
+            }
+            if 节点.启用TLS {
+                参数.append("security=tls")
+                if let sni = 节点.服务器名称, !sni.isEmpty {
+                    参数.append("sni=\(sni)")
+                }
+            } else {
+                参数.append("security=none")
+            }
+            let uuid = 节点.用户标识 ?? ""
+            return "vless://\(uuid)@\(节点.地址):\(节点.端口)?\(参数.joined(separator: "&"))#\(名称编码)"
+
+        case .vmess:
+            // vmess://base64(json)
+            let vmess字典: [String: Any] = [
+                "v": "2",
+                "ps": 节点.名称,
+                "add": 节点.地址,
+                "port": "\(节点.端口)",
+                "id": 节点.用户标识 ?? "",
+                "aid": "0",
+                "scy": "auto",
+                "net": 节点.传输类型 == .ws ? "ws" : "tcp",
+                "type": "none",
+                "host": 节点.ws主机 ?? "",
+                "path": 节点.ws路径 ?? "",
+                "tls": 节点.启用TLS ? "tls" : "",
+                "sni": 节点.服务器名称 ?? ""
+            ]
+            if let json数据 = try? JSONSerialization.data(withJSONObject: vmess字典),
+               let json字符串 = String(data: json数据, encoding: .utf8) {
+                let base64 = json字符串.data(using: .utf8)?.base64EncodedString() ?? ""
+                return "vmess://\(base64)"
+            }
+            return "vmess://\(节点.地址):\(节点.端口)"
+
+        case .trojan:
+            // trojan://password@address:port?type=ws&path=...&host=...&security=tls&sni=...#name
+            var 参数 = [String]()
+            参数.append("type=\(节点.传输类型 == .ws ? "ws" : "tcp")")
+            if let 路径 = 节点.ws路径, !路径.isEmpty {
+                参数.append("path=\(路径.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? 路径)")
+            }
+            if let 主机 = 节点.ws主机, !主机.isEmpty {
+                参数.append("host=\(主机)")
+            }
+            if 节点.启用TLS {
+                参数.append("security=tls")
+                if let sni = 节点.服务器名称, !sni.isEmpty {
+                    参数.append("sni=\(sni)")
+                }
+            }
+            let 密码 = 节点.用户标识 ?? ""
+            return "trojan://\(密码)@\(节点.地址):\(节点.端口)?\(参数.joined(separator: "&"))#\(名称编码)"
+
+        case .shadowsocks:
+            // ss://base64(method:password)@address:port#name
+            let 方法密码 = "\(节点.用户标识 ?? "")"
+            let base64 = 方法密码.data(using: .utf8)?.base64EncodedString() ?? ""
+            return "ss://\(base64)@\(节点.地址):\(节点.端口)#\(名称编码)"
+        }
+    }
+
+    /// 显示 Toast 消息
+    private func 显示Toast消息(_ 消息: String) {
+        Toast消息 = 消息
+        withAnimation(.easeInOut(duration: 0.2)) {
+            显示Toast = true
+        }
+        // 2秒后自动消失
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+            withAnimation(.easeInOut(duration: 0.3)) {
+                显示Toast = false
+            }
+        }
     }
 
     /// 选中节点
@@ -485,6 +589,157 @@ private struct 节点卡片内容: View {
     }
 }
 
+// MARK: - Toast 视图
+
+/// 轻量 Toast 提示视图
+private struct Toast视图: View {
+    let 消息: String
+
+    var body: some View {
+        VStack {
+            Spacer()
+            HStack(spacing: 8) {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundColor(.white)
+                    .font(.system(size: 16))
+                Text(消息)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(.white)
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
+            .background(Color.black.opacity(0.75))
+            .cornerRadius(20)
+            .padding(.bottom, 20)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .allowsHitTesting(false)
+    }
+}
+
+// MARK: - 编辑节点页面
+
+/// 编辑节点信息页面
+private struct 编辑节点页面: View {
+    let 节点: 节点模型
+    @EnvironmentObject private var 状态: AppState
+    @Environment(\.dismiss) private var 关闭
+
+    @State private var 名称: String
+    @State private var 地址: String
+    @State private var 端口: String
+    @State private var 用户标识: String
+    @State private var 传输类型: 传输类型
+    @State private var 启用TLS: Bool
+    @State private var 服务器名称: String
+    @State private var ws路径: String
+    @State private var ws主机: String
+    @State private var 分组: String
+    @State private var 备注: String
+
+    init(节点: 节点模型) {
+        self.节点 = 节点
+        _名称 = State(initialValue: 节点.名称)
+        _地址 = State(initialValue: 节点.地址)
+        _端口 = State(initialValue: "\(节点.端口)")
+        _用户标识 = State(initialValue: 节点.用户标识 ?? "")
+        _传输类型 = State(initialValue: 节点.传输类型)
+        _启用TLS = State(initialValue: 节点.启用TLS)
+        _服务器名称 = State(initialValue: 节点.服务器名称 ?? "")
+        _ws路径 = State(initialValue: 节点.ws路径 ?? "")
+        _ws主机 = State(initialValue: 节点.ws主机 ?? "")
+        _分组 = State(initialValue: 节点.分组)
+        _备注 = State(initialValue: 节点.备注 ?? "")
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("基本信息") {
+                    HStack {
+                        Text("协议")
+                        Spacer()
+                        Text(节点.协议.rawValue)
+                            .foregroundColor(.secondary)
+                    }
+                    TextField("节点名称", text: $名称)
+                    TextField("服务器地址", text: $地址)
+                        .autocapitalization(.none)
+                        .keyboardType(.URL)
+                    HStack {
+                        Text("端口")
+                        TextField("端口", text: $端口)
+                            .keyboardType(.numberPad)
+                            .multilineTextAlignment(.trailing)
+                    }
+                    if 节点.协议 == .vless || 节点.协议 == .vmess || 节点.协议 == .trojan {
+                        TextField("UUID / 密码", text: $用户标识)
+                            .autocapitalization(.none)
+                    }
+                }
+
+                Section("传输设置") {
+                    Picker("传输类型", selection: $传输类型) {
+                        ForEach(传输类型.allCases, id: \.self) { 类型 in
+                            Text(类型.rawValue).tag(类型)
+                        }
+                    }
+                    Toggle("启用 TLS", isOn: $启用TLS)
+                    if 启用TLS {
+                        TextField("SNI 服务器名称", text: $服务器名称)
+                            .autocapitalization(.none)
+                    }
+                    if 传输类型 == .ws {
+                        TextField("WebSocket 路径", text: $ws路径)
+                            .autocapitalization(.none)
+                        TextField("WebSocket Host", text: $ws主机)
+                            .autocapitalization(.none)
+                    }
+                }
+
+                Section("分组与备注") {
+                    TextField("分组名称", text: $分组)
+                    TextField("备注", text: $备注)
+                }
+            }
+            .navigationTitle("编辑节点")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("取消") { 关闭() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("保存") {
+                        保存节点()
+                    }
+                    .disabled(名称.isEmpty || 地址.isEmpty || 端口.isEmpty)
+                }
+            }
+        }
+    }
+
+    /// 保存节点修改
+    private func 保存节点() {
+        guard let 端口号 = Int(端口), 端口号 > 0, 端口号 <= 65535 else { return }
+
+        var 修改后节点 = 节点
+        修改后节点.名称 = 名称
+        修改后节点.地址 = 地址
+        修改后节点.端口 = 端口号
+        修改后节点.用户标识 = 用户标识.isEmpty ? nil : 用户标识
+        修改后节点.传输类型 = 传输类型
+        修改后节点.启用TLS = 启用TLS
+        修改后节点.服务器名称 = 服务器名称.isEmpty ? nil : 服务器名称
+        修改后节点.ws路径 = ws路径.isEmpty ? nil : ws路径
+        修改后节点.ws主机 = ws主机.isEmpty ? nil : ws主机
+        修改后节点.分组 = 分组
+        修改后节点.备注 = 备注.isEmpty ? nil : 备注
+
+        状态.更新节点(修改后节点)
+        关闭()
+    }
+}
+
 // MARK: - 移动分组页面
 
 /// 移动节点到其他分组页面
@@ -493,26 +748,41 @@ private struct 移动分组页面: View {
     @EnvironmentObject private var 状态: AppState
     @Environment(\.dismiss) private var 关闭
     @State private var 新分组名称 = ""
+    @State private var 显示错误提示 = false
+    @State private var 错误消息 = ""
 
     var body: some View {
         NavigationStack {
             Form {
                 Section("当前分组") {
-                    Text(节点.分组)
-                        .foregroundColor(.secondary)
+                    HStack {
+                        Text(节点.分组)
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        Image(systemName: "location.fill")
+                            .foregroundColor(.主题色)
+                            .font(.system(size: 12))
+                    }
                 }
 
                 Section("选择目标分组") {
                     ForEach(状态.获取所有分组名称(), id: \.self) { 分组名 in
-                        if 分组名 != 节点.分组 {
-                            Button {
-                                状态.移动节点(节点.id, 到目标分组: 分组名)
-                                关闭()
-                            } label: {
-                                HStack {
-                                    Text(分组名)
-                                        .foregroundColor(.primary)
-                                    Spacer()
+                        Button {
+                            选择分组(分组名)
+                        } label: {
+                            HStack {
+                                Text(分组名)
+                                    .foregroundColor(.primary)
+                                Spacer()
+                                if 分组名 == 节点.分组 {
+                                    Text("当前")
+                                        .font(.system(size: 11))
+                                        .foregroundColor(.secondary)
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 2)
+                                        .background(Color.secondary.opacity(0.15))
+                                        .cornerRadius(4)
+                                } else {
                                     Image(systemName: "chevron.right")
                                         .foregroundColor(.secondary)
                                 }
@@ -525,8 +795,11 @@ private struct 移动分组页面: View {
                     TextField("新分组名称", text: $新分组名称)
                     Button {
                         if !新分组名称.isEmpty {
-                            状态.移动节点(节点.id, 到目标分组: 新分组名称)
-                            关闭()
+                            if 新分组名称 == 节点.分组 {
+                                显示错误("不能移动至当前分组")
+                            } else {
+                                执行移动(目标分组: 新分组名称)
+                            }
                         }
                     } label: {
                         Text("移动到新分组")
@@ -542,7 +815,33 @@ private struct 移动分组页面: View {
                     Button("取消") { 关闭() }
                 }
             }
+            .alert("提示", isPresented: $显示错误提示) {
+                Button("确定", role: .cancel) {}
+            } message: {
+                Text(错误消息)
+            }
         }
+    }
+
+    /// 选择分组
+    private func 选择分组(_ 分组名: String) {
+        if 分组名 == 节点.分组 {
+            显示错误("不能移动至当前分组")
+            return
+        }
+        执行移动(目标分组: 分组名)
+    }
+
+    /// 执行移动
+    private func 执行移动(目标分组: String) {
+        状态.移动节点(节点.id, 到目标分组: 目标分组)
+        关闭()
+    }
+
+    /// 显示错误提示
+    private func 显示错误(_ 消息: String) {
+        错误消息 = 消息
+        显示错误提示 = true
     }
 }
 

@@ -456,6 +456,8 @@ struct SingBox出站配置: Codable, Equatable {
     var domainStrategy: String?
     /// MITM 嗅探配置
     var sniff: SingBox嗅探配置?
+    /// MITM uTLS 指纹模拟（模拟浏览器TLS握手，降低WAF识别）
+    var utls: SingBoxUTLS配置?
 
     /// MITM 嗅探配置
     struct SingBox嗅探配置: Codable, Equatable {
@@ -561,13 +563,18 @@ struct SingBox出站配置: Codable, Equatable {
                          CA证书: String,
                          CA私钥: String,
                          域名策略: String = "ipv4_only",
-                         嗅探: Bool = true) -> SingBox出站配置 {
+                         嗅探: Bool = true,
+                         TLS指纹: String? = nil) -> SingBox出站配置 {
         var 配置 = SingBox出站配置(type: "mitm", tag: 标签)
         配置.caCertificate = [CA证书]
         配置.caPrivateKey = [CA私钥]
         配置.domainStrategy = 域名策略
         if 嗅探 {
             配置.sniff = SingBox嗅探配置(enabled: true, destOverride: ["http", "tls"])
+        }
+        // uTLS 指纹模拟：模拟浏览器TLS握手，降低EdgeOne等WAF的Bot防护识别
+        if let 指纹 = TLS指纹, !指纹.isEmpty, 指纹 != "disabled" {
+            配置.utls = SingBoxUTLS配置(enabled: true, fingerprint: 指纹)
         }
         return 配置
     }
@@ -625,6 +632,7 @@ struct SingBox出站配置: Codable, Equatable {
         case caPrivateKey = "ca_private_key"
         case domainStrategy = "domain_strategy"
         case sniff
+        case utls
     }
 }
 

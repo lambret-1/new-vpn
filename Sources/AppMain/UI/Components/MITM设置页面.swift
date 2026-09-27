@@ -19,6 +19,9 @@ struct MITM设置页面: View {
     @State private var 显示确认清除 = false
     @State private var 显示证书日志 = false
     @State private var 显示临近过期提示 = false
+    @State private var 显示添加排除域名 = false
+    @State private var 新排除域名 = ""
+    @State private var 新排除备注 = ""
 
     var body: some View {
         NavigationStack {
@@ -71,6 +74,18 @@ struct MITM设置页面: View {
                 if let 元数据 = mitm管理.元数据 {
                     Text("证书将在 \(元数据.剩余天数) 天后过期，建议提前更新以避免 MITM 解密中断。")
                 }
+            }
+            .alert("添加排除域名", isPresented: $显示添加排除域名) {
+                TextField("域名（如 example.com）", text: $新排除域名)
+                    .autocapitalization(.none)
+                    .disableAutocorrection(true)
+                TextField("备注（可选）", text: $新排除备注)
+                Button("取消", role: .cancel) {}
+                Button("添加") {
+                    mitm管理.添加域名排除(域名: 新排除域名, 备注: 新排除备注)
+                }
+            } message: {
+                Text("该域名的 HTTPS 流量将跳过 MITM 解密，直接透传原始 TLS 会话。")
             }
             .onAppear {
                 mitm管理.页面出现时检测()
@@ -248,6 +263,74 @@ struct MITM设置页面: View {
                     } header: {
                         Text("证书信息")
                     }
+                }
+
+                // TLS 指纹模拟
+                Section {
+                    Picker("TLS 指纹模拟", selection: $mitm管理.TLS指纹) {
+                        ForEach(MITM管理器.TLS指纹类型.allCases) { 类型 in
+                            Text(类型.显示名称).tag(类型.rawValue)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                } header: {
+                    Text("TLS 指纹模拟")
+                } footer: {
+                    Text("模拟浏览器 TLS 握手指纹，降低 EdgeOne 等 WAF 的 Bot 防护识别拦截概率。推荐使用 Chrome 或 Safari。")
+                }
+
+                // 域名 MITM 排除列表
+                Section {
+                    if mitm管理.域名排除列表.isEmpty {
+                        Text("暂无排除域名")
+                            .font(.system(size: 14))
+                            .foregroundColor(.secondary)
+                    } else {
+                        ForEach(mitm管理.域名排除列表) { 项 in
+                            HStack {
+                                Toggle(isOn: Binding(
+                                    get: { 项.启用 },
+                                    set: { _ in mitm管理.切换域名排除启用(项) }
+                                )) {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(项.域名)
+                                            .font(.system(size: 14, weight: .medium))
+                                        if !项.备注.isEmpty {
+                                            Text(项.备注)
+                                                .font(.system(size: 12))
+                                                .foregroundColor(.secondary)
+                                        }
+                                    }
+                                }
+                                .tint(.主题色)
+                            }
+                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                Button(role: .destructive) {
+                                    mitm管理.删除域名排除(项)
+                                } label: {
+                                    Label("删除", systemImage: "trash")
+                                }
+                            }
+                        }
+                    }
+
+                    Button {
+                        新排除域名 = ""
+                        新排除备注 = ""
+                        显示添加排除域名 = true
+                    } label: {
+                        HStack {
+                            Image(systemName: "plus.circle.fill")
+                                .foregroundColor(.主题色)
+                            Text("添加排除域名")
+                                .foregroundColor(.主题色)
+                            Spacer()
+                        }
+                    }
+                } header: {
+                    Text("域名排除（透传TLS）")
+                } footer: {
+                    Text("对强 WAF 防护域名（如 EdgeOne 站点）单独关闭 MITM 解密，直接透传原始 TLS 会话，避免被站点安全策略拦截。")
                 }
 
                 // 证书日志

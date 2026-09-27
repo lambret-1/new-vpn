@@ -99,6 +99,7 @@ final class MITM管理器: ObservableObject {
     private init() {
         加载配置()
         加载证书元数据()
+        加载域名排除列表()
     }
 
     // MARK: - 预生成 CA 证书和私钥
@@ -195,6 +196,95 @@ FxBzaz833X+KGgOv4VBtDcY=
     var 证书可启用: Bool {
         guard 证书文件存在, let 元数据 = 元数据 else { return false }
         return !元数据.已过期
+    }
+
+    // MARK: - TLS 指纹模拟
+
+    /// TLS 指纹类型枚举
+    enum TLS指纹类型: String, CaseIterable, Identifiable {
+        case disabled = "disabled"      // 关闭指纹模拟
+        case chrome = "chrome"          // Chrome 浏览器
+        case firefox = "firefox"        // Firefox 浏览器
+        case safari = "safari"          // Safari 浏览器
+        case edge = "edge"              // Edge 浏览器
+        case ios = "ios"                // iOS 原生
+        case android = "android"        // Android 原生
+
+        var id: String { rawValue }
+        var 显示名称: String {
+            switch self {
+            case .disabled: return "关闭（默认指纹）"
+            case .chrome: return "Chrome"
+            case .firefox: return "Firefox"
+            case .safari: return "Safari"
+            case .edge: return "Edge"
+            case .ios: return "iOS 原生"
+            case .android: return "Android 原生"
+            }
+        }
+    }
+
+    /// TLS 指纹模拟设置（模拟浏览器TLS握手，降低WAF识别）
+    @Published var TLS指纹: String = "chrome" {
+        didSet { UserDefaults.standard.set(TLS指纹, forKey: "mitmTLSFingerprint") }
+    }
+
+    // MARK: - 域名 MITM 排除列表
+
+    /// 域名 MITM 排除项（对这些域名跳过MITM解密，直接透传原始TLS）
+    struct 域名排除项: Identifiable, Codable, Equatable {
+        var id = UUID()
+        var 域名: String
+        var 备注: String
+        var 启用: Bool
+    }
+
+    /// 域名 MITM 排除列表
+    @Published var 域名排除列表: [域名排除项] = [] {
+        didSet { 保存域名排除列表() }
+    }
+
+    /// 获取启用的排除域名列表
+    var 启用的排除域名: [String] {
+        域名排除列表.filter { $0.启用 }.map { $0.域名 }
+    }
+
+    /// 保存域名排除列表
+    private func 保存域名排除列表() {
+        if let 数据 = try? JSONEncoder().encode(域名排除列表) {
+            UserDefaults.standard.set(数据, forKey: "mitmDomainExclusions")
+        }
+    }
+
+    /// 加载域名排除列表
+    private func 加载域名排除列表() {
+        if let 数据 = UserDefaults.standard.data(forKey: "mitmDomainExclusions"),
+           let 列表 = try? JSONDecoder().decode([域名排除项].self, from: 数据) {
+            域名排除列表 = 列表
+        }
+        // 加载 TLS 指纹设置
+        TLS指纹 = UserDefaults.standard.string(forKey: "mitmTLSFingerprint") ?? "chrome"
+    }
+
+    /// 添加域名排除
+    func 添加域名排除(域名: String, 备注: String = "") {
+        let 清理域名 = 域名.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !清理域名.isEmpty else { return }
+        // 去重
+        guard !域名排除列表.contains(where: { $0.域名 == 清理域名 }) else { return }
+        域名排除列表.append(域名排除项(域名: 清理域名, 备注: 备注, 启用: true))
+    }
+
+    /// 删除域名排除
+    func 删除域名排除(_ 项: 域名排除项) {
+        域名排除列表.removeAll { $0.id == 项.id }
+    }
+
+    /// 切换域名排除启用状态
+    func 切换域名排除启用(_ 项: 域名排除项) {
+        if let 索引 = 域名排除列表.firstIndex(where: { $0.id == 项.id }) {
+            域名排除列表[索引].启用.toggle()
+        }
     }
 
     // MARK: - 自动探测状态
@@ -808,7 +898,7 @@ FxBzaz833X+KGgOv4VBtDcY=
 
     /// 获取 MITM 出站配置（供 sing-box 配置生成器使用）
     /// 证书有效时直接复用，不重复生成
-    func 获取MITM出站配置() -> (证书: String, 私钥: String)? {
+    func 获取MITM出站配置() -> (证书: String, 私钥: String, TLS指纹: String, 排除域名: [String])? {
         guard 启用, 证书已生成 else { return nil }
 
         // 内核加载前校验证书
@@ -819,8 +909,8 @@ FxBzaz833X+KGgOv4VBtDcY=
             return nil
         }
 
-        添加证书日志(类型: "info", 消息: "内核加载 MITM 出站配置，证书复用")
-        return (CA证书, CA私钥)
+        添加证书日志(类型: "info", 消息: "内核加载 MITM 出站配置，TLS指纹=\(TLS指纹)，排除域名=\(启用的排除域名.count)个")
+        return (CA证书, CA私钥, TLS指纹, 启用的排除域名)
     }
 
     // MARK: - 证书指纹计算
@@ -893,6 +983,35 @@ FxBzaz833X+KGgOv4VBtDcY=
     /// 清空证书日志
     func 清空证书日志() {
         UserDefaults.standard.removeObject(forKey: 日志键)
+    }
+
+    // MARK: - MITM 连接事件日志
+
+    /// MITM 连接事件类型
+    enum MITM连接事件类型: String {
+        case tls握手成功 = "TLS握手成功并解密"
+        case waf拦截 = "站点WAF返回567拦截"
+        case tls握手失败 = "TLS握手失败"
+        case 域名排除透传 = "域名排除，透传原始TLS"
+
+        var 日志类型: String {
+            switch self {
+            case .tls握手成功: return "success"
+            case .waf拦截: return "warning"
+            case .tls握手失败: return "error"
+            case .域名排除透传: return "info"
+            }
+        }
+    }
+
+    /// 记录 MITM 连接事件（区分TLS握手成功、WAF拦截等）
+    /// - Parameters:
+    ///   - 事件: 连接事件类型
+    ///   - 域名: 目标域名
+    ///   - 详情: 附加详情
+    func 记录MITM连接事件(事件: MITM连接事件类型, 域名: String, 详情: String = "") {
+        let 消息 = "[\(事件.rawValue)] 域名：\(域名)\(详情.isEmpty ? "" : "，详情：\(详情)")"
+        添加证书日志(类型: 事件.日志类型, 消息: 消息)
     }
 
     // MARK: - 辅助方法

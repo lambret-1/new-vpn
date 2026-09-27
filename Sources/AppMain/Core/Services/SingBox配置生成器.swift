@@ -37,7 +37,7 @@ final class SingBox配置生成器 {
                   DNS配置: DNS配置模型? = nil,
                   运行模式: 隧道运行模式 = .规则分流,
                   日志级别: String = "debug",
-                  MITM配置: (证书: String, 私钥: String)? = nil,
+                  MITM配置: (证书: String, 私钥: String, TLS指纹: String, 排除域名: [String])? = nil,
                   重写规则: [重写规则项] = [],
                   抓包启用: Bool = false) -> SingBox配置 {
         var 配置 = SingBox配置()
@@ -58,7 +58,7 @@ final class SingBox配置生成器 {
         配置.outbounds = 生成出站配置(节点: 节点, 节点列表: 节点列表, MITM配置: MITM配置, 抓包启用: 抓包启用)
 
         // 路由配置
-        配置.route = 生成路由配置(分流规则: 分流规则, 节点: 节点, 运行模式: 运行模式, MITM启用: MITM配置 != nil, 重写规则: 重写规则, 抓包启用: 抓包启用)
+        配置.route = 生成路由配置(分流规则: 分流规则, 节点: 节点, 运行模式: 运行模式, MITM配置: MITM配置, 重写规则: 重写规则, 抓包启用: 抓包启用)
 
         // 实验配置（缓存文件）
         配置.experimental = SingBox实验配置(
@@ -186,7 +186,7 @@ final class SingBox配置生成器 {
     // MARK: - 生成出站配置
 
     /// 生成出站配置
-    private func 生成出站配置(节点: 节点模型?, 节点列表: [节点模型], MITM配置: (证书: String, 私钥: String)? = nil, 抓包启用: Bool = false) -> [SingBox出站配置] {
+    private func 生成出站配置(节点: 节点模型?, 节点列表: [节点模型], MITM配置: (证书: String, 私钥: String, TLS指纹: String, 排除域名: [String])? = nil, 抓包启用: Bool = false) -> [SingBox出站配置] {
         var 出站列表: [SingBox出站配置] = []
 
         // 当前节点出站
@@ -256,8 +256,10 @@ final class SingBox配置生成器 {
                 CA证书: mitm.证书,
                 CA私钥: mitm.私钥,
                 域名策略: "ipv4_only",
-                嗅探: true
+                嗅探: true,
+                TLS指纹: mitm.TLS指纹
             ))
+            NSLog("[SingBox配置] MITM TLS指纹：\(mitm.TLS指纹)，排除域名：\(mitm.排除域名.count)个")
         }
 
         // 抓包代理出站：HTTP 代理指向本地 127.0.0.1:8888，用于捕获 HTTP 流量
@@ -382,7 +384,7 @@ final class SingBox配置生成器 {
     ///   - 节点: 当前节点（用于代理服务器 IP 直连）
     ///   - 运行模式: 隧道运行模式，决定最终出站
     ///   - MITM启用: 是否启用 MITM（HTTPS 解密）
-    private func 生成路由配置(分流规则: [分流规则项], 节点: 节点模型?, 运行模式: 隧道运行模式, MITM启用: Bool = false, 重写规则: [重写规则项] = [], 抓包启用: Bool = false) -> SingBox路由配置 {
+    private func 生成路由配置(分流规则: [分流规则项], 节点: 节点模型?, 运行模式: 隧道运行模式, MITM配置: (证书: String, 私钥: String, TLS指纹: String, 排除域名: [String])? = nil, 重写规则: [重写规则项] = [], 抓包启用: Bool = false) -> SingBox路由配置 {
         var 规则列表: [SingBox路由规则] = []
 
         // DNS 拦截：目标端口 53 的流量转发到 dns-out 出站，交给 sing-box DNS 模块处理
@@ -410,9 +412,21 @@ final class SingBox配置生成器 {
             NSLog("[SingBox配置] HTTP抓包已启用，端口80流量转发到capture-proxy")
         }
 
+        // MITM 域名排除：对强WAF防护域名跳过MITM解密，直接透传原始TLS会话
+        // 必须在 MITM 拦截规则之前，优先匹配
+        if let mitm = MITM配置, !mitm.排除域名.isEmpty {
+            规则列表.append(SingBox路由规则(
+                domain: mitm.排除域名,
+                port: [443],
+                network: ["tcp"],
+                outbound: "proxy"
+            ))
+            NSLog("[SingBox配置] MITM域名排除：\(mitm.排除域名.count)个域名直接透传TLS")
+        }
+
         // MITM 拦截：HTTPS(443)的TCP流量转发到 mitm-out 出站进行解密
         // 注意：只拦截 TCP，不拦截 UDP（QUIC已被下面的规则阻止）
-        if MITM启用 {
+        if MITM配置 != nil {
             规则列表.append(SingBox路由规则(
                 port: [443],
                 network: ["tcp"],

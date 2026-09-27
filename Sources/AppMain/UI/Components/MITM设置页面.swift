@@ -27,6 +27,20 @@ struct MITM设置页面: View {
                 Section {
                     Toggle("启用 MITM 解密", isOn: $mitm管理.启用)
                         .tint(.主题色)
+                        .disabled(!mitm管理.证书可启用)
+
+                    // 开关置灰时的提示
+                    if !mitm管理.证书可启用 {
+                        HStack(spacing: 6) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .font(.system(size: 12))
+                                .foregroundColor(.警告色)
+                            Text("证书文件缺失或已过期，无法启用 MITM，请先生成证书")
+                                .font(.system(size: 12))
+                                .foregroundColor(.警告色)
+                        }
+                        .padding(.vertical, 2)
+                    }
 
                     // 根据证书状态显示不同提示
                     if mitm管理.启用 {
@@ -45,7 +59,7 @@ struct MITM设置页面: View {
 
                 // CA 证书管理
                 Section {
-                    if mitm管理.证书已生成 {
+                    if mitm管理.证书文件存在 && mitm管理.证书已生成 {
                         // 导出/分享证书
                         Button {
                             显示导出证书 = true
@@ -61,8 +75,8 @@ struct MITM设置页面: View {
                             }
                         }
 
-                        // 标记已安装
-                        if !(mitm管理.元数据?.用户确认已安装 ?? true) {
+                        // 标记已安装（仅未安装时显示）
+                        if !(mitm管理.元数据?.用户确认已安装 ?? false) {
                             Button {
                                 mitm管理.标记已安装()
                             } label: {
@@ -76,8 +90,8 @@ struct MITM设置页面: View {
                             }
                         }
 
-                        // 标记已信任
-                        if mitm管理.元数据?.用户确认已安装 ?? false &&
+                        // 标记已信任（仅已安装但未信任时显示）
+                        if (mitm管理.元数据?.用户确认已安装 ?? false) &&
                            !(mitm管理.元数据?.用户确认已信任 ?? false) {
                             Button {
                                 mitm管理.标记已信任()
@@ -132,11 +146,11 @@ struct MITM设置页面: View {
                 } header: {
                     Text("CA 证书管理")
                 } footer: {
-                    Text("证书就绪后无需重复生成。手动重置用于证书损坏或需要更换证书的场景。")
+                    Text(mitm管理.证书文件存在 ? "证书就绪后无需重复生成。手动重置用于证书损坏或需要更换证书的场景。" : "证书文件缺失，请先生成 CA 证书。")
                 }
 
-                // 证书元数据
-                if let 元数据 = mitm管理.元数据 {
+                // 证书元数据（仅文件存在时显示）
+                if mitm管理.证书文件存在, let 元数据 = mitm管理.元数据 {
                     Section {
                         HStack {
                             Text("指纹")
@@ -265,8 +279,8 @@ struct MITM设置页面: View {
                 }
             }
             .onAppear {
-                // 进入页面时检测证书状态
-                mitm管理.检测证书状态()
+                // 进入页面时执行完整检测（记录持久化状态读取结果）
+                mitm管理.页面出现时检测()
                 // 检查是否临近过期
                 if mitm管理.需要提示临近过期() {
                     显示临近过期提示 = true
@@ -313,7 +327,7 @@ struct MITM设置页面: View {
     // MARK: - 证书状态卡片
 
     private var 证书状态卡片: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Image(systemName: 状态图标)
                     .font(.system(size: 24))
@@ -329,28 +343,46 @@ struct MITM设置页面: View {
                 Spacer()
             }
 
-            // 进度指示
-            HStack(spacing: 4) {
-                状态步骤(标题: "生成", 完成: mitm管理.证书已生成)
-                状态步骤(标题: "安装", 完成: mitm管理.元数据?.用户确认已安装 ?? false)
-                状态步骤(标题: "信任", 完成: mitm管理.元数据?.用户确认已信任 ?? false)
+            // 独立状态标签（替代单选圆圈，避免用户误解）
+            HStack(spacing: 8) {
+                状态标签(标题: "已生成", 完成: mitm管理.证书文件存在 && mitm管理.证书已生成)
+                状态标签(标题: "已安装", 完成: mitm管理.元数据?.用户确认已安装 ?? false)
+                状态标签(标题: "已信任", 完成: mitm管理.元数据?.用户确认已信任 ?? false)
             }
         }
         .padding(14)
-        .background(状态颜色.opacity(0.08))
+        .background(卡片背景色)
         .cornerRadius(10)
     }
 
-    private func 状态步骤(标题: String, 完成: Bool) -> some View {
+    /// 独立状态标签（胶囊样式，非单选圆圈）
+    private func 状态标签(标题: String, 完成: Bool) -> some View {
         HStack(spacing: 4) {
-            Image(systemName: 完成 ? "checkmark.circle.fill" : "circle")
-                .font(.system(size: 12))
-                .foregroundColor(完成 ? .green : .secondary)
+            Image(systemName: 完成 ? "checkmark" : "minus")
+                .font(.system(size: 10, weight: .bold))
             Text(标题)
-                .font(.system(size: 12))
-                .foregroundColor(完成 ? .green : .secondary)
+                .font(.system(size: 11, weight: .medium))
         }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background(完成 ? Color.green.opacity(0.15) : Color.secondary.opacity(0.1))
+        .foregroundColor(完成 ? .green : .secondary)
+        .cornerRadius(8)
         .frame(maxWidth: .infinity)
+    }
+
+    /// 卡片背景色：就绪绿色，异常红色/黄色
+    private var 卡片背景色: Color {
+        switch mitm管理.当前状态 {
+        case .就绪:
+            return Color.green.opacity(0.08)
+        case .未安装, .未信任:
+            return Color.blue.opacity(0.06)
+        case .文件缺失, .已过期, .文件损坏:
+            return Color.危险色.opacity(0.08)
+        case .临近过期:
+            return Color.警告色.opacity(0.08)
+        }
     }
 
     // MARK: - 辅助方法

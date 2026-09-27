@@ -285,6 +285,7 @@ private struct 连接记录行: View {
 private struct MITM开关卡片: View {
     @EnvironmentObject private var 隧道管理: 隧道管理器
     @State private var 启用 = MITM管理器.共享.启用
+    @State private var 显示设置 = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -319,6 +320,27 @@ private struct MITM开关卡片: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+        .contextMenu {
+            Button {
+                显示设置 = true
+            } label: {
+                Label("进入 MITM 设置", systemImage: "gearshape")
+            }
+            Button {
+                启用.toggle()
+                MITM管理器.共享.启用 = 启用
+                if 隧道管理.当前状态 == .已连接 {
+                    隧道管理.重新加载配置()
+                }
+            } label: {
+                Label(启用 ? "关闭解密" : "开启解密", systemImage: 启用 ? "pause.circle" : "play.circle")
+            }
+        }
+        .sheet(isPresented: $显示设置) {
+            MITM设置页面()
+                .environmentObject(MITM管理器.共享)
+        }
     }
 }
 
@@ -328,6 +350,7 @@ private struct MITM开关卡片: View {
 private struct HTTP抓包开关卡片: View {
     @EnvironmentObject private var 隧道管理: 隧道管理器
     @State private var 启用 = 抓包存储管理器.共享.是否启用
+    @State private var 显示设置 = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -362,6 +385,32 @@ private struct HTTP抓包开关卡片: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+        .contextMenu {
+            Button {
+                显示设置 = true
+            } label: {
+                Label("进入抓包记录", systemImage: "list.bullet")
+            }
+            Button {
+                启用.toggle()
+                抓包存储管理器.共享.是否启用 = 启用
+                if 隧道管理.当前状态 == .已连接 {
+                    隧道管理.重新加载配置()
+                }
+            } label: {
+                Label(启用 ? "停止抓包" : "开始抓包", systemImage: 启用 ? "pause.circle" : "play.circle")
+            }
+            Button {
+                抓包存储管理器.共享.清空记录()
+            } label: {
+                Label("清空抓包记录", systemImage: "trash")
+            }
+        }
+        .sheet(isPresented: $显示设置) {
+            抓包列表页面()
+                .environmentObject(隧道管理)
+        }
     }
 }
 

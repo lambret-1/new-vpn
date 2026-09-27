@@ -475,6 +475,8 @@ struct SingBox出站配置: Codable, Equatable {
     var packetEncoding: String?
     /// 绑定物理网卡接口名（en0=WiFi, pdp_ip0=蜂窝），直连出站必须设置避免回环
     var bindInterface: String?
+    /// 禁用出站UDP（普通模式下iOS沙盒不支持出站packet监听，禁用UDP避免operation not permitted报错）
+    var udpDisable: Bool?
     /// MITM CA 证书列表（PEM格式字符串数组）
     var caCertificate: [String]?
     /// MITM CA 私钥列表（PEM格式字符串数组）
@@ -655,6 +657,7 @@ struct SingBox出站配置: Codable, Equatable {
         case overridePort = "override_port"
         case packetEncoding = "packet_encoding"
         case bindInterface = "bind_interface"
+        case udpDisable = "udp_disable"
         case caCertificate = "ca_certificate"
         case caPrivateKey = "ca_private_key"
         case domainStrategy = "domain_strategy"

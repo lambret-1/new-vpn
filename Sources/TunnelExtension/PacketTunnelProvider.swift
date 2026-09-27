@@ -49,6 +49,11 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     /// sing-box 内核是否运行中
     private var singBox运行中 = false
 
+    /// 出站packet权限错误降噪：上次汇总日志输出时间（10秒内只输出一条）
+    private var 上次Packet权限错误汇总时间: Date?
+    /// 出站packet权限错误计数（10秒内的错误数量）
+    private var Packet权限错误计数 = 0
+
     /// 扩展内共享可变状态的串行队列
     /// sing-box 日志回调会在多个 Go 线程并发回调，同时主线程 Timer 也会清理 DNS 记录，
     /// 无锁并发读写字典/UserDefaults 数组会触发 Swift 独占检查崩溃或堆损坏（对应 commit eb043b4 提到的数据竞争）
@@ -922,6 +927,26 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             case 5: 级别字符串 = "致命"
             default: 级别字符串 = "未知"
             }
+
+            // 日志降噪：出站packet权限错误，10秒内只输出一条汇总日志
+            if 内容.contains("listen outbound packet connection: operation not permitted") {
+                self.扩展数据队列.async {
+                    let 现在 = Date()
+                    self.Packet权限错误计数 += 1
+                    if let 上次 = self.上次Packet权限错误汇总时间,
+                       现在.timeIntervalSince(上次) < 10 {
+                        // 10秒内，静默丢弃，不输出
+                        return
+                    }
+                    // 超过10秒，输出汇总日志
+                    let 汇总内容 = "【出站Packet套接字权限受限：iOS不支持出站packet监听，UDP无法代理，TCP/MITM不受影响】10秒内同类错误 \(self.Packet权限错误计数) 条"
+                    self.记录扩展日志(级别: "警告", 模块: "sing-box内核", 内容: 汇总内容)
+                    self.上次Packet权限错误汇总时间 = 现在
+                    self.Packet权限错误计数 = 0
+                }
+                return
+            }
+
             // 调试日志总开关：关闭时不写入 UserDefaults（减少 IO），但仍解析 DNS 查询记录
             let 调试日志开启 = self.共享默认?.bool(forKey: "debugLogEnabled") ?? true
             if 调试日志开启 {

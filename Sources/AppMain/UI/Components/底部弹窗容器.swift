@@ -309,6 +309,21 @@ private struct 设置视图: View {
                     }
                 }
                 .buttonStyle(PlainButtonStyle())
+
+                // 出站UDP禁用：普通模式下iOS沙盒不支持出站packet监听，禁用UDP避免报错
+                Toggle(isOn: Binding(
+                    get: { 隧道管理.禁用出站UDP },
+                    set: { 隧道管理.禁用出站UDP = $0 }
+                )) {
+                    Label("禁用出站UDP", systemImage: "wifi.slash")
+                }
+                .tint(.主题色)
+
+                if 隧道管理.禁用出站UDP {
+                    Text("已禁用出站UDP，UDP流量直连；TUN模式下可关闭此开关支持UDP代理")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                }
             }
             Section("安全") {
                 Button {

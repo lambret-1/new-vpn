@@ -39,7 +39,8 @@ final class SingBox配置生成器 {
                   日志级别: String = "debug",
                   MITM配置: (证书: String, 私钥: String, TLS指纹: String, 排除域名: [String])? = nil,
                   重写规则: [重写规则项] = [],
-                  抓包启用: Bool = false) -> SingBox配置 {
+                  抓包启用: Bool = false,
+                  禁用出站UDP: Bool = false) -> SingBox配置 {
         var 配置 = SingBox配置()
 
         // 日志配置
@@ -56,6 +57,19 @@ final class SingBox配置生成器 {
 
         // 出站配置
         配置.outbounds = 生成出站配置(节点: 节点, 节点列表: 节点列表, 抓包启用: 抓包启用)
+
+        // 普通模式前置预检：禁用出站UDP，避免iOS沙盒packet权限报错
+        if 禁用出站UDP {
+            配置.outbounds = 配置.outbounds.map { 出站 in
+                var 修改出站 = 出站
+                // 仅对代理协议出站禁用UDP，dns/block/selector等不受影响
+                if ["vless", "vmess", "trojan", "shadowsocks", "direct", "http"].contains(出站.type) {
+                    修改出站.udpDisable = true
+                }
+                return 修改出站
+            }
+            NSLog("[SingBox配置] 普通模式：已禁用全部代理出站UDP，避免packet权限报错，UDP流量直连")
+        }
 
         // 路由配置
         配置.route = 生成路由配置(分流规则: 分流规则, 节点: 节点, 运行模式: 运行模式, MITM配置: MITM配置, 重写规则: 重写规则, 抓包启用: 抓包启用)

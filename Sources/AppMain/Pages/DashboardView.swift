@@ -124,6 +124,8 @@ private struct 顶部状态区: View {
 private struct 主内容区: View {
     /// 全局应用状态
     @EnvironmentObject private var 状态: AppState
+    /// 重写规则管理器
+    @EnvironmentObject private var 重写管理: 重写规则管理器
 
     var body: some View {
         Group {
@@ -134,6 +136,7 @@ private struct 主内容区: View {
                 网络活动内容区()
             case .重写规则:
                 重写规则内容区()
+                    .environmentObject(重写管理)
             case .分流规则:
                 分流规则内容区()
             case .日志:

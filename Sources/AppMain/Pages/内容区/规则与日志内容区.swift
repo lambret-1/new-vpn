@@ -11,54 +11,368 @@ import SwiftUI
 
 /// 重写规则内容区视图
 struct 重写规则内容区: View {
-    /// 全局应用状态
-    @EnvironmentObject private var 状态: AppState
+    @EnvironmentObject private var 重写管理: 重写规则管理器
+    @State private var 搜索关键词 = ""
+    @State private var 展开的分组ID: UUID?
+    @State private var 显示添加规则 = false
+    @State private var 显示添加分组 = false
+    @State private var 显示预设规则 = false
+    @State private var 重命名的分组: 重写规则分组?
+    @State private var 重命名名称 = ""
+    @State private var 编辑的规则: 重写规则项?
+    @State private var 编辑规则所在分组: 重写规则分组?
+
+    /// 统计数据
+    private var 统计: (分组数: Int, 总规则数: Int, 启用规则数: Int) {
+        let 所有规则 = 重写管理.配置.分组列表.flatMap { $0.规则列表 }
+        let 启用规则 = 所有规则.filter { $0.启用 }
+        return (重写管理.配置.分组列表.count, 所有规则.count, 启用规则.count)
+    }
+
+    /// 过滤后的分组列表（搜索过滤）
+    private var 过滤后的分组: [重写规则分组] {
+        guard !搜索关键词.isEmpty else { return 重写管理.配置.分组列表 }
+        return 重写管理.配置.分组列表.map { 分组 in
+            let 过滤规则 = 分组.规则列表.filter { 规则 in
+                规则.名称.localizedCaseInsensitiveContains(搜索关键词) ||
+                规则.匹配正则.localizedCaseInsensitiveContains(搜索关键词) ||
+                规则.替换内容.localizedCaseInsensitiveContains(搜索关键词)
+            }
+            return 重写规则分组(id: 分组.id, 名称: 分组.名称, 图标: 分组.图标, 描述: 分组.描述, 启用: 分组.启用, 规则列表: 过滤规则)
+        }.filter { !$0.规则列表.isEmpty }
+    }
 
     var body: some View {
-        LazyVStack(spacing: 10) {
-            ForEach(状态.重写规则列表) { 规则 in
-                重写规则行(规则: 规则)
+        LazyVStack(spacing: 12) {
+            // 统计栏
+            统计栏
+            // 操作栏
+            操作栏
+            // 搜索栏
+            搜索栏
+            // 分组列表
+            if 过滤后的分组.isEmpty {
+                空状态视图
+            } else {
+                ForEach(过滤后的分组) { 分组 in
+                    分组视图(分组: 分组)
+                }
             }
         }
         .padding(.horizontal, 15)
+        .padding(.bottom, 20)
+        .sheet(isPresented: $显示添加规则) {
+            重写规则编辑页面(规则: nil, 分组: 重写管理.配置.分组列表.first)
+                .environmentObject(重写管理)
+        }
+        .sheet(isPresented: $显示添加分组) {
+            添加分组页面()
+                .environmentObject(重写管理)
+        }
+        .sheet(isPresented: $显示预设规则) {
+            预设重写规则页面()
+                .environmentObject(重写管理)
+        }
+        .sheet(item: $编辑的规则) { 规则 in
+            重写规则编辑页面(规则: 规则, 分组: 编辑规则所在分组)
+                .environmentObject(重写管理)
+        }
     }
-}
 
-/// 单个重写规则行
-private struct 重写规则行: View {
-    let 规则: 重写规则模型
+    // MARK: - 统计栏
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text(规则.名称)
-                    .font(.system(size: 15, weight: .medium))
-                Spacer()
-                Toggle("", isOn: .constant(规则.启用))
-                    .labelsHidden()
-                    .scaleEffect(0.8)
-            }
-            HStack(spacing: 6) {
-                Text(规则.重写类型)
-                    .font(.system(size: 11))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Color(red: 0.99, green: 0.33, blue: 0.63))
-                    .cornerRadius(4)
-                Text(规则.域名后缀)
-                    .font(.system(size: 12))
-                    .foregroundColor(.secondary)
-            }
-            Text(规则.匹配表达式)
-                .font(.system(size: 12, design: .monospaced))
-                .foregroundColor(.secondary)
-                .lineLimit(1)
+    private var 统计栏: some View {
+        HStack(spacing: 8) {
+            统计项(标题: "分组", 数值: "\(统计.分组数)", 颜色: .主题色)
+            统计项(标题: "总规则", 数值: "\(统计.总规则数)", 颜色: Color(red: 0.20, green: 0.55, blue: 0.91))
+            统计项(标题: "已启用", 数值: "\(统计.启用规则数)", 颜色: .成功色)
+            Spacer()
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
         .background(Color.卡片背景)
         .cornerRadius(12)
+    }
+
+    private func 统计项(标题: String, 数值: String, 颜色: Color) -> some View {
+        VStack(spacing: 2) {
+            Text(数值)
+                .font(.system(size: 18, weight: .bold))
+                .foregroundColor(颜色)
+            Text(标题)
+                .font(.system(size: 11))
+                .foregroundColor(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    // MARK: - 操作栏
+
+    private var 操作栏: some View {
+        HStack(spacing: 8) {
+            操作按钮(标题: "添加规则", 图标: "plus.circle.fill", 颜色: .主题色) {
+                显示添加规则 = true
+            }
+            操作按钮(标题: "添加分组", 图标: "folder.badge.plus", 颜色: Color(red: 0.95, green: 0.55, blue: 0.20)) {
+                显示添加分组 = true
+            }
+            操作按钮(标题: "预设导入", 图标: "square.and.arrow.down", 颜色: .成功色) {
+                显示预设规则 = true
+            }
+        }
+    }
+
+    private func 操作按钮(标题: String, 图标: String, 颜色: Color, 动作: @escaping () -> Void) -> some View {
+        Button(action: 动作) {
+            HStack(spacing: 4) {
+                Image(systemName: 图标)
+                    .font(.system(size: 13))
+                Text(标题)
+                    .font(.system(size: 12, weight: .medium))
+            }
+            .foregroundColor(颜色)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 8)
+            .background(颜色.opacity(0.1))
+            .cornerRadius(8)
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+
+    // MARK: - 搜索栏
+
+    private var 搜索栏: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 14))
+                .foregroundColor(.secondary)
+            TextField("搜索规则名称、匹配表达式", text: $搜索关键词)
+                .font(.system(size: 13))
+                .textFieldStyle(PlainTextFieldStyle())
+            if !搜索关键词.isEmpty {
+                Button {
+                    搜索关键词 = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundColor(.secondary)
+                }
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(Color.卡片背景)
+        .cornerRadius(10)
+    }
+
+    // MARK: - 空状态
+
+    private var 空状态视图: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "pencil.line")
+                .font(.system(size: 48))
+                .foregroundColor(.secondary)
+            Text("暂无重写规则")
+                .font(.system(size: 16, weight: .medium))
+                .foregroundColor(.secondary)
+            Text("点击上方按钮添加规则或导入预设")
+                .font(.system(size: 14))
+                .foregroundColor(.secondary.opacity(0.8))
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 60)
+        .background(Color.卡片背景)
+        .cornerRadius(12)
+    }
+
+    // MARK: - 分组视图
+
+    private func 分组视图(分组: 重写规则分组) -> some View {
+        let 已展开 = 展开的分组ID == 分组.id
+        return VStack(spacing: 0) {
+            // 分组标题栏
+            Button {
+                withAnimation {
+                    展开的分组ID = 已展开 ? nil : 分组.id
+                }
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: 分组.图标)
+                        .font(.system(size: 14))
+                        .foregroundColor(.主题色)
+                    Text(分组.名称)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.primary)
+                    Text("\(分组.规则列表.count) 条")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.主题色.opacity(0.1))
+                        .cornerRadius(4)
+                    Spacer()
+                    // 分组启用开关
+                    Toggle("", isOn: Binding(
+                        get: { 分组.启用 },
+                        set: { 新值 in
+                            重写管理.切换分组启用(分组)
+                        }
+                    ))
+                    .labelsHidden()
+                    .scaleEffect(0.8)
+                    Image(systemName: 已展开 ? "chevron.down" : "chevron.right")
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
+                .background(Color.卡片背景)
+                .cornerRadius(12, corners: 已展开 ? [.topLeft, .topRight] : .allCorners)
+            }
+            .buttonStyle(PlainButtonStyle())
+            .contextMenu {
+                Button {
+                    重命名的分组 = 分组
+                    重命名名称 = 分组.名称
+                } label: {
+                    Label("重命名", systemImage: "pencil")
+                }
+                Button(role: .destructive) {
+                    重写管理.删除分组(分组)
+                } label: {
+                    Label("删除分组", systemImage: "trash")
+                }
+            }
+
+            // 分组规则列表
+            if 已展开 {
+                VStack(spacing: 0) {
+                    ForEach(Array(分组.规则列表.enumerated()), id: \.element.id) { 索引, 规则 in
+                        规则行(规则: 规则, 分组: 分组)
+                        if 索引 < 分组.规则列表.count - 1 {
+                            Divider()
+                                .padding(.leading, 15)
+                        }
+                    }
+                }
+                .background(Color.卡片背景)
+                .cornerRadius(12, corners: [.bottomLeft, .bottomRight])
+            }
+        }
+        .alert("重命名分组", isPresented: .constant(重命名的分组 != nil)) {
+            TextField("分组名称", text: $重命名名称)
+            Button("取消", role: .cancel) { 重命名的分组 = nil }
+            Button("确定") {
+                if let 分组 = 重命名的分组, !重命名名称.isEmpty {
+                    重写管理.重命名分组(分组, 新名称: 重命名名称)
+                }
+                重命名的分组 = nil
+            }
+        }
+    }
+
+    // MARK: - 规则行
+
+    private func 规则行(规则: 重写规则项, 分组: 重写规则分组) -> some View {
+        Button {
+            编辑的规则 = 规则
+            编辑规则所在分组 = 分组
+        } label: {
+            HStack(spacing: 10) {
+                // 类型标签
+                Text(规则.类型.rawValue)
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+                    .background(规则类型颜色(规则.类型))
+                    .cornerRadius(4)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(规则.名称)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.primary)
+                        .lineLimit(1)
+                    Text(规则.匹配正则)
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                }
+
+                Spacer()
+
+                // 启用开关
+                Toggle("", isOn: Binding(
+                    get: { 规则.启用 },
+                    set: { _ in
+                        重写管理.切换规则启用(规则)
+                    }
+                ))
+                .labelsHidden()
+                .scaleEffect(0.8)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(PlainButtonStyle())
+        .contextMenu {
+            Button {
+                编辑的规则 = 规则
+                编辑规则所在分组 = 分组
+            } label: {
+                Label("编辑", systemImage: "pencil")
+            }
+            Button(role: .destructive) {
+                重写管理.删除规则(规则)
+            } label: {
+                Label("删除", systemImage: "trash")
+            }
+        }
+    }
+
+    private func 规则类型颜色(_ 类型: 重写规则类型) -> Color {
+        switch 类型 {
+        case .URL重写: return Color(red: 0.20, green: 0.55, blue: 0.91)
+        case .请求头: return Color(red: 0.95, green: 0.55, blue: 0.20)
+        case .响应头: return Color(red: 0.56, green: 0.38, blue: 0.95)
+        case .请求阻断: return .危险色
+        }
+    }
+}
+
+// MARK: - 添加分组页面
+
+private struct 添加分组页面: View {
+    @EnvironmentObject private var 重写管理: 重写规则管理器
+    @Environment(\.dismiss) private var 关闭
+    @State private var 分组名称 = ""
+    @State private var 分组描述 = ""
+
+    var body: some View {
+        NavigationView {
+            Form {
+                Section("分组信息") {
+                    TextField("分组名称", text: $分组名称)
+                    TextField("分组描述（可选）", text: $分组描述)
+                }
+            }
+            .navigationTitle("添加分组")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("取消") { 关闭() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("保存") {
+                        guard !分组名称.isEmpty else { return }
+                        let 新分组 = 重写规则分组(名称: 分组名称, 描述: 分组描述)
+                        重写管理.添加分组(新分组)
+                        关闭()
+                    }
+                    .disabled(分组名称.isEmpty)
+                }
+            }
+        }
     }
 }
 

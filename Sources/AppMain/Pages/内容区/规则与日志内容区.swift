@@ -38,7 +38,10 @@ struct 重写规则内容区: View {
                 规则.匹配正则.localizedCaseInsensitiveContains(搜索关键词) ||
                 规则.替换内容.localizedCaseInsensitiveContains(搜索关键词)
             }
-            return 重写规则分组(id: 分组.id, 名称: 分组.名称, 图标: 分组.图标, 描述: 分组.描述, 启用: 分组.启用, 规则列表: 过滤规则)
+            var 新分组 = 重写规则分组(名称: 分组.名称, 图标: 分组.图标, 描述: 分组.描述, 规则列表: 过滤规则)
+            新分组.id = 分组.id
+            新分组.启用 = 分组.启用
+            return 新分组
         }.filter { !$0.规则列表.isEmpty }
     }
 

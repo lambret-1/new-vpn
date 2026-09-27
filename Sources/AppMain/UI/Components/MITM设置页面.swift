@@ -22,7 +22,69 @@ struct MITM设置页面: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            Group {
+                if !mitm管理.检测完成 {
+                    // 检测未完成时显示加载状态，禁止提前渲染旧缓存
+                    VStack(spacing: 16) {
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle(tint: .主题色))
+                            .scaleEffect(1.2)
+                        Text("正在检测证书状态...")
+                            .font(.system(size: 14))
+                            .foregroundColor(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    完整设置内容
+                }
+            }
+            .navigationTitle("MITM 解密")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("完成") { 关闭() }
+                }
+            }
+            .sheet(isPresented: $显示导出证书) {
+                if let 证书数据 = mitm管理.导出证书数据() {
+                    证书导出视图(证书数据: 证书数据)
+                }
+            }
+            .sheet(isPresented: $显示证书日志) {
+                证书日志页面()
+                    .environmentObject(mitm管理)
+            }
+            .alert("确认重置", isPresented: $显示确认清除) {
+                Button("取消", role: .cancel) {}
+                Button("重置", role: .destructive) {
+                    mitm管理.清除证书()
+                }
+            } message: {
+                Text("重置后将删除本地证书并需要重新生成安装，确定要重置吗？")
+            }
+            .alert("证书临近过期", isPresented: $显示临近过期提示) {
+                Button("稍后提醒", role: .cancel) {}
+                Button("立即更新") {
+                    mitm管理.生成CA证书()
+                }
+            } message: {
+                if let 元数据 = mitm管理.元数据 {
+                    Text("证书将在 \(元数据.剩余天数) 天后过期，建议提前更新以避免 MITM 解密中断。")
+                }
+            }
+            .onAppear {
+                mitm管理.页面出现时检测()
+                if mitm管理.需要提示临近过期() {
+                    显示临近过期提示 = true
+                }
+            }
+        }
+    }
+
+    // MARK: - 完整设置内容
+
+    private var 完整设置内容: some View {
+        Form {
                 // 功能开关
                 Section {
                     Toggle("启用 MITM 解密", isOn: $mitm管理.启用)
@@ -246,49 +308,6 @@ struct MITM设置页面: View {
                     Text("安全提示")
                 }
             }
-            .navigationTitle("MITM 解密")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("完成") { 关闭() }
-                }
-            }
-            .sheet(isPresented: $显示导出证书) {
-                if let 证书数据 = mitm管理.导出证书数据() {
-                    证书导出视图(证书数据: 证书数据)
-                }
-            }
-            .sheet(isPresented: $显示证书日志) {
-                证书日志页面()
-                    .environmentObject(mitm管理)
-            }
-            .alert("确认重置", isPresented: $显示确认清除) {
-                Button("取消", role: .cancel) {}
-                Button("重置", role: .destructive) {
-                    mitm管理.清除证书()
-                }
-            } message: {
-                Text("重置后将删除本地证书并需要重新生成安装，确定要重置吗？")
-            }
-            .alert("证书临近过期", isPresented: $显示临近过期提示) {
-                Button("稍后提醒", role: .cancel) {}
-                Button("立即更新") {
-                    mitm管理.生成CA证书()
-                }
-            } message: {
-                if let 元数据 = mitm管理.元数据 {
-                    Text("证书将在 \(元数据.剩余天数) 天后过期，建议提前更新以避免 MITM 解密中断。")
-                }
-            }
-            .onAppear {
-                // 进入页面时执行完整检测（记录持久化状态读取结果）
-                mitm管理.页面出现时检测()
-                // 检查是否临近过期
-                if mitm管理.需要提示临近过期() {
-                    显示临近过期提示 = true
-                }
-            }
-        }
     }
 
     // MARK: - 证书状态提示

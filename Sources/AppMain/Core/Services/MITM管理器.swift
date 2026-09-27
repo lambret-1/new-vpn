@@ -234,17 +234,46 @@ FxBzaz833X+KGgOv4VBtDcY=
     private let 元数据键 = "mitmCertificateMetadata"
     private let 日志键 = "mitmCertificateLogs"
 
-    // MARK: - 证书文件路径
+    // MARK: - 证书文件路径（动态读取，禁止硬编码）
 
-    /// 证书文件存储目录
-    private var 证书目录: URL {
-        let 文档目录 = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        return 文档目录.appendingPathComponent("MITM证书", isDirectory: true)
+    /// 动态获取 Documents 根目录
+    private var 文档目录: URL {
+        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
     }
 
-    /// 证书文件路径
+    /// 证书文件存储目录（动态拼接，不硬编码完整路径）
+    private var 证书目录: URL {
+        文档目录.appendingPathComponent("MITM证书", isDirectory: true)
+    }
+
+    /// 证书文件路径（crt）
     private var 证书文件URL: URL {
         证书目录.appendingPathComponent("ca_certificate.crt")
+    }
+
+    /// 私钥文件路径（key）
+    private var 私钥文件URL: URL {
+        证书目录.appendingPathComponent("ca_private.key")
+    }
+
+    /// 确保证书目录存在，并设置不加入 iCloud 备份
+    private func 确保证书目录() -> Bool {
+        let 文件管理 = FileManager.default
+        do {
+            if !文件管理.fileExists(atPath: 证书目录.path) {
+                try 文件管理.createDirectory(at: 证书目录, withIntermediateDirectories: true)
+                添加证书日志(类型: "info", 消息: "证书目录已创建：\(证书目录.lastPathComponent)")
+            }
+            // 设置不加入 iCloud 备份，规避系统清理
+            var 目录URL = 证书目录
+            var 资源值 = URLResourceValues()
+            资源值.isExcludedFromBackup = true
+            try 目录URL.setResourceValues(资源值)
+            return true
+        } catch {
+            添加证书日志(类型: "error", 消息: "证书目录创建/设置失败：\(error.localizedDescription)")
+            return false
+        }
     }
 
     // MARK: - 加载和保存配置
@@ -287,16 +316,44 @@ FxBzaz833X+KGgOv4VBtDcY=
 
     // MARK: - 证书自动探测
 
+    /// 检测是否已完成（用于UI等待渲染）
+    @Published private(set) var 检测完成 = false
+
+    /// 实时从磁盘读取证书文件内容
+    private func 读取磁盘证书() -> String? {
+        guard FileManager.default.fileExists(atPath: 证书文件URL.path) else {
+            return nil
+        }
+        return try? String(contentsOf: 证书文件URL, encoding: .utf8)
+    }
+
+    /// 实时从磁盘读取私钥文件内容
+    private func 读取磁盘私钥() -> String? {
+        guard FileManager.default.fileExists(atPath: 私钥文件URL.path) else {
+            return nil
+        }
+        return try? String(contentsOf: 私钥文件URL, encoding: .utf8)
+    }
+
+    /// 获取文件大小
+    private func 文件大小(_ 路径: String) -> Int {
+        guard let 属性 = try? FileManager.default.attributesOfItem(atPath: 路径),
+              let 大小 = 属性[.size] as? Int else {
+            return 0
+        }
+        return 大小
+    }
+
     /// 解析 PEM 证书为 Security framework 证书对象
+    /// - Parameter 证书内容: PEM 格式证书字符串
     /// - Returns: SecCertificate?，解析失败返回 nil
-    private func 解析PEM证书() -> SecCertificate? {
-        guard !CA证书.isEmpty else {
-            添加证书日志(类型: "error", 消息: "PEM解析失败：证书内容为空")
+    private func 解析PEM证书(证书内容: String) -> SecCertificate? {
+        guard !证书内容.isEmpty else {
             return nil
         }
 
         // 移除 PEM 头尾，获取 Base64 内容
-        var 内容 = CA证书
+        let 内容 = 证书内容
             .replacingOccurrences(of: "-----BEGIN CERTIFICATE-----", with: "")
             .replacingOccurrences(of: "-----END CERTIFICATE-----", with: "")
             .replacingOccurrences(of: "\n", with: "")
@@ -304,25 +361,92 @@ FxBzaz833X+KGgOv4VBtDcY=
             .trimmingCharacters(in: .whitespaces)
 
         guard let 数据 = Data(base64Encoded: 内容) else {
-            添加证书日志(类型: "error", 消息: "PEM解析失败：Base64解码失败")
             return nil
         }
 
-        guard let 证书 = SecCertificateCreateWithData(nil, 数据 as CFData) else {
-            添加证书日志(类型: "error", 消息: "PEM解析失败：SecCertificateCreateWithData返回nil")
+        return SecCertificateCreateWithData(nil, 数据 as CFData)
+    }
+
+    /// 实时解析证书获取元数据（指纹、创建时间、过期时间）
+    /// - Returns: (指纹, 创建时间, 过期时间)?，解析失败返回 nil
+    private func 实时解析证书元数据() -> (指纹: String, 创建时间: Date, 过期时间: Date)? {
+        guard let 证书内容 = 读取磁盘证书(),
+              let 证书 = 解析PEM证书(证书内容: 证书内容) else {
             return nil
         }
 
-        添加证书日志(类型: "success", 消息: "PEM证书解析成功，DER数据大小=\(数据.count)字节")
-        return 证书
+        // 计算指纹
+        let 指纹 = 计算证书指纹(证书: 证书内容)
+
+        // 从证书提取有效期
+        var 错误: Unmanaged<CFError>?
+        guard let 证书值 = SecCertificateCopyValues(证书, [kSecOIDValidityPeriod] as CFArray, &错误) as? [String: Any],
+              let 有效期 = 证书值[kSecOIDValidityPeriod as String] as? [String: Any],
+              let 有效期数据 = 有效期[kSecPropertyKeyValue as String] as? [String: Any],
+              let 不早于 = 有效期数据["notBefore"] as? Date,
+              let 不晚于 = 有效期数据["notAfter"] as? Date else {
+            // 备用：使用固定10年有效期
+            let 创建时间 = Date()
+            let 过期时间 = Calendar.current.date(byAdding: .year, value: 10, to: 创建时间) ?? 创建时间
+            return (指纹, 创建时间, 过期时间)
+        }
+
+        return (指纹, 不早于, 不晚于)
+    }
+
+    /// 证书文件状态检测结果
+    struct 证书文件状态 {
+        let crt存在: Bool
+        let key存在: Bool
+        let crt大小: Int
+        let key大小: Int
+        let crt解析成功: Bool
+        let key解析成功: Bool
+        let 目录存在: Bool
+
+        /// 双文件都存在且都能解析
+        var 完全有效: Bool {
+            crt存在 && key存在 && crt解析成功 && key解析成功
+        }
+    }
+
+    /// 检测证书文件状态（同时检测 crt 和 key）
+    private func 检测证书文件状态() -> 证书文件状态 {
+        let 文件管理 = FileManager.default
+        var 是目录: ObjCBool = false
+        let 目录存在 = 文件管理.fileExists(atPath: 证书目录.path, isDirectory: &是目录) && 是目录.boolValue
+
+        let crt存在 = 文件管理.fileExists(atPath: 证书文件URL.path)
+        let key存在 = 文件管理.fileExists(atPath: 私钥文件URL.path)
+        let crt大小 = 文件大小(证书文件URL.path)
+        let key大小 = 文件大小(私钥文件URL.path)
+
+        // 解析 crt
+        let crt内容 = 读取磁盘证书()
+        let crt解析成功 = crt内容 != nil && 解析PEM证书(证书内容: crt内容!) != nil
+
+        // 解析 key（简单检查 PEM 格式）
+        let key内容 = 读取磁盘私钥()
+        let key解析成功 = key内容 != nil && key内容!.contains("PRIVATE KEY")
+
+        return 证书文件状态(
+            crt存在: crt存在,
+            key存在: key存在,
+            crt大小: crt大小,
+            key大小: key大小,
+            crt解析成功: crt解析成功,
+            key解析成功: key解析成功,
+            目录存在: 目录存在
+        )
     }
 
     /// 探测证书是否已安装到系统描述文件
     /// iOS沙盒限制：无法直接读取系统描述文件列表，通过钥匙串查询间接判断
     /// - Returns: true=已安装，false=未安装，nil=探测失败（权限限制）
     private func 探测证书安装状态() -> Bool? {
-        guard let 证书 = 解析PEM证书() else {
-            添加证书日志(类型: "warning", 消息: "安装状态探测：证书解析失败，无法探测")
+        guard let 证书内容 = 读取磁盘证书(),
+              let 证书 = 解析PEM证书(证书内容: 证书内容) else {
+            添加证书日志(类型: "warning", 消息: "安装状态探测：从磁盘读取/解析证书失败，无法探测")
             return nil
         }
 
@@ -356,8 +480,9 @@ FxBzaz833X+KGgOv4VBtDcY=
     /// 通过 SecTrustEvaluate 评估证书链信任（仅能评估系统默认信任策略）
     /// - Returns: true=已信任，false=未信任，nil=探测失败（权限限制）
     private func 探测证书信任状态() -> Bool? {
-        guard let 证书 = 解析PEM证书() else {
-            添加证书日志(类型: "warning", 消息: "信任状态探测：证书解析失败，无法探测")
+        guard let 证书内容 = 读取磁盘证书(),
+              let 证书 = 解析PEM证书(证书内容: 证书内容) else {
+            添加证书日志(类型: "warning", 消息: "信任状态探测：从磁盘读取/解析证书失败，无法探测")
             return nil
         }
 
@@ -416,123 +541,126 @@ FxBzaz833X+KGgOv4VBtDcY=
 
     // MARK: - MITM证书状态检测
 
-    /// 检测证书状态（智能校验）
-    /// 最高优先级：物理文件存在性检测
-    /// 文件不存在时，自动清除持久化存储的全部状态元数据（安装/信任标记），消除UI矛盾
+    /// 检测证书状态（实时从磁盘检测，不依赖缓存元数据）
+    /// 优先级：目录存在 > crt+key双文件存在 > PEM解析 > 指纹 > 过期 > 安装 > 信任
     /// - Returns: MITM证书状态
     @discardableResult
     func 检测证书状态() -> MITM证书状态 {
-        // 1. 最高优先级：检查证书文件是否物理存在于沙盒
-        let 文件存在 = FileManager.default.fileExists(atPath: 证书文件URL.path)
-        var 文件大小 = 0
-        if 文件存在 {
-            if let 属性 = try? FileManager.default.attributesOfItem(atPath: 证书文件URL.path),
-               let 大小 = 属性[.size] as? Int {
-                文件大小 = 大小
-            }
-        }
-        添加证书日志(类型: "info", 消息: "证书状态检测：物理文件存在=\(文件存在 ? "是" : "否")，文件大小=\(文件大小)字节，路径=\(证书文件URL.path)")
+        // 1. 实时检测证书文件状态（同时检测 crt 和 key）
+        let 文件状态 = 检测证书文件状态()
+        添加证书日志(类型: "info", 消息: "文件状态：目录=\(文件状态.目录存在 ? "存在" : "丢失")，crt=\(文件状态.crt存在 ? "存在(\(文件状态.crt大小)B)" : "丢失")，key=\(文件状态.key存在 ? "存在(\(文件状态.key大小)B)" : "丢失")，crt解析=\(文件状态.crt解析成功 ? "成功" : "失败")，key解析=\(文件状态.key解析成功 ? "成功" : "失败")")
 
-        guard 文件存在 else {
-            // 文件物理丢失：完全重置全部状态元数据，消除"已安装已信任但证书缺失"的矛盾
-            if 元数据 != nil {
-                添加证书日志(类型: "warning", 消息: "证书物理文件丢失，但持久化元数据存在，执行完全重置（清除安装/信任标记+删除持久化记录）")
-                完全重置证书元数据()
-            }
-            // 同时禁用 MITM 开关
-            if 启用 {
-                启用 = false
-                添加证书日志(类型: "warning", 消息: "证书文件缺失，自动关闭 MITM 开关")
-            }
+        // 2. 检查目录是否存在
+        guard 文件状态.目录存在 else {
+            if 元数据 != nil { 完全重置证书元数据() }
+            if 启用 { 启用 = false }
             当前状态 = .文件缺失
-            添加证书日志(类型: "error", 消息: "证书状态检测结果：文件缺失")
+            添加证书日志(类型: "error", 消息: "检测结果：证书目录丢失")
             return .文件缺失
         }
 
-        // 2. 检查证书内容是否存在（内存中）
-        guard 证书已生成 else {
+        // 3. 检查 crt 和 key 是否都存在
+        guard 文件状态.crt存在 && 文件状态.key存在 else {
+            if 元数据 != nil { 完全重置证书元数据() }
+            if 启用 { 启用 = false }
+            if !文件状态.crt存在 {
+                添加证书日志(类型: "error", 消息: "检测结果：crt证书文件缺失")
+            } else {
+                添加证书日志(类型: "error", 消息: "检测结果：key私钥文件缺失")
+            }
             当前状态 = .文件缺失
-            添加证书日志(类型: "error", 消息: "证书状态检测结果：证书内容缺失")
             return .文件缺失
         }
 
-        // 3. 检查元数据
-        guard let 元数据 = 元数据 else {
+        // 4. 检查 crt 和 key 是否都能正常解析
+        guard 文件状态.crt解析成功 && 文件状态.key解析成功 else {
+            if 元数据 != nil { 完全重置证书元数据() }
+            if 启用 { 启用 = false }
+            添加证书日志(类型: "error", 消息: "检测结果：证书文件损坏或私钥丢失（PEM解析失败）")
             当前状态 = .文件损坏
-            添加证书日志(类型: "error", 消息: "证书状态检测结果：元数据缺失")
             return .文件损坏
         }
 
-        // 4. 验证元数据中的文件存在标记是否与实际一致
-        if !元数据.文件存在 {
-            添加证书日志(类型: "warning", 消息: "元数据中文件存在标记为否，但物理文件存在，更新标记")
-            var 更新元数据 = 元数据
-            更新元数据.文件存在 = true
-            self.元数据 = 更新元数据
-            保存证书元数据()
-        }
-
-        // 5. 验证证书指纹是否匹配
-        let 当前指纹 = 计算证书指纹(证书: CA证书)
-        guard 当前指纹 == 元数据.指纹 else {
+        // 5. 实时解析证书元数据（指纹、创建时间、过期时间）
+        guard let 实时元数据 = 实时解析证书元数据() else {
+            添加证书日志(类型: "error", 消息: "检测结果：实时解析证书元数据失败")
             当前状态 = .文件损坏
-            添加证书日志(类型: "error", 消息: "证书状态检测结果：指纹不匹配")
             return .文件损坏
         }
 
-        // 6. 检查是否过期
-        if 元数据.已过期 {
+        // 6. 同步内存中的证书内容（从磁盘读取）
+        if let 磁盘证书 = 读取磁盘证书() {
+            CA证书 = 磁盘证书
+        }
+        if let 磁盘私钥 = 读取磁盘私钥() {
+            CA私钥 = 磁盘私钥
+        }
+
+        // 7. 更新元数据（实时解析结果，不使用缓存）
+        元数据 = 证书元数据(
+            文件存在: true,
+            指纹: 实时元数据.指纹,
+            创建时间: 实时元数据.创建时间,
+            过期时间: 实时元数据.过期时间,
+            文件路径: 证书文件URL.path,
+            系统探测失败: 使用手动兜底,
+            手动确认已安装: 元数据?.手动确认已安装 ?? false,
+            手动确认已信任: 元数据?.手动确认已信任 ?? false
+        )
+        保存证书元数据()
+
+        // 8. 检查是否过期
+        let 剩余天数 = 日历_剩余天数(过期时间: 实时元数据.过期时间)
+        if 剩余天数 <= 0 {
             当前状态 = .已过期
-            添加证书日志(类型: "error", 消息: "证书状态检测结果：已过期")
+            添加证书日志(类型: "error", 消息: "检测结果：证书已过期")
             return .已过期
         }
 
-        // 7. 检查是否临近过期
-        if 元数据.临近过期 {
-            当前状态 = .临近过期(剩余天数: 元数据.剩余天数)
-            添加证书日志(类型: "warning", 消息: "证书状态检测结果：临近过期，剩余 \(元数据.剩余天数) 天")
-            return .临近过期(剩余天数: 元数据.剩余天数)
+        // 9. 检查是否临近过期
+        if 剩余天数 <= 30 {
+            当前状态 = .临近过期(剩余天数: 剩余天数)
+            添加证书日志(类型: "warning", 消息: "检测结果：证书临近过期，剩余 \(剩余天数) 天")
+            return .临近过期(剩余天数: 剩余天数)
         }
 
-        // 8. 检查证书是否已安装（自动探测优先，失败时用手动兜底）
+        // 10. 检查证书是否已安装（自动探测优先，失败时用手动兜底）
         guard 综合已安装 else {
             当前状态 = .未安装
-            添加证书日志(类型: "info", 消息: "证书状态检测结果：未安装（自动探测=\(探测已安装 == nil ? "失败" : (探测已安装! ? "已安装" : "未安装"))，手动兜底=\(元数据.手动确认已安装 ? "是" : "否")）")
+            添加证书日志(类型: "info", 消息: "检测结果：未安装")
             return .未安装
         }
 
-        // 9. 检查证书是否已信任（自动探测优先，失败时用手动兜底）
+        // 11. 检查证书是否已信任（自动探测优先，失败时用手动兜底）
         guard 综合已信任 else {
             当前状态 = .未信任
-            添加证书日志(类型: "info", 消息: "证书状态检测结果：未信任（自动探测=\(探测已信任 == nil ? "失败" : (探测已信任! ? "已信任" : "未信任"))，手动兜底=\(元数据.手动确认已信任 ? "是" : "否")）")
+            添加证书日志(类型: "info", 消息: "检测结果：未信任")
             return .未信任
         }
 
         // 全部通过
         当前状态 = .就绪
-        添加证书日志(类型: "success", 消息: "证书状态检测结果：就绪")
+        添加证书日志(类型: "success", 消息: "检测结果：就绪，指纹=\(String(实时元数据.指纹.prefix(16)))...，剩余\(剩余天数)天")
         return .就绪
     }
 
-    /// 页面出现时执行完整检测（记录沙盒目录、文件路径、持久化状态）
+    /// 计算剩余天数
+    private func 日历_剩余天数(过期时间: Date) -> Int {
+        let 日历 = Calendar.current
+        let 组件 = 日历.dateComponents([.day], from: Date(), to: 过期时间)
+        return 组件.day ?? 0
+    }
+
+    /// 页面出现时执行完整检测（等待文件读取+PEM解析完成后再渲染UI）
     func 页面出现时检测() {
-        let 文档目录 = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        检测完成 = false
         添加证书日志(类型: "info", 消息: "===== 页面加载，开始证书状态检测 =====")
-        添加证书日志(类型: "info", 消息: "沙盒 Documents 目录：\(文档目录.path)")
-        添加证书日志(类型: "info", 消息: "证书文件完整路径：\(证书文件URL.path)")
-        添加证书日志(类型: "info", 消息: "读取持久化状态：证书已生成=\(证书已生成 ? "是" : "否")，元数据存在=\(元数据 != nil ? "是" : "否")，MITM开关=\(启用 ? "开" : "关")")
-        if let 元数据 = 元数据 {
-            添加证书日志(类型: "info", 消息: "持久化元数据：文件存在标记=\(元数据.文件存在 ? "是" : "否")，系统探测失败=\(元数据.系统探测失败 ? "是" : "否")，手动兜底已安装=\(元数据.手动确认已安装 ? "是" : "否")，手动兜底已信任=\(元数据.手动确认已信任 ? "是" : "否")")
-            添加证书日志(类型: "info", 消息: "证书元数据：指纹=\(String(元数据.指纹.prefix(16)))...，创建=\(格式化日期(元数据.创建时间))，过期=\(格式化日期(元数据.过期时间))，剩余\(元数据.剩余天数)天")
-        }
-        // 检查沙盒目录是否存在
-        var 是目录: ObjCBool = false
-        let 目录存在 = FileManager.default.fileExists(atPath: 证书目录.path, isDirectory: &是目录)
-        添加证书日志(类型: "info", 消息: "证书目录存在=\(目录存在 ? "是" : "否")，是目录=\(是目录.boolValue ? "是" : "否")")
         // 执行自动探测（安装+信任状态）
         执行自动探测()
+        // 实时检测证书状态（从磁盘读取+PEM解析）
         检测证书状态()
-        添加证书日志(类型: "info", 消息: "===== 页面加载检测完成，最终状态：\(当前状态.描述) =====")
+        检测完成 = true
+        添加证书日志(类型: "info", 消息: "===== 检测完成，最终状态：\(当前状态.描述) =====")
     }
 
     /// 完全重置证书元数据（文件丢失时调用）
@@ -581,27 +709,43 @@ FxBzaz833X+KGgOv4VBtDcY=
         CA私钥 = MITM管理器.预生成CA私钥
         保存配置()
 
-        // 写入证书文件
-        do {
-            try FileManager.default.createDirectory(at: 证书目录, withIntermediateDirectories: true)
-            try CA证书.write(to: 证书文件URL, atomically: true, encoding: .utf8)
-        } catch {
-            NSLog("[MITM] 写入证书文件失败：\(error.localizedDescription)")
-            添加证书日志(类型: "error", 消息: "写入证书文件失败：\(error.localizedDescription)")
+        // 确保证书目录存在（设置不加入iCloud备份）
+        guard 确保证书目录() else {
+            添加证书日志(类型: "error", 消息: "证书目录创建失败")
             return false
         }
 
-        // 计算指纹和元数据
-        let 指纹 = 计算证书指纹(证书: CA证书)
-        let 创建时间 = Date()
-        // 预生成证书有效期 10 年
-        let 过期时间 = Calendar.current.date(byAdding: .year, value: 10, to: 创建时间) ?? 创建时间
+        // 成对原子写入 crt + key，缺少任意一个判定生成失败
+        do {
+            try CA证书.write(to: 证书文件URL, atomically: true, encoding: .utf8)
+            try CA私钥.write(to: 私钥文件URL, atomically: true, encoding: .utf8)
+        } catch {
+            NSLog("[MITM] 写入证书文件失败：\(error.localizedDescription)")
+            添加证书日志(类型: "error", 消息: "成对写入crt+key失败：\(error.localizedDescription)")
+            // 写入失败时清理部分文件
+            try? FileManager.default.removeItem(at: 证书文件URL)
+            try? FileManager.default.removeItem(at: 私钥文件URL)
+            return false
+        }
+
+        // 验证双文件都写入成功
+        let 文件状态 = 检测证书文件状态()
+        guard 文件状态.完全有效 else {
+            添加证书日志(类型: "error", 消息: "写入验证失败：crt=\(文件状态.crt存在 ? "存在" : "丢失")，key=\(文件状态.key存在 ? "存在" : "丢失")，crt解析=\(文件状态.crt解析成功 ? "成功" : "失败")，key解析=\(文件状态.key解析成功 ? "成功" : "失败")")
+            return false
+        }
+
+        // 实时解析证书元数据
+        guard let 实时元数据 = 实时解析证书元数据() else {
+            添加证书日志(类型: "error", 消息: "生成后实时解析证书元数据失败")
+            return false
+        }
 
         元数据 = 证书元数据(
             文件存在: true,
-            指纹: 指纹,
-            创建时间: 创建时间,
-            过期时间: 过期时间,
+            指纹: 实时元数据.指纹,
+            创建时间: 实时元数据.创建时间,
+            过期时间: 实时元数据.过期时间,
             文件路径: 证书文件URL.path,
             系统探测失败: false,
             手动确认已安装: false,
@@ -609,8 +753,8 @@ FxBzaz833X+KGgOv4VBtDcY=
         )
         保存证书元数据()
 
-        NSLog("[MITM] CA 证书生成成功（预生成证书，RSA 2048，有效期10年）")
-        添加证书日志(类型: "success", 消息: "CA 证书生成成功，已写入沙盒，文件存在标记已更新，指纹：\(String(指纹.prefix(16)))...")
+        NSLog("[MITM] CA 证书生成成功（crt+key成对原子写入，RSA 2048，有效期10年）")
+        添加证书日志(类型: "success", 消息: "CA证书生成成功，crt+key成对写入并验证通过，指纹：\(String(实时元数据.指纹.prefix(16)))...")
 
         // 重新检测状态
         检测证书状态()
@@ -623,7 +767,7 @@ FxBzaz833X+KGgOv4VBtDcY=
         return CA证书.data(using: .utf8)
     }
 
-    /// 清除 CA 证书（手动重置）
+    /// 清除 CA 证书（手动重置，同时删除 crt 和 key 文件）
     func 清除证书() {
         CA证书 = ""
         CA私钥 = ""
@@ -632,13 +776,14 @@ FxBzaz833X+KGgOv4VBtDcY=
         当前状态 = .文件缺失
         保存配置()
 
-        // 删除证书文件
+        // 同时删除 crt 和 key 文件
         try? FileManager.default.removeItem(at: 证书文件URL)
+        try? FileManager.default.removeItem(at: 私钥文件URL)
 
         // 清除元数据
         UserDefaults.standard.removeObject(forKey: 元数据键)
 
-        添加证书日志(类型: "info", 消息: "证书已手动重置")
+        添加证书日志(类型: "info", 消息: "证书已手动重置（crt+key已删除）")
         NSLog("[MITM] CA 证书已清除")
     }
 

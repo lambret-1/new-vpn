@@ -319,6 +319,8 @@ final class SingBox配置生成器 {
         )
         // 出站顶层字段设置 TCP 快速打开（libbox v1.11.0 支持）
         配置.tcpFastOpen = true
+        // 强制仅 TCP，避免 iOS 网络扩展中 UDP 监听权限不足
+        配置.network = "tcp"
         return 配置
     }
 
@@ -334,6 +336,7 @@ final class SingBox配置生成器 {
             传输: 生成传输配置(节点)
         )
         配置.tcpFastOpen = true
+        配置.network = "tcp"
         return 配置
     }
 
@@ -348,6 +351,7 @@ final class SingBox配置生成器 {
             传输: 生成传输配置(节点)
         )
         配置.tcpFastOpen = true
+        配置.network = "tcp"
         return 配置
     }
 
@@ -361,6 +365,7 @@ final class SingBox配置生成器 {
             密码: 节点.用户标识 ?? ""
         )
         配置.tcpFastOpen = true
+        配置.network = "tcp"
         return 配置
     }
 
@@ -380,6 +385,13 @@ final class SingBox配置生成器 {
         规则列表.append(SingBox路由规则(
             port: [53],
             outbound: "dns-out"
+        ))
+
+        // 阻止所有非 DNS 的 UDP 流量：iOS 网络扩展中 UDP 出站监听常报 operation not permitted
+        // DNS(53)已在上一条规则处理，QUIC(443)在后面处理，这里兜底阻止其余 UDP
+        规则列表.append(SingBox路由规则(
+            network: ["udp"],
+            outbound: "REJECT"
         ))
 
         // MITM 拦截：HTTP(80)和HTTPS(443)的TCP流量转发到 mitm-out 出站进行解密

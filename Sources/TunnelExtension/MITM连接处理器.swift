@@ -101,9 +101,8 @@ final class MITM连接处理器 {
 
         // 设置证书和私钥
         if let 身份 = MITM证书签发器.共享.获取服务器身份(域名: 目标域名) {
-            var 证书数组: [AnyObject] = [身份]
-            // 也可以添加 CA 证书链
-            SSLCertificateCopyChain(身份, &证书数组)
+            // SSLSetCertificate 接受 CFArray，第一个元素是 SecIdentity，后面是证书链
+            let 证书数组: [AnyObject] = [身份]
             SSLSetCertificate(上下文, 证书数组 as CFArray)
         }
 
@@ -113,7 +112,6 @@ final class MITM连接处理器 {
 
         // 允许断点续连（false = 不允许，每次完整握手）
         SSLSetSessionOption(上下文, .breakOnClientAuth, false)
-        SSLSetSessionOption(上下文, .tryServerSideOnly, false)
     }
 
     // MARK: - SSL IO 回调

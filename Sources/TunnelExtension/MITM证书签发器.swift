@@ -151,33 +151,51 @@ final class MITM证书签发器 {
 
     /// 从证书和私钥创建 SecIdentity
     private func 创建身份(证书: SecCertificate, 私钥: SecKey) -> SecIdentity? {
-        // 将证书和私钥添加到临时钥匙串，然后查询身份
-        let 标签 = "com.newvpn.mitm.temp"
-        let 添加查询: [String: Any] = [
+        // 先清理旧的钥匙串条目
+        let 删除查询: [String: Any] = [
             kSecClass as String: kSecClassIdentity,
-            kSecAttrLabel as String: 标签,
-            kSecValueRef as String: 证书,
+            kSecAttrLabel as String: "com.newvpn.mitm.identity"
+        ]
+        SecItemDelete(删除查询 as CFDictionary)
+
+        // 1. 先将私钥添加到钥匙串
+        let 私钥添加: [String: Any] = [
+            kSecClass as String: kSecClassKey,
+            kSecAttrKeyClass as String: kSecAttrKeyClassPrivate,
+            kSecValueRef as String: 私钥,
+            kSecAttrLabel as String: "com.newvpn.mitm.key",
             kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlocked
         ]
-        // 先删除旧的
-        SecItemDelete([kSecClass as String: kSecClassIdentity, kSecAttrLabel as String: 标签] as CFDictionary)
-        // 添加
-        let 状态 = SecItemAdd(添加查询 as CFDictionary, nil)
-        if 状态 != errSecSuccess && 状态 != errSecDuplicateItem {
-            NSLog("[MITM证书] 添加身份到钥匙串失败：\(状态)")
+        let 私钥状态 = SecItemAdd(私钥添加 as CFDictionary, nil)
+        if 私钥状态 != errSecSuccess && 私钥状态 != errSecDuplicateItem {
+            NSLog("[MITM证书] 添加私钥到钥匙串失败：\(私钥状态)")
         }
 
-        // 查询身份
+        // 2. 再将证书添加到钥匙串（与私钥关联后自动形成 SecIdentity）
+        let 证书添加: [String: Any] = [
+            kSecClass as String: kSecClassCertificate,
+            kSecValueRef as String: 证书,
+            kSecAttrLabel as String: "com.newvpn.mitm.cert",
+            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlocked
+        ]
+        let 证书状态 = SecItemAdd(证书添加 as CFDictionary, nil)
+        if 证书状态 != errSecSuccess && 证书状态 != errSecDuplicateItem {
+            NSLog("[MITM证书] 添加证书到钥匙串失败：\(证书状态)")
+        }
+
+        // 3. 查询 SecIdentity
         let 查询: [String: Any] = [
             kSecClass as String: kSecClassIdentity,
-            kSecAttrLabel as String: 标签,
-            kSecReturnRef as String: true
+            kSecReturnRef as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
         ]
         var 结果: AnyObject?
         let 查询状态 = SecItemCopyMatching(查询 as CFDictionary, &结果)
         if 查询状态 == errSecSuccess, let 身份 = 结果 as! SecIdentity? {
+            NSLog("[MITM证书] SecIdentity 创建成功")
             return 身份
         }
+        NSLog("[MITM证书] 查询 SecIdentity 失败：\(查询状态)")
         return nil
     }
 

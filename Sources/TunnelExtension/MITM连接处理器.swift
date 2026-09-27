@@ -117,27 +117,24 @@ final class MITM连接处理器 {
     // MARK: - SSL IO 回调
 
     /// SSL 读取回调：从接收缓冲区读取数据给 SSL 引擎
+    /// 注意：此回调在 SSLHandshake/SSLRead 调用栈中同步执行，不能再用队列同步，否则死锁
     private func ssl读取回调(数据: UnsafeMutableRawPointer, 长度: UnsafeMutablePointer<Int>) -> OSStatus {
-        处理队列.sync {
-            if 接收缓冲区.isEmpty {
-                长度.pointee = 0
-                return errSSLWouldBlock
-            }
-            let 可读取 = min(长度.pointee, 接收缓冲区.count)
-            接收缓冲区.copyBytes(to: 数据.assumingMemoryBound(to: UInt8.self), count: 可读取)
-            接收缓冲区.removeFirst(可读取)
-            长度.pointee = 可读取
-            return errSecSuccess
+        if 接收缓冲区.isEmpty {
+            长度.pointee = 0
+            return errSSLWouldBlock
         }
+        let 可读取 = min(长度.pointee, 接收缓冲区.count)
+        接收缓冲区.copyBytes(to: 数据.assumingMemoryBound(to: UInt8.self), count: 可读取)
+        接收缓冲区.removeFirst(可读取)
+        长度.pointee = 可读取
+        return errSecSuccess
     }
 
     /// SSL 写入回调：SSL 引擎输出的加密数据放入发送缓冲区
     private func ssl写入回调(数据: UnsafeRawPointer, 长度: UnsafeMutablePointer<Int>) -> OSStatus {
-        处理队列.sync {
-            let 字节 = 数据.assumingMemoryBound(to: UInt8.self)
-            发送缓冲区.append(字节, count: 长度.pointee)
-            return errSecSuccess
-        }
+        let 字节 = 数据.assumingMemoryBound(to: UInt8.self)
+        发送缓冲区.append(字节, count: 长度.pointee)
+        return errSecSuccess
     }
 
     // MARK: - 读取客户端数据

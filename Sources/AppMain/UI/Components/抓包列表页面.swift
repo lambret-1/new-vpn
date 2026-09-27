@@ -35,6 +35,10 @@ struct 抓包列表页面: View {
     @State private var 显示分享 = false
     /// 分享文件 URL
     @State private var 分享文件URL: URL?
+    /// 热更新中
+    @State private var 热更新中 = false
+    /// 热更新状态消息
+    @State private var 热更新状态: String?
 
     var body: some View {
         NavigationStack {
@@ -174,33 +178,90 @@ struct 抓包列表页面: View {
     // MARK: - 抓包开关行
 
     private var 抓包开关行: some View {
-        HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("启用 HTTP 抓包")
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundColor(.primary)
-                Text("开启后需重启 VPN，仅捕获 HTTP(80) 流量")
-                    .font(.system(size: 12))
-                    .foregroundColor(.secondary)
-            }
-            Spacer()
-            Toggle("", isOn: Binding(
-                get: { 存储.是否启用 },
-                set: { 新值 in
-                    存储.是否启用 = 新值
-                    if 新值 {
-                        存储.清空记录()
-                    }
-                    刷新列表()
+        VStack(spacing: 10) {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("启用 HTTP 抓包")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundColor(.primary)
+                    Text("仅捕获 HTTP(80) 流量，HTTPS 需安装证书")
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
                 }
-            ))
-            .labelsHidden()
-            .tint(.成功色)
+                Spacer()
+                Toggle("", isOn: Binding(
+                    get: { 存储.是否启用 },
+                    set: { 新值 in
+                        切换抓包开关(新值)
+                    }
+                ))
+                .labelsHidden()
+                .tint(.成功色)
+                .disabled(热更新中)
+            }
+
+            // 热更新状态
+            if 热更新中 {
+                HStack(spacing: 6) {
+                    ProgressView()
+                        .scaleEffect(0.8)
+                    Text("正在热更新配置...")
+                        .font(.system(size: 12))
+                        .foregroundColor(.blue)
+                }
+            } else if let 状态 = 热更新状态 {
+                HStack(spacing: 6) {
+                    Image(systemName: 状态.contains("失败") ? "exclamationmark.triangle" : "checkmark.circle")
+                        .font(.system(size: 12))
+                        .foregroundColor(状态.contains("失败") ? .orange : .green)
+                    Text(状态)
+                        .font(.system(size: 12))
+                        .foregroundColor(状态.contains("失败") ? .orange : .green)
+                    if 状态.contains("失败") {
+                        Button("重启 VPN") {
+                            // 通知用户手动重启
+                        }
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.blue)
+                    }
+                }
+            }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
         .background(Color.卡片背景)
         .cornerRadius(12)
+    }
+
+    /// 切换抓包开关，触发热更新
+    private func 切换抓包开关(_ 新值: Bool) {
+        // 先保存状态
+        存储.是否启用 = 新值
+        if 新值 {
+            存储.清空记录()
+        }
+        刷新列表()
+
+        // 如果 VPN 已连接，触发热更新
+        if 隧道管理.当前状态.是否活动 {
+            热更新中 = true
+            热更新状态 = nil
+
+            隧道管理.触发抓包热更新(抓包启用: 新值, HTTPS抓包启用: false) { 成功, 错误 in
+                DispatchQueue.main.async {
+                    热更新中 = false
+                    if 成功 {
+                        热更新状态 = "热更新成功，抓包已\(新值 ? "启用" : "关闭")"
+                        // 3秒后清除状态
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                            热更新状态 = nil
+                        }
+                    } else {
+                        热更新状态 = "热更新失败，可手动重启 VPN 生效"
+                    }
+                }
+            }
+        }
     }
 
     // MARK: - 统计栏

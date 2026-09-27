@@ -57,6 +57,12 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     /// sing-box 内核桥接
     private let singBox桥接 = SingBox内核桥接.共享
 
+    /// 热更新轮询定时器
+    private var 热更新定时器: Timer?
+
+    /// 本地抓包代理
+    private var 本地抓包代理: 本地HTTP代理?
+
     /// sing-box 配置文件路径
     private var singBox配置路径: String? {
         guard let 容器URL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.com.newvpn.app") else {
@@ -156,6 +162,9 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                 // 启动统计定时器
                 self.启动统计定时器()
 
+                // 启动热更新轮询定时器
+                self.启动热更新定时器()
+
                 // 标记运行中
                 self.是否运行中 = true
 
@@ -184,6 +193,9 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
         // 停止统计定时器
         停止统计定时器()
+
+        // 停止热更新定时器
+        停止热更新定时器()
 
         // 保存最终统计
         保存统计数据()
@@ -997,5 +1009,155 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             "uploadBytes": singBox桥接.上行字节,
             "downloadBytes": singBox桥接.下行字节
         ]
+    }
+
+    // MARK: - 热更新
+
+    /// 启动热更新轮询定时器
+    private func 启动热更新定时器() {
+        热更新定时器?.invalidate()
+        热更新定时器 = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
+            self?.检查热更新指令()
+        }
+        记录扩展日志(级别: "信息", 模块: "热更新", 内容: "热更新轮询定时器已启动")
+    }
+
+    /// 停止热更新定时器
+    private func 停止热更新定时器() {
+        热更新定时器?.invalidate()
+        热更新定时器 = nil
+    }
+
+    /// 检查并处理热更新指令
+    private func 检查热更新指令() {
+        guard let 指令 = 抓包存储管理器.共享.读取热更新指令() else {
+            return
+        }
+
+        记录扩展日志(级别: "信息", 模块: "热更新", 内容: "收到热更新指令：抓包=\(指令.抓包启用 ? "开启" : "关闭")")
+
+        // 执行热更新
+        执行热更新(指令: 指令)
+    }
+
+    /// 执行热更新：重启 sing-box 内核，动态加载/卸载抓包入站
+    private func 执行热更新(指令: 抓包存储管理器.热更新指令) {
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+
+            do {
+                // 1. 停止当前 sing-box 内核
+                self.停止SingBox内核()
+
+                // 2. 停止本地抓包代理
+                本地HTTP代理.共享.停止()
+
+                // 3. 修改配置文件，添加或移除抓包入站
+                try self.更新抓包配置(抓包启用: 指令.抓包启用)
+
+                // 4. 如果抓包启用，启动本地抓包代理
+                if 指令.抓包启用 {
+                    本地HTTP代理.共享.启动()
+                    self.记录扩展日志(级别: "信息", 模块: "热更新", 内容: "本地抓包代理已启动")
+                }
+
+                // 5. 重新启动 sing-box 内核
+                self.启动SingBox内核 { 成功 in
+                    if 成功 {
+                        self.singBox运行中 = true
+                        抓包存储管理器.共享.写入热更新结果(指令ID: 指令.指令ID, 成功: true)
+                        self.记录扩展日志(级别: "信息", 模块: "热更新", 内容: "热更新成功，sing-box 内核已重启")
+                    } else {
+                        抓包存储管理器.共享.写入热更新结果(指令ID: 指令.指令ID, 成功: false, 错误信息: "sing-box 内核启动失败")
+                        self.记录扩展日志(级别: "错误", 模块: "热更新", 内容: "热更新失败：sing-box 内核启动失败")
+                    }
+                }
+            } catch {
+                抓包存储管理器.共享.写入热更新结果(指令ID: 指令.指令ID, 成功: false, 错误信息: error.localizedDescription)
+                self.记录扩展日志(级别: "错误", 模块: "热更新", 内容: "热更新失败：\(error.localizedDescription)")
+            }
+        }
+    }
+
+    /// 更新抓包配置：在配置文件中添加或移除抓包入站和路由规则
+    private func 更新抓包配置(抓包启用: Bool) throws {
+        guard let 配置路径 = singBox配置路径 else {
+            throw NSError(domain: "HotUpdate", code: 1, userInfo: [NSLocalizedDescriptionKey: "配置文件路径不存在"])
+        }
+
+        let 配置URL = URL(fileURLWithPath: 配置路径)
+        let 配置数据 = try Data(contentsOf: 配置URL)
+
+        guard var 配置字典 = try JSONSerialization.jsonObject(with: 配置数据) as? [String: Any] else {
+            throw NSError(domain: "HotUpdate", code: 2, userInfo: [NSLocalizedDescriptionKey: "配置文件格式错误"])
+        }
+
+        // 处理入站配置
+        if var 入站列表 = 配置字典["inbounds"] as? [[String: Any]] {
+            if 抓包启用 {
+                // 检查是否已存在抓包入站
+                let 已有抓包入站 = 入站列表.contains { ($0["tag"] as? String) == "capture-proxy" }
+                if !已有抓包入站 {
+                    // 添加抓包入站
+                    let 抓包入站: [String: Any] = [
+                        "type": "http",
+                        "tag": "capture-proxy",
+                        "listen": "127.0.0.1",
+                        "listen_port": 8888
+                    ]
+                    入站列表.append(抓包入站)
+                    配置字典["inbounds"] = 入站列表
+                    记录扩展日志(级别: "信息", 模块: "热更新", 内容: "已添加抓包入站 capture-proxy")
+                }
+            } else {
+                // 移除抓包入站
+                let 过滤后 = 入站列表.filter { ($0["tag"] as? String) != "capture-proxy" }
+                配置字典["inbounds"] = 过滤后
+                记录扩展日志(级别: "信息", 模块: "热更新", 内容: "已移除抓包入站 capture-proxy")
+            }
+        }
+
+        // 处理路由规则
+        if var 路由 = 配置字典["route"] as? [String: Any],
+           var 规则列表 = 路由["rules"] as? [[String: Any]] {
+            if 抓包启用 {
+                // 检查是否已存在抓包路由规则
+                let 已有抓包规则 = 规则列表.contains { rule in
+                    if let 出站 = rule["outbound"] as? String, 出站 == "capture-proxy",
+                       let 端口 = rule["port"] as? Int, 端口 == 80 {
+                        return true
+                    }
+                    return false
+                }
+                if !已有抓包规则 {
+                    // 添加 HTTP(80) 流量转发到抓包代理的规则
+                    let 抓包规则: [String: Any] = [
+                        "port": 80,
+                        "outbound": "capture-proxy"
+                    ]
+                    规则列表.insert(抓包规则, at: 0)
+                    路由["rules"] = 规则列表
+                    配置字典["route"] = 路由
+                    记录扩展日志(级别: "信息", 模块: "热更新", 内容: "已添加抓包路由规则(端口80)")
+                }
+            } else {
+                // 移除抓包路由规则
+                let 过滤后 = 规则列表.filter { rule in
+                    if let 出站 = rule["outbound"] as? String, 出站 == "capture-proxy" {
+                        return false
+                    }
+                    return true
+                }
+                路由["rules"] = 过滤后
+                配置字典["route"] = 路由
+                记录扩展日志(级别: "信息", 模块: "热更新", 内容: "已移除抓包路由规则")
+            }
+        }
+
+        // 写回配置文件
+        let 新配置数据 = try JSONSerialization.data(withJSONObject: 配置字典, options: [.prettyPrinted])
+        try 新配置数据.write(to: 配置URL)
+
+        记录扩展日志(级别: "信息", 模块: "热更新", 内容: "配置文件已更新，抓包=\(抓包启用 ? "开启" : "关闭")")
     }
 }

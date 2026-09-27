@@ -225,7 +225,8 @@ final class 本地HTTP代理 {
         guard 目标部分.count >= 2,
               let 端口 = Int(目标部分[1]) else {
             NSLog("[抓包代理] CONNECT 请求格式无效：\(请求.路径)")
-            发送错误响应(原始连接, 状态码: 400, 原因: "Bad Request")
+            let 响应 = "HTTP/1.1 400 Bad Request\r\n\r\n"
+            原始连接.send(content: 响应.data(using: .utf8), completion: .contentProcessed { _ in })
             关闭连接(原始连接)
             return
         }

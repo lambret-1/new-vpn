@@ -83,9 +83,9 @@ struct 重写规则内容区: View {
 
     private var 统计栏: some View {
         HStack(spacing: 8) {
-            统计项(标题: "分组", 数值: "\(统计.分组数)", 颜色: .主题色)
-            统计项(标题: "总规则", 数值: "\(统计.总规则数)", 颜色: Color(red: 0.20, green: 0.55, blue: 0.91))
-            统计项(标题: "已启用", 数值: "\(统计.启用规则数)", 颜色: .成功色)
+            重写统计项(标题: "分组", 数值: "\(统计.分组数)", 颜色: .主题色)
+            重写统计项(标题: "总规则", 数值: "\(统计.总规则数)", 颜色: Color(red: 0.20, green: 0.55, blue: 0.91))
+            重写统计项(标题: "已启用", 数值: "\(统计.启用规则数)", 颜色: .成功色)
             Spacer()
         }
         .padding(.horizontal, 14)
@@ -94,7 +94,7 @@ struct 重写规则内容区: View {
         .cornerRadius(12)
     }
 
-    private func 统计项(标题: String, 数值: String, 颜色: Color) -> some View {
+    private func 重写统计项(标题: String, 数值: String, 颜色: Color) -> some View {
         VStack(spacing: 2) {
             Text(数值)
                 .font(.system(size: 18, weight: .bold))
@@ -226,7 +226,7 @@ struct 重写规则内容区: View {
                 .padding(.horizontal, 14)
                 .padding(.vertical, 12)
                 .background(Color.卡片背景)
-                .cornerRadius(12, corners: 已展开 ? [.topLeft, .topRight] : .allCorners)
+                .cornerRadius(12)
             }
             .buttonStyle(PlainButtonStyle())
             .contextMenu {
@@ -255,7 +255,7 @@ struct 重写规则内容区: View {
                     }
                 }
                 .background(Color.卡片背景)
-                .cornerRadius(12, corners: [.bottomLeft, .bottomRight])
+                .cornerRadius(12)
             }
         }
         .alert("重命名分组", isPresented: .constant(重命名的分组 != nil)) {

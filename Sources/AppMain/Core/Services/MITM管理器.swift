@@ -368,30 +368,23 @@ FxBzaz833X+KGgOv4VBtDcY=
     }
 
     /// 实时解析证书获取元数据（指纹、创建时间、过期时间）
+    /// 预生成证书有效期固定10年，iOS 上 SecCertificateCopyValues 不可用，使用固定有效期
     /// - Returns: (指纹, 创建时间, 过期时间)?，解析失败返回 nil
     private func 实时解析证书元数据() -> (指纹: String, 创建时间: Date, 过期时间: Date)? {
         guard let 证书内容 = 读取磁盘证书(),
-              let 证书 = 解析PEM证书(证书内容: 证书内容) else {
+              解析PEM证书(证书内容: 证书内容) != nil else {
             return nil
         }
 
         // 计算指纹
         let 指纹 = 计算证书指纹(证书: 证书内容)
 
-        // 从证书提取有效期
-        var 错误: Unmanaged<CFError>?
-        guard let 证书值 = SecCertificateCopyValues(证书, [kSecOIDValidityPeriod] as CFArray, &错误) as? [String: Any],
-              let 有效期 = 证书值[kSecOIDValidityPeriod as String] as? [String: Any],
-              let 有效期数据 = 有效期[kSecPropertyKeyValue as String] as? [String: Any],
-              let 不早于 = 有效期数据["notBefore"] as? Date,
-              let 不晚于 = 有效期数据["notAfter"] as? Date else {
-            // 备用：使用固定10年有效期
-            let 创建时间 = Date()
-            let 过期时间 = Calendar.current.date(byAdding: .year, value: 10, to: 创建时间) ?? 创建时间
-            return (指纹, 创建时间, 过期时间)
-        }
+        // 预生成证书有效期固定10年，从文件创建时间计算
+        let 文件属性 = try? FileManager.default.attributesOfItem(atPath: 证书文件URL.path)
+        let 创建时间 = (文件属性?[.creationDate] as? Date) ?? Date()
+        let 过期时间 = Calendar.current.date(byAdding: .year, value: 10, to: 创建时间) ?? 创建时间
 
-        return (指纹, 不早于, 不晚于)
+        return (指纹, 创建时间, 过期时间)
     }
 
     /// 证书文件状态检测结果

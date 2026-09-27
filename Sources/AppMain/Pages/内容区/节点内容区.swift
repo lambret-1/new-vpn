@@ -629,7 +629,7 @@ private struct 编辑节点页面: View {
     @State private var 地址: String
     @State private var 端口: String
     @State private var 用户标识: String
-    @State private var 传输类型: 传输类型
+    @State private var 选中传输类型: 传输类型
     @State private var 启用TLS: Bool
     @State private var 服务器名称: String
     @State private var ws路径: String
@@ -643,7 +643,7 @@ private struct 编辑节点页面: View {
         _地址 = State(initialValue: 节点.地址)
         _端口 = State(initialValue: "\(节点.端口)")
         _用户标识 = State(initialValue: 节点.用户标识 ?? "")
-        _传输类型 = State(initialValue: 节点.传输类型)
+        _选中传输类型 = State(initialValue: 节点.传输类型)
         _启用TLS = State(initialValue: 节点.启用TLS)
         _服务器名称 = State(initialValue: 节点.服务器名称 ?? "")
         _ws路径 = State(initialValue: 节点.ws路径 ?? "")
@@ -679,7 +679,7 @@ private struct 编辑节点页面: View {
                 }
 
                 Section("传输设置") {
-                    Picker("传输类型", selection: $传输类型) {
+                    Picker("传输类型", selection: $选中传输类型) {
                         ForEach(传输类型.allCases, id: \.self) { 类型 in
                             Text(类型.rawValue).tag(类型)
                         }
@@ -689,7 +689,7 @@ private struct 编辑节点页面: View {
                         TextField("SNI 服务器名称", text: $服务器名称)
                             .autocapitalization(.none)
                     }
-                    if 传输类型 == .ws {
+                    if 选中传输类型 == .ws {
                         TextField("WebSocket 路径", text: $ws路径)
                             .autocapitalization(.none)
                         TextField("WebSocket Host", text: $ws主机)
@@ -727,7 +727,7 @@ private struct 编辑节点页面: View {
         修改后节点.地址 = 地址
         修改后节点.端口 = 端口号
         修改后节点.用户标识 = 用户标识.isEmpty ? nil : 用户标识
-        修改后节点.传输类型 = 传输类型
+        修改后节点.传输类型 = 选中传输类型
         修改后节点.启用TLS = 启用TLS
         修改后节点.服务器名称 = 服务器名称.isEmpty ? nil : 服务器名称
         修改后节点.ws路径 = ws路径.isEmpty ? nil : ws路径

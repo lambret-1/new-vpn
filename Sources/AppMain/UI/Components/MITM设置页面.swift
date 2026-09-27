@@ -110,7 +110,7 @@ struct MITM设置页面: View {
                     HStack(spacing: 6) {
                         Image(systemName: "info.circle.fill")
                             .font(.system(size: 12))
-                            .foregroundColor(.蓝色)
+                            .foregroundColor(.blue)
                         Text("当前内核版本暂不支持 TLS 解密，HTTPS 抓包为 CONNECT 隧道透传模式（记录连接日志，不解密内容），待内核升级后启用完整解密。")
                             .font(.system(size: 12))
                             .foregroundColor(.secondary)

@@ -3,17 +3,17 @@
 //  NewVPN
 //
 //  MITM（HTTPS 中间人解密）功能管理
-//  负责 CA 证书管理、配置持久化、证书状态智能检测
+//  负责 CA 证书管理、配置持久化、MITM证书状态智能检测
 //  CA 证书为预生成的自签名根证书，有效期 10 年
 //
 
 import Foundation
 import CommonCrypto
 
-// MARK: - 证书状态枚举
+// MARK: - MITM证书状态枚举
 
-/// CA 证书状态
-enum 证书状态: Equatable {
+/// CA MITM证书状态
+enum MITMMITM证书状态: Equatable {
     /// 证书完全就绪（文件存在 + 未过期 + 用户确认已安装信任）
     case 就绪
     /// 证书文件存在但未安装
@@ -174,8 +174,8 @@ FxBzaz833X+KGgOv4VBtDcY=
     /// 证书元数据
     @Published var 元数据: 证书元数据?
 
-    /// 当前证书状态（缓存）
-    @Published var 当前状态: 证书状态 = .文件缺失
+    /// 当前MITM证书状态（缓存）
+    @Published var 当前状态: MITM证书状态 = .文件缺失
 
     /// CA 证书是否已生成
     var 证书已生成: Bool {
@@ -228,8 +228,8 @@ FxBzaz833X+KGgOv4VBtDcY=
            let 元数据 = try? JSONDecoder().decode(证书元数据.self, from: 数据) {
             self.元数据 = 元数据
         }
-        // 初始化时检测证书状态
-        检测证书状态()
+        // 初始化时检测MITM证书状态
+        检测MITM证书状态()
     }
 
     /// 保存证书元数据
@@ -241,30 +241,30 @@ FxBzaz833X+KGgOv4VBtDcY=
         }
     }
 
-    // MARK: - 证书状态检测
+    // MARK: - MITM证书状态检测
 
-    /// 检测证书状态（智能校验）
-    /// - Returns: 证书状态
+    /// 检测MITM证书状态（智能校验）
+    /// - Returns: MITM证书状态
     @discardableResult
-    func 检测证书状态() -> 证书状态 {
+    func 检测MITM证书状态() -> MITM证书状态 {
         // 1. 检查证书内容是否存在
         guard 证书已生成 else {
             当前状态 = .文件缺失
-            添加证书日志(类型: "error", 消息: "证书状态检测：证书内容缺失")
+            添加证书日志(类型: "error", 消息: "MITM证书状态检测：证书内容缺失")
             return .文件缺失
         }
 
         // 2. 检查证书文件是否存在
         guard FileManager.default.fileExists(atPath: 证书文件URL.path) else {
             当前状态 = .文件缺失
-            添加证书日志(类型: "error", 消息: "证书状态检测：证书文件不存在")
+            添加证书日志(类型: "error", 消息: "MITM证书状态检测：证书文件不存在")
             return .文件缺失
         }
 
         // 3. 检查元数据
         guard let 元数据 = 元数据 else {
             当前状态 = .文件损坏
-            添加证书日志(类型: "error", 消息: "证书状态检测：证书元数据缺失")
+            添加证书日志(类型: "error", 消息: "MITM证书状态检测：证书元数据缺失")
             return .文件损坏
         }
 
@@ -272,41 +272,41 @@ FxBzaz833X+KGgOv4VBtDcY=
         let 当前指纹 = 计算证书指纹(证书: CA证书)
         guard 当前指纹 == 元数据.指纹 else {
             当前状态 = .文件损坏
-            添加证书日志(类型: "error", 消息: "证书状态检测：指纹不匹配")
+            添加证书日志(类型: "error", 消息: "MITM证书状态检测：指纹不匹配")
             return .文件损坏
         }
 
         // 5. 检查是否过期
         if 元数据.已过期 {
             当前状态 = .已过期
-            添加证书日志(类型: "error", 消息: "证书状态检测：证书已过期")
+            添加证书日志(类型: "error", 消息: "MITM证书状态检测：证书已过期")
             return .已过期
         }
 
         // 6. 检查是否临近过期
         if 元数据.临近过期 {
             当前状态 = .临近过期(剩余天数: 元数据.剩余天数)
-            添加证书日志(类型: "warning", 消息: "证书状态检测：证书临近过期，剩余 \(元数据.剩余天数) 天")
+            添加证书日志(类型: "warning", 消息: "MITM证书状态检测：证书临近过期，剩余 \(元数据.剩余天数) 天")
             return .临近过期(剩余天数: 元数据.剩余天数)
         }
 
         // 7. 检查用户是否确认已安装
         guard 元数据.用户确认已安装 else {
             当前状态 = .未安装
-            添加证书日志(类型: "info", 消息: "证书状态检测：证书未安装")
+            添加证书日志(类型: "info", 消息: "MITM证书状态检测：证书未安装")
             return .未安装
         }
 
         // 8. 检查用户是否确认已信任
         guard 元数据.用户确认已信任 else {
             当前状态 = .未信任
-            添加证书日志(类型: "info", 消息: "证书状态检测：证书未信任")
+            添加证书日志(类型: "info", 消息: "MITM证书状态检测：证书未信任")
             return .未信任
         }
 
         // 全部通过
         当前状态 = .就绪
-        添加证书日志(类型: "success", 消息: "证书状态检测：证书就绪")
+        添加证书日志(类型: "success", 消息: "MITM证书状态检测：证书就绪")
         return .就绪
     }
 
@@ -316,7 +316,7 @@ FxBzaz833X+KGgOv4VBtDcY=
         元数据.用户确认已安装 = true
         self.元数据 = 元数据
         保存证书元数据()
-        检测证书状态()
+        检测MITM证书状态()
         添加证书日志(类型: "info", 消息: "用户确认已安装证书")
     }
 
@@ -326,7 +326,7 @@ FxBzaz833X+KGgOv4VBtDcY=
         元数据.用户确认已信任 = true
         self.元数据 = 元数据
         保存证书元数据()
-        检测证书状态()
+        检测MITM证书状态()
         添加证书日志(类型: "info", 消息: "用户确认已信任证书")
     }
 
@@ -338,7 +338,7 @@ FxBzaz833X+KGgOv4VBtDcY=
     @discardableResult
     func 生成CA证书() -> Bool {
         // 智能检测：证书已存在且有效时跳过生成
-        if 检测证书状态().可使用 {
+        if 检测MITM证书状态().可使用 {
             NSLog("[MITM] 证书已就绪，跳过生成")
             添加证书日志(类型: "info", 消息: "证书已就绪，跳过生成")
             return true
@@ -378,7 +378,7 @@ FxBzaz833X+KGgOv4VBtDcY=
         添加证书日志(类型: "success", 消息: "CA 证书生成成功，指纹：\(String(指纹.prefix(16)))...")
 
         // 重新检测状态
-        检测证书状态()
+        检测MITM证书状态()
         return true
     }
 
@@ -422,9 +422,9 @@ FxBzaz833X+KGgOv4VBtDcY=
         guard 启用, 证书已生成 else { return nil }
 
         // 内核加载前校验证书
-        let 状态 = 检测证书状态()
+        let 状态 = 检测MITM证书状态()
         guard 状态.可使用 || 状态 == .未安装 || 状态 == .未信任 else {
-            NSLog("[MITM] 证书状态异常(\(状态.描述))，无法启用 MITM")
+            NSLog("[MITM] MITM证书状态异常(\(状态.描述))，无法启用 MITM")
             添加证书日志(类型: "error", 消息: "内核加载 MITM 失败：\(状态.描述)")
             return nil
         }

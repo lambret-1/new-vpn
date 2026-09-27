@@ -12,8 +12,6 @@ import SwiftUI
 struct ContentView: View {
     /// 全局应用状态
     @EnvironmentObject private var 状态: AppState
-    /// 隧道管理器（连接状态下实时切换节点）
-    @EnvironmentObject private var 隧道管理: 隧道管理器
 
     var body: some View {
         NavigationSplitView {
@@ -53,6 +51,8 @@ private struct 侧边导航栏: View {
 /// 内容列表栏
 private struct 内容列表栏: View {
     @EnvironmentObject private var 状态: AppState
+    /// 隧道管理器（连接状态下实时切换节点）
+    @EnvironmentObject private var 隧道管理: 隧道管理器
 
     var body: some View {
         Group {

@@ -478,6 +478,31 @@ final class AppState: ObservableObject {
         保存持久化节点()
     }
 
+    /// 删除单个节点
+    func 删除节点(_ 节点ID: UUID) {
+        节点列表.removeAll { $0.id == 节点ID }
+        节点分组列表 = Mock数据.生成节点分组(节点列表: 节点列表)
+        保存持久化节点()
+
+        // 如果删除的是当前选中节点，清空选中
+        if 当前节点ID == 节点ID {
+            当前节点ID = nil
+        }
+    }
+
+    /// 移动节点到其他分组
+    func 移动节点(_ 节点ID: UUID, 到目标分组: String) {
+        guard let 索引 = 节点列表.firstIndex(where: { $0.id == 节点ID }) else { return }
+        节点列表[索引].分组 = 目标分组
+        节点分组列表 = Mock数据.生成节点分组(节点列表: 节点列表)
+        保存持久化节点()
+    }
+
+    /// 获取所有分组名称
+    func 获取所有分组名称() -> [String] {
+        Array(Set(节点列表.map { $0.分组 })).sorted()
+    }
+
     /// 保存订阅列表到本地
     func 保存订阅列表() {
         订阅存储.共享.保存订阅列表(远程订阅列表)

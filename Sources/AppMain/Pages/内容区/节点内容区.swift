@@ -244,6 +244,12 @@ private struct 可滑动节点行视图: View {
     @State private var 偏移量: CGFloat = 0
     /// 拖拽起始偏移量
     @State private var 拖拽起始偏移: CGFloat = 0
+    /// 显示删除确认弹窗
+    @State private var 显示删除确认 = false
+    /// 显示移动分组弹窗
+    @State private var 显示移动分组 = false
+    /// 显示编辑节点
+    @State private var 显示编辑节点 = false
 
     /// 展开宽度（测速按钮宽度）
     private let 展开宽度: CGFloat = 70
@@ -251,6 +257,11 @@ private struct 可滑动节点行视图: View {
     /// 是否为当前选中节点
     private var 是否选中: Bool {
         状态.当前节点ID == 节点.id
+    }
+
+    /// 节点是否有效（非空、地址端口有效）
+    private var 节点有效: Bool {
+        !节点.名称.isEmpty && !节点.地址.isEmpty && 节点.端口 > 0 && 节点.端口 <= 65535
     }
 
     var body: some View {
@@ -327,9 +338,74 @@ private struct 可滑动节点行视图: View {
                         选中节点()
                     }
                 }
+                // 长按上下文菜单（仅有效节点显示）
+                .contextMenu {
+                    if 节点有效 {
+                        上下文菜单内容
+                    }
+                }
         }
         .frame(height: 60)
         .clipped()
+        .alert("确认删除节点", isPresented: $显示删除确认) {
+            Button("取消", role: .cancel) {}
+            Button("删除", role: .destructive) {
+                状态.删除节点(节点.id)
+            }
+        } message: {
+            Text("确定要删除节点「\(节点.名称)」吗？此操作不可恢复。")
+        }
+        .sheet(isPresented: $显示移动分组) {
+            移动分组页面(节点: 节点)
+                .environmentObject(状态)
+        }
+    }
+
+    // MARK: - 上下文菜单内容
+
+    @ViewBuilder
+    private var 上下文菜单内容: some View {
+        // 节点测试
+        Button {
+            测速管理器.测速节点(节点) { _ in }
+        } label: {
+            Label("节点测试", systemImage: "gauge")
+        }
+
+        // 复制节点链接
+        Button {
+            复制节点链接()
+        } label: {
+            Label("复制节点链接", systemImage: "doc.on.doc")
+        }
+
+        // 编辑节点
+        Button {
+            显示编辑节点 = true
+        } label: {
+            Label("编辑节点", systemImage: "pencil")
+        }
+
+        // 移动至其他分组
+        Button {
+            显示移动分组 = true
+        } label: {
+            Label("移动至其他分组", systemImage: "folder")
+        }
+
+        // 删除节点
+        Button(role: .destructive) {
+            显示删除确认 = true
+        } label: {
+            Label("删除节点", systemImage: "trash")
+        }
+    }
+
+    /// 复制节点链接到剪贴板
+    private func 复制节点链接() {
+        // 生成节点分享链接（简化为协议格式）
+        let 链接 = "\(节点.协议.rawValue)://\(节点.地址):\(节点.端口)"
+        UIPasteboard.general.string = 链接
     }
 
     /// 选中节点
@@ -406,6 +482,67 @@ private struct 节点卡片内容: View {
             RoundedRectangle(cornerRadius: 12)
                 .stroke(是否选中 ? Color.主题色.opacity(0.5) : Color.clear, lineWidth: 1)
         )
+    }
+}
+
+// MARK: - 移动分组页面
+
+/// 移动节点到其他分组页面
+private struct 移动分组页面: View {
+    let 节点: 节点模型
+    @EnvironmentObject private var 状态: AppState
+    @Environment(\.dismiss) private var 关闭
+    @State private var 新分组名称 = ""
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("当前分组") {
+                    Text(节点.分组)
+                        .foregroundColor(.secondary)
+                }
+
+                Section("选择目标分组") {
+                    ForEach(状态.获取所有分组名称(), id: \.self) { 分组名 in
+                        if 分组名 != 节点.分组 {
+                            Button {
+                                状态.移动节点(节点.id, 到目标分组: 分组名)
+                                关闭()
+                            } label: {
+                                HStack {
+                                    Text(分组名)
+                                        .foregroundColor(.primary)
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Section("或创建新分组") {
+                    TextField("新分组名称", text: $新分组名称)
+                    Button {
+                        if !新分组名称.isEmpty {
+                            状态.移动节点(节点.id, 到目标分组: 新分组名称)
+                            关闭()
+                        }
+                    } label: {
+                        Text("移动到新分组")
+                            .foregroundColor(.主题色)
+                    }
+                    .disabled(新分组名称.isEmpty)
+                }
+            }
+            .navigationTitle("移动节点")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("取消") { 关闭() }
+                }
+            }
+        }
     }
 }
 

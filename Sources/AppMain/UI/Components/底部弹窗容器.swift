@@ -259,56 +259,102 @@ private struct 设置视图: View {
                 }
                 .buttonStyle(PlainButtonStyle())
 
-                // MITM 解密：显示启用状态，点击进入 MITM 设置页面
-                Button {
-                    显示MITM设置 = true
-                } label: {
-                    HStack {
-                        Label("MITM 解密", systemImage: "lock.shield")
-                        Spacer()
-                        Text(MITM管理器.共享.启用 ? "已启用" : "未启用")
-                            .font(.system(size: 12))
-                            .foregroundColor(MITM管理器.共享.启用 ? .成功色 : .secondary)
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 13))
-                            .foregroundColor(.secondary)
+                // MITM 解密：右侧快捷开关，点击卡片进入设置页面
+                HStack {
+                    Button {
+                        显示MITM设置 = true
+                    } label: {
+                        HStack(spacing: 0) {
+                            Label("MITM 解密", systemImage: "lock.shield")
+                            Spacer()
+                            Text(MITM管理器.共享.启用 ? "已启用" : "未启用")
+                                .font(.system(size: 12))
+                                .foregroundColor(MITM管理器.共享.启用 ? .成功色 : .secondary)
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 13))
+                                .foregroundColor(.secondary)
+                                .padding(.leading, 4)
+                        }
                     }
+                    .buttonStyle(PlainButtonStyle())
+                    Toggle("", isOn: Binding(
+                        get: { MITM管理器.共享.启用 },
+                        set: { 新值 in
+                            MITM管理器.共享.启用 = 新值
+                            if 隧道管理.当前状态 == .已连接 {
+                                隧道管理.重新加载配置()
+                            }
+                        }
+                    ))
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                    .frame(width: 51)
                 }
-                .buttonStyle(PlainButtonStyle())
 
-                // 重写规则：显示启用状态，点击进入重写规则设置页面
-                Button {
-                    显示重写规则 = true
-                } label: {
-                    HStack {
-                        Label("重写规则", systemImage: "pencil.line")
-                        Spacer()
-                        Text(重写规则管理器.共享.配置.启用 ? "已启用" : "未启用")
-                            .font(.system(size: 12))
-                            .foregroundColor(重写规则管理器.共享.配置.启用 ? .成功色 : .secondary)
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 13))
-                            .foregroundColor(.secondary)
+                // 重写规则：右侧快捷开关，点击卡片进入设置页面
+                HStack {
+                    Button {
+                        显示重写规则 = true
+                    } label: {
+                        HStack(spacing: 0) {
+                            Label("重写规则", systemImage: "pencil.line")
+                            Spacer()
+                            Text(重写规则管理器.共享.配置.启用 ? "已启用" : "未启用")
+                                .font(.system(size: 12))
+                                .foregroundColor(重写规则管理器.共享.配置.启用 ? .成功色 : .secondary)
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 13))
+                                .foregroundColor(.secondary)
+                                .padding(.leading, 4)
+                        }
                     }
+                    .buttonStyle(PlainButtonStyle())
+                    Toggle("", isOn: Binding(
+                        get: { 重写规则管理器.共享.配置.启用 },
+                        set: { 新值 in
+                            重写规则管理器.共享.配置.启用 = 新值
+                            重写规则管理器.共享.保存配置()
+                            if 隧道管理.当前状态 == .已连接 {
+                                隧道管理.重新加载配置()
+                            }
+                        }
+                    ))
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                    .frame(width: 51)
                 }
-                .buttonStyle(PlainButtonStyle())
 
-                // HTTP 抓包：显示启用状态和记录数，点击进入抓包列表页面
-                Button {
-                    显示抓包页面 = true
-                } label: {
-                    HStack {
-                        Label("HTTP 抓包", systemImage: "antenna.radiowaves.left.and.right")
-                        Spacer()
-                        Text(抓包存储管理器.共享.是否启用 ? "\(抓包存储管理器.共享.记录总数)条" : "未启用")
-                            .font(.system(size: 12))
-                            .foregroundColor(抓包存储管理器.共享.是否启用 ? .成功色 : .secondary)
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 13))
-                            .foregroundColor(.secondary)
+                // HTTP 抓包：右侧快捷开关，点击卡片进入抓包列表页面
+                HStack {
+                    Button {
+                        显示抓包页面 = true
+                    } label: {
+                        HStack(spacing: 0) {
+                            Label("HTTP 抓包", systemImage: "antenna.radiowaves.left.and.right")
+                            Spacer()
+                            Text(抓包存储管理器.共享.是否启用 ? "\(抓包存储管理器.共享.记录总数)条" : "未启用")
+                                .font(.system(size: 12))
+                                .foregroundColor(抓包存储管理器.共享.是否启用 ? .成功色 : .secondary)
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 13))
+                                .foregroundColor(.secondary)
+                                .padding(.leading, 4)
+                        }
                     }
+                    .buttonStyle(PlainButtonStyle())
+                    Toggle("", isOn: Binding(
+                        get: { 抓包存储管理器.共享.是否启用 },
+                        set: { 新值 in
+                            抓包存储管理器.共享.是否启用 = 新值
+                            if 隧道管理.当前状态 == .已连接 {
+                                隧道管理.重新加载配置()
+                            }
+                        }
+                    ))
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                    .frame(width: 51)
                 }
-                .buttonStyle(PlainButtonStyle())
             }
             Section("安全") {
                 Button {

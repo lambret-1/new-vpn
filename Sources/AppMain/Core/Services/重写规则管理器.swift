@@ -41,7 +41,7 @@ final class 重写规则管理器: ObservableObject {
     }
 
     /// 保存配置到 UserDefaults
-    private func 保存配置() {
+    func 保存配置() {
         if let 数据 = try? JSONEncoder().encode(配置) {
             UserDefaults.standard.set(数据, forKey: 配置键)
         }

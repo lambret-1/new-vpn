@@ -82,6 +82,7 @@ final class 本地HTTP代理 {
         }
 
         监听器?.newConnectionHandler = { [weak self] 连接 in
+            NSLog("[抓包代理] 收到新连接，当前活跃=\(self?.活跃连接.count ?? 0)")
             self?.处理新连接(连接)
         }
 
@@ -111,9 +112,12 @@ final class 本地HTTP代理 {
         // 读取 HTTP 请求
         读取请求(连接) { [weak self] 请求 in
             guard let self = self, let 请求 = 请求 else {
+                NSLog("[抓包代理] 请求解析失败或连接关闭，活跃连接数=\(self?.活跃连接.count ?? 0)")
                 self?.关闭连接(连接)
                 return
             }
+
+            NSLog("[抓包代理] 收到请求：\(请求.方法) \(请求.路径)")
 
             // 检测 CONNECT 方法（HTTPS 隧道）
             if 请求.方法.uppercased() == "CONNECT" {

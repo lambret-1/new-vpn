@@ -368,12 +368,34 @@ FxBzaz833X+KGgOv4VBtDcY=
 
     // MARK: - 加载和保存配置
 
-    /// 从 UserDefaults 加载配置
+    /// 从 UserDefaults 加载配置（优先从 App Group 读取，确保与隧道扩展一致）
     private func 加载配置() {
-        let 默认 = UserDefaults.standard
-        启用 = 默认.bool(forKey: 启用键)
-        CA证书 = 默认.string(forKey: 证书键) ?? ""
-        CA私钥 = 默认.string(forKey: 私钥键) ?? ""
+        // 优先从 App Group UserDefaults 读取（隧道扩展写入的位置）
+        if let 共享默认 = UserDefaults(suiteName: "group.com.newvpn.app") {
+            启用 = 共享默认.bool(forKey: 启用键)
+            CA证书 = 共享默认.string(forKey: 证书键) ?? ""
+            CA私钥 = 共享默认.string(forKey: 私钥键) ?? ""
+        }
+
+        // App Group 中没有证书时，回退到标准 UserDefaults 读取
+        if CA证书.isEmpty || CA私钥.isEmpty {
+            let 默认 = UserDefaults.standard
+            if CA证书.isEmpty {
+                CA证书 = 默认.string(forKey: 证书键) ?? ""
+            }
+            if CA私钥.isEmpty {
+                CA私钥 = 默认.string(forKey: 私钥键) ?? ""
+            }
+            // 标准 UserDefaults 有证书但 App Group 没有时，同步到 App Group
+            if !CA证书.isEmpty && !CA私钥.isEmpty,
+               let 共享默认 = UserDefaults(suiteName: "group.com.newvpn.app") {
+                共享默认.set(CA证书, forKey: 证书键)
+                共享默认.set(CA私钥, forKey: 私钥键)
+                共享默认.synchronize()
+            }
+        }
+
+        NSLog("[MITM] 配置加载完成：启用=\(启用)，证书已生成=\(证书已生成)，证书长度=\(CA证书.count)")
     }
 
     /// 保存配置到 UserDefaults（同时同步到 App Group 供隧道扩展读取）

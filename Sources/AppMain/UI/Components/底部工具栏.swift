@@ -71,8 +71,8 @@ struct 底部工具栏: View {
     /// 根据 VPN 连接状态启动或停止旋转动画
     private func 启动旋转动画() {
         if 隧道管理.当前状态.是否活动 {
-            // VPN 连接中：持续顺时针旋转，2秒一圈，无限循环
-            withAnimation(.linear(duration: 4.0).repeatForever(autoreverses: false)) {
+            // VPN 连接中：持续顺时针旋转，8秒一圈，无限循环
+            withAnimation(.linear(duration: 8.0).repeatForever(autoreverses: false)) {
                 旋转角度 = 360
             }
         } else {

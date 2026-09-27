@@ -962,6 +962,8 @@ struct SingBox路由规则: Codable, Equatable {
     var ruleSet: [String]?
     /// 是否取反
     var invert: Bool?
+    /// URL 重写（正则替换）
+    var rewriteUrl: String?
 
     enum CodingKeys: String, CodingKey {
         case tag
@@ -998,6 +1000,7 @@ struct SingBox路由规则: Codable, Equatable {
         case outbound
         case ruleSet
         case invert
+        case rewriteUrl
     }
 }
 

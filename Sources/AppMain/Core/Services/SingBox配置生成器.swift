@@ -29,6 +29,7 @@ final class SingBox配置生成器 {
     ///   - 运行模式: 隧道运行模式（规则分流/全局代理/全局直连）
     ///   - 日志级别: 日志级别
     ///   - MITM配置: MITM 配置（nil 表示不启用）
+    ///   - 重写规则: URL 重写规则列表（空表示不启用）
     /// - Returns: sing-box 配置
     func 生成配置(节点: 节点模型?,
                   节点列表: [节点模型] = [],
@@ -36,7 +37,8 @@ final class SingBox配置生成器 {
                   DNS配置: DNS配置模型? = nil,
                   运行模式: 隧道运行模式 = .规则分流,
                   日志级别: String = "debug",
-                  MITM配置: (证书: String, 私钥: String)? = nil) -> SingBox配置 {
+                  MITM配置: (证书: String, 私钥: String)? = nil,
+                  重写规则: [重写规则项] = []) -> SingBox配置 {
         var 配置 = SingBox配置()
 
         // 日志配置
@@ -55,7 +57,7 @@ final class SingBox配置生成器 {
         配置.outbounds = 生成出站配置(节点: 节点, 节点列表: 节点列表, MITM配置: MITM配置)
 
         // 路由配置
-        配置.route = 生成路由配置(分流规则: 分流规则, 节点: 节点, 运行模式: 运行模式, MITM启用: MITM配置 != nil)
+        配置.route = 生成路由配置(分流规则: 分流规则, 节点: 节点, 运行模式: 运行模式, MITM启用: MITM配置 != nil, 重写规则: 重写规则)
 
         // 实验配置（缓存文件）
         配置.experimental = SingBox实验配置(
@@ -370,7 +372,7 @@ final class SingBox配置生成器 {
     ///   - 节点: 当前节点（用于代理服务器 IP 直连）
     ///   - 运行模式: 隧道运行模式，决定最终出站
     ///   - MITM启用: 是否启用 MITM（HTTPS 解密）
-    private func 生成路由配置(分流规则: [分流规则项], 节点: 节点模型?, 运行模式: 隧道运行模式, MITM启用: Bool = false) -> SingBox路由配置 {
+    private func 生成路由配置(分流规则: [分流规则项], 节点: 节点模型?, 运行模式: 隧道运行模式, MITM启用: Bool = false, 重写规则: [重写规则项] = []) -> SingBox路由配置 {
         var 规则列表: [SingBox路由规则] = []
 
         // DNS 拦截：目标端口 53 的流量转发到 dns-out 出站，交给 sing-box DNS 模块处理
@@ -387,6 +389,25 @@ final class SingBox配置生成器 {
                 port: [80, 443],
                 network: ["tcp"],
                 outbound: "mitm-out"
+            ))
+        }
+
+        // URL 重写规则：将匹配的 URL 重写为指定内容
+        // 注意：重写规则需要 MITM 启用才能生效（需要解密 HTTPS）
+        for 规则 in 重写规则 where 规则.启用 && 规则.类型 == .URL重写 {
+            var 路由规则 = SingBox路由规则(
+                domainRegex: [规则.匹配正则],
+                outbound: "proxy"
+            )
+            路由规则.rewriteUrl = 规则.替换内容
+            规则列表.append(路由规则)
+        }
+
+        // 请求阻断规则：阻断匹配的请求
+        for 规则 in 重写规则 where 规则.启用 && 规则.类型 == .请求阻断 {
+            规则列表.append(SingBox路由规则(
+                domainRegex: [规则.匹配正则],
+                outbound: "REJECT"
             ))
         }
 

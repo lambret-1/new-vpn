@@ -40,6 +40,8 @@ struct NewVPNApp: App {
     @StateObject private var 调试日志 = 调试日志管理器.共享
     /// MITM 管理器
     @StateObject private var mitm管理 = MITM管理器.共享
+    /// 重写规则管理器
+    @StateObject private var 重写管理 = 重写规则管理器.共享
     /// App 代理
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
@@ -58,6 +60,7 @@ struct NewVPNApp: App {
                 .environmentObject(证书管理)
                 .environmentObject(调试日志)
                 .environmentObject(mitm管理)
+                .environmentObject(重写管理)
                 .preferredColorScheme(颜色方案)
         }
     }

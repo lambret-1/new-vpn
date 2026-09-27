@@ -551,7 +551,8 @@ final class 隧道管理器: NSObject, ObservableObject {
             分流规则: 启用的分流规则,
             DNS配置: nil,
             运行模式: 配置.运行模式,
-            MITM配置: MITM管理器.共享.获取MITM出站配置()
+            MITM配置: MITM管理器.共享.获取MITM出站配置(),
+            重写规则: 重写规则管理器.共享.配置.所有启用规则
         )
 
         // 保存配置到 App Group 共享目录（必须使用完整路径）

@@ -195,6 +195,8 @@ private struct 设置视图: View {
     @State private var 显示代理模式选择 = false
     /// 是否显示 MITM 设置页面
     @State private var 显示MITM设置 = false
+    /// 是否显示重写规则设置页面
+    @State private var 显示重写规则 = false
 
     var body: some View {
         List {
@@ -265,6 +267,23 @@ private struct 设置视图: View {
                         Text(MITM管理器.共享.启用 ? "已启用" : "未启用")
                             .font(.system(size: 12))
                             .foregroundColor(MITM管理器.共享.启用 ? .成功色 : .secondary)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 13))
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .buttonStyle(PlainButtonStyle())
+
+                // 重写规则：显示启用状态，点击进入重写规则设置页面
+                Button {
+                    显示重写规则 = true
+                } label: {
+                    HStack {
+                        Label("重写规则", systemImage: "pencil.line")
+                        Spacer()
+                        Text(重写规则管理器.共享.配置.启用 ? "已启用" : "未启用")
+                            .font(.system(size: 12))
+                            .foregroundColor(重写规则管理器.共享.配置.启用 ? .成功色 : .secondary)
                         Image(systemName: "chevron.right")
                             .font(.system(size: 13))
                             .foregroundColor(.secondary)
@@ -350,6 +369,10 @@ private struct 设置视图: View {
         .sheet(isPresented: $显示MITM设置) {
             MITM设置页面()
                 .environmentObject(MITM管理器.共享)
+        }
+        .sheet(isPresented: $显示重写规则) {
+            重写规则设置页面()
+                .environmentObject(重写规则管理器.共享)
         }
     }
 }

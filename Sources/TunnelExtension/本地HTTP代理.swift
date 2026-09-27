@@ -25,8 +25,8 @@ final class 本地HTTP代理 {
     private let 监听端口: UInt16 = 8888
     /// 是否运行中
     private(set) var 是否运行中 = false
-    /// 活跃连接集合
-    private var 活跃连接: Set<NWConnection> = []
+    /// 活跃连接数组
+    private var 活跃连接: [NWConnection] = []
     /// 连接队列
     private let 连接队列 = DispatchQueue(label: "com.newvpn.capture.proxy")
     /// URLSession（转发请求用）
@@ -97,7 +97,7 @@ final class 本地HTTP代理 {
 
     /// 处理新连接
     private func 处理新连接(_ 连接: NWConnection) {
-        活跃连接.insert(连接)
+        活跃连接.append(连接)
         连接.start(queue: 连接队列)
 
         // 读取 HTTP 请求
@@ -322,7 +322,9 @@ final class 本地HTTP代理 {
     /// 关闭连接
     private func 关闭连接(_ 连接: NWConnection) {
         连接.cancel()
-        活跃连接.remove(连接)
+        if let 索引 = 活跃连接.firstIndex(where: { $0 === 连接 }) {
+            活跃连接.remove(at: 索引)
+        }
     }
 
     /// 推断 Body 类型

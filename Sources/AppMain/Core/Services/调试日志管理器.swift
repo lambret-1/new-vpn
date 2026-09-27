@@ -30,6 +30,10 @@ struct 日志配置: Codable, Equatable {
     var 自动滚动: Bool = true
     /// 单条日志最大字符数（超过截断）
     var 单条最大字符数: Int = 4096
+    /// 是否启用调试(DEBUG)日志采集（关闭后不接收调试类型日志）
+    var 启用调试日志: Bool = true
+    /// 批量刷新间隔（毫秒），内存缓冲区日志批量刷新到UI
+    var 批量刷新间隔毫秒: Int = 200
 }
 
 // MARK: - 调试日志管理器
@@ -89,6 +93,13 @@ final class 调试日志管理器: ObservableObject {
     private var 待处理计数 = 0
     /// 队列容量上限
     private let 队列容量 = 1000
+
+    /// 内存缓冲区（待批量刷新到UI的日志）
+    private var 内存缓冲区: [日志模型] = []
+    /// 批量刷新定时器
+    private var 批量刷新定时器: Timer?
+    /// 缓冲区串行队列（保证线程安全）
+    private let 缓冲区队列 = DispatchQueue(label: "com.newvpn.debuglog.buffer", qos: .utility)
 
     /// 脱敏正则表达式列表
     private let 脱敏规则: [(模式: String, 替换: String)] = [
@@ -239,6 +250,9 @@ final class 调试日志管理器: ObservableObject {
         // 级别过滤：低于最低输出级别的日志不记录
         guard 级别.级别序号 >= 配置.最低输出级别.级别序号 else { return }
 
+        // 调试日志独立开关：关闭时不接收调试类型日志
+        if 级别 == .调试 && !配置.启用调试日志 { return }
+
         // 队列溢出保护：队列满时丢弃 trace/debug
         if 待处理计数 >= 队列容量 {
             if 级别 == .追踪 || 级别 == .调试 {
@@ -271,9 +285,16 @@ final class 调试日志管理器: ObservableObject {
                 堆栈: 堆栈
             )
 
-            DispatchQueue.main.async {
-                self.日志列表.append(日志)
-                self.清理超出缓冲区()
+            // 写入内存缓冲区（批量刷新到UI，避免单条频繁触发视图重绘）
+            self.缓冲区队列.async { [weak self] in
+                guard let self = self else { return }
+                self.内存缓冲区.append(日志)
+                // 确保批量刷新定时器已启动
+                if self.批量刷新定时器 == nil {
+                    DispatchQueue.main.async {
+                        self.启动批量刷新定时器()
+                    }
+                }
             }
 
             // 异步写入文件
@@ -281,6 +302,52 @@ final class 调试日志管理器: ObservableObject {
                 self.写入文件日志(日志)
             }
         }
+    }
+
+    // MARK: - 批量刷新
+
+    /// 启动批量刷新定时器
+    private func 启动批量刷新定时器() {
+        let 间隔 = TimeInterval(max(50, 配置.批量刷新间隔毫秒)) / 1000.0
+        批量刷新定时器 = Timer.scheduledTimer(withTimeInterval: 间隔, repeats: true) { [weak self] _ in
+            self?.执行批量刷新()
+        }
+        // 立即执行一次
+        执行批量刷新()
+    }
+
+    /// 停止批量刷新定时器
+    private func 停止批量刷新定时器() {
+        批量刷新定时器?.invalidate()
+        批量刷新定时器 = nil
+    }
+
+    /// 执行批量刷新：将内存缓冲区日志批量追加到日志列表
+    private func 执行批量刷新() {
+        缓冲区队列.async { [weak self] in
+            guard let self = self else { return }
+            guard !self.内存缓冲区.isEmpty else { return }
+
+            let 待刷新 = self.内存缓冲区
+            self.内存缓冲区.removeAll()
+
+            DispatchQueue.main.async {
+                self.日志列表.append(contentsOf: 待刷新)
+                self.清理超出缓冲区()
+            }
+        }
+    }
+
+    /// 清空内存缓冲区与视图缓存（页面退出/关闭日志采集时调用）
+    func 清空全部缓存() {
+        缓冲区队列.async { [weak self] in
+            guard let self = self else { return }
+            self.内存缓冲区.removeAll()
+            DispatchQueue.main.async {
+                self.日志列表.removeAll()
+            }
+        }
+        停止批量刷新定时器()
     }
 
     /// 清理超出缓冲区的旧日志
@@ -340,8 +407,13 @@ final class 调试日志管理器: ObservableObject {
 
     // MARK: - 日志过滤
 
-    /// 筛选后的日志列表
+    /// 筛选后的日志列表（倒序：新日志在顶部，时间从新→旧）
     var 筛选后的日志列表: [日志模型] {
+        原始筛选后的日志列表.reversed()
+    }
+
+    /// 原始顺序的筛选后日志列表（时间从旧→新，用于导出）
+    var 原始筛选后的日志列表: [日志模型] {
         日志列表.filter { 日志 in
             // 级别过滤
             if let 级别 = 过滤级别, 日志.级别 != 级别 {
@@ -697,7 +769,7 @@ final class 调试日志管理器: ObservableObject {
 
         var 文本 = "NewVPN 调试日志导出\n"
         文本 += "导出时间：\(日期格式化.string(from: Date()))\n"
-        文本 += "日志总数：\(筛选后的日志列表.count)\n"
+        文本 += "日志总数：\(原始筛选后的日志列表.count)\n"
         if let 级别 = 过滤级别 {
             文本 += "级别过滤：\(级别.rawValue)\n"
         }
@@ -709,7 +781,8 @@ final class 调试日志管理器: ObservableObject {
         }
         文本 += String(repeating: "=", count: 60) + "\n\n"
 
-        for 日志 in 筛选后的日志列表 {
+        // 导出文件内日志保持时间从旧到新的常规顺序，不受页面倒序展示影响
+        for 日志 in 原始筛选后的日志列表 {
             let 时间 = 日期格式化.string(from: 日志.时间)
             文本 += "[\(时间)] [\(日志.级别.rawValue)] [\(日志.模块)]\n"
             文本 += "\(日志.内容)\n"

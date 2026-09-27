@@ -25,6 +25,8 @@ struct 调试日志内容区: View {
     @State private var 显示设置 = false
     /// 日志输出窗口的 ScrollView 代理
     @State private var 滚动代理: ScrollViewProxy?
+    /// 是否显示回到顶部按钮（用户向下滚动浏览历史时显示）
+    @State private var 显示回到顶部按钮 = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -69,6 +71,10 @@ struct 调试日志内容区: View {
         .sheet(isPresented: $显示设置) {
             日志设置面板()
                 .environmentObject(日志管理)
+        }
+        .onDisappear {
+            // 页面退出时清空日志缓冲区与视图缓存，释放资源
+            日志管理.清空全部缓存()
         }
     }
 
@@ -286,43 +292,78 @@ struct 调试日志内容区: View {
 
     private var 日志列表: some View {
         ScrollViewReader { 代理 in
-            ScrollView {
-                LazyVStack(spacing: 8, pinnedViews: []) {
-                    // 错误/警告/调试分组（可折叠）
-                    ForEach(日志管理.分组后的日志列表) { 分组 in
-                        日志分组视图(
-                            分组: 分组,
-                            简洁模式: 日志管理.简洁模式,
-                            复制回调: { 日志 in 复制单条日志(日志) }
-                        )
-                    }
+            ZStack(alignment: .bottomTrailing) {
+                ScrollView {
+                    // 滚动位置检测（用于判断是否显示回到顶部按钮）
+                    几何检测视图()
 
-                    // 信息平铺显示（无分组）
-                    if !日志管理.未分组日志列表.isEmpty {
-                        LazyVStack(spacing: 日志管理.简洁模式 ? 2 : 4) {
-                            ForEach(日志管理.未分组日志列表) { 日志 in
-                                日志行(
-                                    日志: 日志,
-                                    简洁模式: 日志管理.简洁模式,
-                                    复制回调: { 复制单条日志(日志) }
-                                )
-                                .id(日志.id)
+                    LazyVStack(spacing: 8, pinnedViews: []) {
+                        // 错误/警告/调试分组（可折叠）
+                        ForEach(日志管理.分组后的日志列表) { 分组 in
+                            日志分组视图(
+                                分组: 分组,
+                                简洁模式: 日志管理.简洁模式,
+                                复制回调: { 日志 in 复制单条日志(日志) }
+                            )
+                        }
+
+                        // 信息平铺显示（无分组）
+                        if !日志管理.未分组日志列表.isEmpty {
+                            LazyVStack(spacing: 日志管理.简洁模式 ? 2 : 4) {
+                                ForEach(日志管理.未分组日志列表) { 日志 in
+                                    日志行(
+                                        日志: 日志,
+                                        简洁模式: 日志管理.简洁模式,
+                                        复制回调: { 复制单条日志(日志) }
+                                    )
+                                    .id(日志.id)
+                                }
                             }
                         }
                     }
+                    .padding(.horizontal, 15)
+                    .padding(.vertical, 8)
+                    // 顶部锚点ID，用于滚动到顶部
+                    .id("顶部锚点")
                 }
-                .padding(.horizontal, 15)
-                .padding(.vertical, 8)
-            }
-            .onAppear {
-                滚动代理 = 代理
-            }
-            .onChange(of: 日志管理.日志列表.count) { _ in
-                if 日志管理.配置.自动滚动, let 最后一条 = 日志管理.筛选后的日志列表.last {
-                    withAnimation {
-                        代理.scrollTo(最后一条.id, anchor: .bottom)
+                .onAppear {
+                    滚动代理 = 代理
+                }
+
+                // 回到顶部按钮（用户向下滚动浏览历史时显示）
+                if 显示回到顶部按钮 {
+                    Button {
+                        withAnimation {
+                            代理.scrollTo("顶部锚点", anchor: .top)
+                        }
+                    } label: {
+                        Image(systemName: "arrow.up.circle.fill")
+                            .font(.system(size: 36))
+                            .foregroundColor(.主题色)
+                            .background(Color.卡片背景)
+                            .clipShape(Circle())
+                            .shadow(radius: 4)
                     }
+                    .padding(.trailing, 15)
+                    .padding(.bottom, 15)
+                    .transition(.opacity)
                 }
+            }
+        }
+    }
+
+    /// 滚动位置检测视图（通过PreferenceKey传递滚动偏移量）
+    private func 几何检测视图() -> some View {
+        GeometryReader { 几何 in
+            Color.clear
+                .preference(key: 滚动偏移偏好键.self, value: 几何.frame(in: .global).minY)
+        }
+        .frame(height: 0)
+        .onPreferenceChange(滚动偏移偏好键.self) { 偏移量 in
+            // 初始偏移量约为0（顶部），向下滚动时偏移量为负值
+            // 向下滚动超过100pt时显示回到顶部按钮
+            withAnimation {
+                显示回到顶部按钮 = 偏移量 < -100
             }
         }
     }
@@ -636,6 +677,28 @@ private struct 日志设置面板: View {
                         set: { 日志管理.配置.自动滚动 = $0 }
                     ))
 
+                    // 调试日志独立开关
+                    Toggle("启用调试(DEBUG)日志", isOn: Binding(
+                        get: { 日志管理.配置.启用调试日志 },
+                        set: { 日志管理.配置.启用调试日志 = $0 }
+                    ))
+
+                    // 批量刷新间隔
+                    HStack {
+                        Text("批量刷新间隔")
+                        Spacer()
+                        Picker("", selection: Binding(
+                            get: { 日志管理.配置.批量刷新间隔毫秒 },
+                            set: { 日志管理.配置.批量刷新间隔毫秒 = $0 }
+                        )) {
+                            Text("100ms").tag(100)
+                            Text("200ms").tag(200)
+                            Text("500ms").tag(500)
+                            Text("1000ms").tag(1000)
+                        }
+                        .pickerStyle(.menu)
+                    }
+
                     // 敏感信息脱敏
                     Toggle("敏感信息脱敏", isOn: Binding(
                         get: { 日志管理.配置.启用脱敏 },
@@ -839,6 +902,16 @@ private struct 分享视图: UIViewControllerRepresentable {
 
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {
         // 无需更新
+    }
+}
+
+// MARK: - 滚动偏移偏好键
+
+/// 滚动偏移量偏好键（用于检测ScrollView滚动位置）
+private struct 滚动偏移偏好键: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
     }
 }
 

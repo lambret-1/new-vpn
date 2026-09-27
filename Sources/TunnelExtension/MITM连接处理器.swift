@@ -80,7 +80,7 @@ final class MITM连接处理器 {
     private func 初始化SSL服务端() {
         // 创建 SSL 上下文（服务端，流式，无侧）
         guard let 上下文 = SSLCreateContext(kCFAllocatorDefault, .serverSide, .streamType) else {
-            NSLog("[扩展-MITM] 创建 SSL 上下文失败")
+            扩展日志记录器.共享.错误("MITM", "创建 SSL 上下文失败")
             return
         }
         self.ssl上下文 = 上下文
@@ -108,10 +108,10 @@ final class MITM连接处理器 {
             }
             let 设置状态 = SSLSetCertificate(上下文, 证书数组 as CFArray)
             if 设置状态 != errSecSuccess {
-                NSLog("[扩展-MITM] SSLSetCertificate 失败：\(设置状态) (\(目标域名))")
+                扩展日志记录器.共享.错误("MITM", "SSLSetCertificate 失败：\(设置状态) (\(目标域名))")
             }
         } else {
-            NSLog("[扩展-MITM] 获取服务器身份失败：\(目标域名)")
+            扩展日志记录器.共享.错误("MITM", "获取服务器身份失败：\(目标域名)")
         }
 
         // 允许 TLS 1.0 到 1.3（兼容旧客户端）
@@ -153,7 +153,7 @@ final class MITM连接处理器 {
             guard let self = self else { return }
 
             if let 错误 = 错误 {
-                NSLog("[扩展-MITM] 读取客户端数据失败：\(错误.localizedDescription)")
+                扩展日志记录器.共享.调试("MITM", "读取客户端数据失败：\(错误.localizedDescription)")
                 self.清理并完成()
                 return
             }
@@ -185,14 +185,14 @@ final class MITM连接处理器 {
             switch 状态 {
             case errSecSuccess:
                 握手完成 = true
-                NSLog("[扩展-MITM] TLS 握手完成：\(目标域名)")
+                扩展日志记录器.共享.信息("MITM", "TLS 握手完成：\(目标域名)")
                 // 握手完成后，读取解密后的应用数据
                 读取解密数据()
             case errSSLWouldBlock:
                 // 需要更多数据，继续读取客户端
                 读取客户端数据()
             default:
-                NSLog("[扩展-MITM] TLS 握手失败：\(状态) (\(目标域名)) - \(描述SSL错误(状态))")
+                扩展日志记录器.共享.错误("MITM", "TLS 握手失败：\(状态) (\(目标域名)) - \(描述SSL错误(状态))")
                 清理并完成()
             }
         } else {
@@ -269,7 +269,7 @@ final class MITM连接处理器 {
         if 处理状态 == errSSLWouldBlock || 处理状态 == errSecSuccess {
             读取客户端数据()
         } else {
-            NSLog("[扩展-MITM] SSLRead 失败：\(处理状态)")
+            扩展日志记录器.共享.调试("MITM", "SSLRead 失败：\(处理状态)")
             清理并完成()
         }
     }
@@ -280,7 +280,7 @@ final class MITM连接处理器 {
     private func 处理解密HTTP请求(_ 数据: Data) {
         // 解析 HTTP 请求（复用本地代理的解析逻辑，这里简化实现）
         guard let 请求 = 解析HTTP请求(数据) else {
-            NSLog("[扩展-MITM] 解析 HTTP 请求失败")
+            扩展日志记录器.共享.调试("MITM", "解析 HTTP 请求失败")
             return
         }
 

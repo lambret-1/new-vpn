@@ -62,7 +62,7 @@ final class 本地HTTP代理 {
         do {
             监听器 = try NWListener(using: 参数, on: NWEndpoint.Port(integerLiteral: 监听端口))
         } catch {
-            NSLog("[抓包代理] 创建监听器失败：\(error.localizedDescription)")
+            扩展日志记录器.共享.调试("抓包代理", "创建监听器失败：\(error.localizedDescription)")
             return
         }
 
@@ -70,9 +70,9 @@ final class 本地HTTP代理 {
             switch 状态 {
             case .ready:
                 self?.是否运行中 = true
-                NSLog("[抓包代理] 已启动，监听 127.0.0.1:\(self?.监听端口 ?? 0)")
+                扩展日志记录器.共享.调试("抓包代理", "已启动，监听 127.0.0.1:\(self?.监听端口 ?? 0)")
             case .failed(let 错误):
-                NSLog("[抓包代理] 监听器失败：\(错误.localizedDescription)")
+                扩展日志记录器.共享.调试("抓包代理", "监听器失败：\(错误.localizedDescription)")
                 self?.是否运行中 = false
             case .cancelled:
                 self?.是否运行中 = false
@@ -82,7 +82,7 @@ final class 本地HTTP代理 {
         }
 
         监听器?.newConnectionHandler = { [weak self] 连接 in
-            NSLog("[抓包代理] 收到新连接，当前活跃=\(self?.活跃连接.count ?? 0)")
+            扩展日志记录器.共享.信息("抓包代理", "收到新连接，当前活跃=\(self?.活跃连接.count ?? 0)")
             self?.处理新连接(连接)
         }
 
@@ -99,7 +99,7 @@ final class 本地HTTP代理 {
             self.活跃连接.forEach { $0.cancel() }
             self.活跃连接.removeAll()
         }
-        NSLog("[抓包代理] 已停止")
+        扩展日志记录器.共享.调试("抓包代理", "已停止")
     }
 
     // MARK: - 连接处理
@@ -112,12 +112,12 @@ final class 本地HTTP代理 {
         // 读取 HTTP 请求
         读取请求(连接) { [weak self] 请求 in
             guard let self = self, let 请求 = 请求 else {
-                NSLog("[抓包代理] 请求解析失败或连接关闭，活跃连接数=\(self?.活跃连接.count ?? 0)")
+                扩展日志记录器.共享.追踪("抓包代理", "请求解析失败或连接关闭，活跃连接数=\(self?.活跃连接.count ?? 0)")
                 self?.关闭连接(连接)
                 return
             }
 
-            NSLog("[抓包代理] 收到请求：\(请求.方法) \(请求.路径)")
+            扩展日志记录器.共享.信息("抓包代理", "收到请求：\(请求.方法) \(请求.路径)")
 
             // 检测 CONNECT 方法（HTTPS 隧道）
             if 请求.方法.uppercased() == "CONNECT" {
@@ -133,7 +133,7 @@ final class 本地HTTP代理 {
     private func 读取请求(_ 连接: NWConnection, 完成: @escaping (HTTP请求?) -> Void) {
         连接.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [weak self] 数据, _, 是否完成, 错误 in
             if let 错误 = 错误 {
-                NSLog("[抓包代理] 读取请求失败：\(错误.localizedDescription)")
+                扩展日志记录器.共享.错误("抓包代理", "读取请求失败：\(错误.localizedDescription)")
                 完成(nil)
                 return
             }
@@ -255,7 +255,7 @@ final class 本地HTTP代理 {
             }
         } else {
             // 透传模式：直接建立 TCP 隧道，不解密
-            NSLog("[抓包代理] HTTPS 透传：\(域名):\(端口)")
+            扩展日志记录器.共享.调试("抓包代理", "HTTPS 透传：\(域名):\(端口)")
             透传CONNECT请求(域名: 域名, 端口: 端口, 连接: 连接)
         }
     }

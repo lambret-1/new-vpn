@@ -568,7 +568,7 @@ struct SingBox出站配置: Codable, Equatable {
         配置.domainStrategy = 域名策略
         配置.network = "tcp" // 强制 TCP，避免 UDP 监听权限不足
         if 嗅探 {
-            配置.sniff = SingBox嗅探配置(enabled: true, destOverride: ["http", "tls", "quic"])
+            配置.sniff = SingBox嗅探配置(enabled: true, destOverride: ["http", "tls"])
         }
         return 配置
     }

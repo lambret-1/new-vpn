@@ -239,7 +239,9 @@ final class SingBox配置生成器 {
         // 动态检测当前活动物理网卡并绑定，避免直连流量回环到 TUN 导致 connection refused
         let 活动接口 = 检测当前活动物理网卡()
         NSLog("[SingBox配置] DIRECT 出站绑定物理网卡：%@", 活动接口)
-        出站列表.append(SingBox出站配置.direct出站(标签: "DIRECT", 绑定接口: 活动接口))
+        var direct出站 = SingBox出站配置.direct出站(标签: "DIRECT", 绑定接口: 活动接口)
+        direct出站.network = "tcp" // 强制 TCP，避免 UDP 监听权限不足
+        出站列表.append(direct出站)
 
         // Block 出站
         出站列表.append(SingBox出站配置.block出站(标签: "REJECT"))

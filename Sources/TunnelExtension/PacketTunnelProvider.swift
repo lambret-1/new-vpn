@@ -140,6 +140,13 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                 if 内核启动成功 {
                     self.日志.info("sing-box 内核启动成功，由内核直接处理数据包")
                     self.singBox运行中 = true
+
+                    // 检查抓包功能是否启用，启用则启动本地 HTTP 代理
+                    if let 共享默认 = UserDefaults(suiteName: "group.com.newvpn.app"),
+                       共享默认.bool(forKey: "httpCaptureEnabled") {
+                        self.记录扩展日志(级别: "信息", 模块: "抓包", 内容: "HTTP抓包已启用，启动本地代理 127.0.0.1:8888")
+                        本地HTTP代理.共享.启动()
+                    }
                 } else {
                     self.日志.error("sing-box 内核启动失败，使用基础数据包处理")
                     // 仅在内核启动失败时才启动基础数据包读取循环
@@ -168,6 +175,9 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
         // 停止 sing-box 内核
         停止SingBox内核()
+
+        // 停止本地 HTTP 抓包代理
+        本地HTTP代理.共享.停止()
 
         // 停止数据包处理
         停止数据包处理()

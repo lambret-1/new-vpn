@@ -197,6 +197,8 @@ private struct 设置视图: View {
     @State private var 显示MITM设置 = false
     /// 是否显示重写规则设置页面
     @State private var 显示重写规则 = false
+    /// 是否显示 HTTP 抓包页面
+    @State private var 显示抓包页面 = false
 
     var body: some View {
         List {
@@ -290,6 +292,23 @@ private struct 设置视图: View {
                     }
                 }
                 .buttonStyle(PlainButtonStyle())
+
+                // HTTP 抓包：显示启用状态和记录数，点击进入抓包列表页面
+                Button {
+                    显示抓包页面 = true
+                } label: {
+                    HStack {
+                        Label("HTTP 抓包", systemImage: "antenna.radiowaves.left.and.right")
+                        Spacer()
+                        Text(抓包存储管理器.共享.是否启用 ? "\(抓包存储管理器.共享.记录总数)条" : "未启用")
+                            .font(.system(size: 12))
+                            .foregroundColor(抓包存储管理器.共享.是否启用 ? .成功色 : .secondary)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 13))
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .buttonStyle(PlainButtonStyle())
             }
             Section("安全") {
                 Button {
@@ -373,6 +392,10 @@ private struct 设置视图: View {
         .sheet(isPresented: $显示重写规则) {
             重写规则设置页面()
                 .environmentObject(重写规则管理器.共享)
+        }
+        .sheet(isPresented: $显示抓包页面) {
+            抓包列表页面()
+                .environmentObject(隧道管理)
         }
     }
 }

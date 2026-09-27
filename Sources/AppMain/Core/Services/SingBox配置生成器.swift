@@ -38,7 +38,8 @@ final class SingBox配置生成器 {
                   运行模式: 隧道运行模式 = .规则分流,
                   日志级别: String = "debug",
                   MITM配置: (证书: String, 私钥: String)? = nil,
-                  重写规则: [重写规则项] = []) -> SingBox配置 {
+                  重写规则: [重写规则项] = [],
+                  抓包启用: Bool = false) -> SingBox配置 {
         var 配置 = SingBox配置()
 
         // 日志配置
@@ -54,10 +55,10 @@ final class SingBox配置生成器 {
         配置.inbounds = 生成入站配置()
 
         // 出站配置
-        配置.outbounds = 生成出站配置(节点: 节点, 节点列表: 节点列表, MITM配置: MITM配置)
+        配置.outbounds = 生成出站配置(节点: 节点, 节点列表: 节点列表, MITM配置: MITM配置, 抓包启用: 抓包启用)
 
         // 路由配置
-        配置.route = 生成路由配置(分流规则: 分流规则, 节点: 节点, 运行模式: 运行模式, MITM启用: MITM配置 != nil, 重写规则: 重写规则)
+        配置.route = 生成路由配置(分流规则: 分流规则, 节点: 节点, 运行模式: 运行模式, MITM启用: MITM配置 != nil, 重写规则: 重写规则, 抓包启用: 抓包启用)
 
         // 实验配置（缓存文件）
         配置.experimental = SingBox实验配置(
@@ -185,7 +186,7 @@ final class SingBox配置生成器 {
     // MARK: - 生成出站配置
 
     /// 生成出站配置
-    private func 生成出站配置(节点: 节点模型?, 节点列表: [节点模型], MITM配置: (证书: String, 私钥: String)? = nil) -> [SingBox出站配置] {
+    private func 生成出站配置(节点: 节点模型?, 节点列表: [节点模型], MITM配置: (证书: String, 私钥: String)? = nil, 抓包启用: Bool = false) -> [SingBox出站配置] {
         var 出站列表: [SingBox出站配置] = []
 
         // 当前节点出站
@@ -257,6 +258,15 @@ final class SingBox配置生成器 {
                 域名策略: "ipv4_only",
                 嗅探: true
             ))
+        }
+
+        // 抓包代理出站：HTTP 代理指向本地 127.0.0.1:8888，用于捕获 HTTP 流量
+        if 抓包启用 {
+            var 抓包代理 = SingBox出站配置(type: "http", tag: "capture-proxy")
+            抓包代理.server = "127.0.0.1"
+            抓包代理.serverPort = 8888
+            出站列表.append(抓包代理)
+            NSLog("[SingBox配置] 已添加抓包代理出站：127.0.0.1:8888")
         }
 
         return 出站列表
@@ -372,7 +382,7 @@ final class SingBox配置生成器 {
     ///   - 节点: 当前节点（用于代理服务器 IP 直连）
     ///   - 运行模式: 隧道运行模式，决定最终出站
     ///   - MITM启用: 是否启用 MITM（HTTPS 解密）
-    private func 生成路由配置(分流规则: [分流规则项], 节点: 节点模型?, 运行模式: 隧道运行模式, MITM启用: Bool = false, 重写规则: [重写规则项] = []) -> SingBox路由配置 {
+    private func 生成路由配置(分流规则: [分流规则项], 节点: 节点模型?, 运行模式: 隧道运行模式, MITM启用: Bool = false, 重写规则: [重写规则项] = [], 抓包启用: Bool = false) -> SingBox路由配置 {
         var 规则列表: [SingBox路由规则] = []
 
         // DNS 拦截：目标端口 53 的流量转发到 dns-out 出站，交给 sing-box DNS 模块处理
@@ -389,11 +399,22 @@ final class SingBox配置生成器 {
             outbound: "REJECT"
         ))
 
-        // MITM 拦截：HTTP(80)和HTTPS(443)的TCP流量转发到 mitm-out 出站进行解密
+        // HTTP 抓包：端口 80 的 TCP 流量转发到本地抓包代理（127.0.0.1:8888）
+        // 抓包代理记录请求/响应后转发到目标服务器
+        if 抓包启用 {
+            规则列表.append(SingBox路由规则(
+                port: [80],
+                network: ["tcp"],
+                outbound: "capture-proxy"
+            ))
+            NSLog("[SingBox配置] HTTP抓包已启用，端口80流量转发到capture-proxy")
+        }
+
+        // MITM 拦截：HTTPS(443)的TCP流量转发到 mitm-out 出站进行解密
         // 注意：只拦截 TCP，不拦截 UDP（QUIC已被下面的规则阻止）
         if MITM启用 {
             规则列表.append(SingBox路由规则(
-                port: [80, 443],
+                port: [443],
                 network: ["tcp"],
                 outbound: "mitm-out"
             ))

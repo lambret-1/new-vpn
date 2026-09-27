@@ -62,15 +62,15 @@ struct MITM设置页面: View {
                         }
 
                         // 标记已安装
-                        if !mitm管理.元数据?.用户确认已安装 ?? true {
+                        if !(mitm管理.元数据?.用户确认已安装 ?? true) {
                             Button {
                                 mitm管理.标记已安装()
                             } label: {
                                 HStack {
                                     Image(systemName: "checkmark.circle")
-                                        .foregroundColor(.蓝色)
+                                        .foregroundColor(.blue)
                                     Text("我已安装描述文件")
-                                        .foregroundColor(.蓝色)
+                                        .foregroundColor(.blue)
                                     Spacer()
                                 }
                             }
@@ -84,9 +84,9 @@ struct MITM设置页面: View {
                             } label: {
                                 HStack {
                                     Image(systemName: "hand.thumbsup")
-                                        .foregroundColor(.绿色)
+                                        .foregroundColor(.green)
                                     Text("我已在设置中信任证书")
-                                        .foregroundColor(.绿色)
+                                        .foregroundColor(.green)
                                     Spacer()
                                 }
                             }
@@ -303,8 +303,8 @@ struct MITM设置页面: View {
 
     private var 状态颜色: Color {
         switch mitm管理.当前状态 {
-        case .就绪: return .绿色
-        case .未安装, .未信任: return .蓝色
+        case .就绪: return .green
+        case .未安装, .未信任: return .blue
         case .文件缺失, .已过期, .文件损坏: return .危险色
         case .临近过期: return .警告色
         }
@@ -345,10 +345,10 @@ struct MITM设置页面: View {
         HStack(spacing: 4) {
             Image(systemName: 完成 ? "checkmark.circle.fill" : "circle")
                 .font(.system(size: 12))
-                .foregroundColor(完成 ? .绿色 : .secondary)
+                .foregroundColor(完成 ? .green : .secondary)
             Text(标题)
                 .font(.system(size: 12))
-                .foregroundColor(完成 ? .绿色 : .secondary)
+                .foregroundColor(完成 ? .green : .secondary)
         }
         .frame(maxWidth: .infinity)
     }
@@ -445,10 +445,10 @@ private struct 证书日志页面: View {
 
     private func 日志颜色(_ 类型: String) -> Color {
         switch 类型 {
-        case "success": return .绿色
+        case "success": return .green
         case "warning": return .警告色
         case "error": return .危险色
-        default: return .蓝色
+        default: return .blue
         }
     }
 

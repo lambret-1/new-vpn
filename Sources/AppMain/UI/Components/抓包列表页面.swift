@@ -23,6 +23,12 @@ struct 抓包列表页面: View {
     @State private var 刷新定时器: Timer?
     /// 当前显示的记录列表
     @State private var 显示列表: [抓包记录] = []
+    /// 当前加载页数
+    @State private var 当前页数 = 1
+    /// 每页记录数
+    private let 每页数量 = 50
+    /// 是否还有更多记录
+    @State private var 还有更多 = true
     /// 是否显示筛选面板
     @State private var 显示筛选 = false
     /// 是否显示分享面板
@@ -113,7 +119,7 @@ struct 抓包列表页面: View {
                         .padding(.bottom, 8)
 
                     // 记录列表
-                    ForEach(显示列表) { 记录 in
+                    ForEach(Array(显示列表.enumerated()), id: \.element.id) { 索引, 记录 in
                         NavigationLink {
                             抓包详情页面(记录: 记录)
                         } label: {
@@ -122,6 +128,28 @@ struct 抓包列表页面: View {
                         .buttonStyle(PlainButtonStyle())
                         .padding(.horizontal, 16)
                         .padding(.bottom, 8)
+                        .onAppear {
+                            // 滑动到倒数第 5 条时加载更多
+                            if 索引 == 显示列表.count - 5 {
+                                加载更多()
+                            }
+                        }
+                    }
+
+                    // 加载更多提示
+                    if 还有更多 {
+                        HStack {
+                            ProgressView()
+                            Text("加载更多...")
+                                .font(.system(size: 12))
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(.vertical, 12)
+                    } else if !显示列表.isEmpty {
+                        Text("已加载全部 \(显示列表.count) 条记录")
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary)
+                            .padding(.vertical, 8)
                     }
                 } header: {
                     // 列表头（固定）
@@ -286,7 +314,25 @@ struct 抓包列表页面: View {
     }
 
     private func 刷新列表() {
-        显示列表 = 存储.获取筛选记录(筛选)
+        当前页数 = 1
+        let 全部 = 存储.获取筛选记录(筛选)
+        let 结束索引 = min(每页数量, 全部.count)
+        显示列表 = Array(全部.prefix(结束索引))
+        还有更多 = 全部.count > 每页数量
+    }
+
+    /// 加载更多记录
+    private func 加载更多() {
+        guard 还有更多 else { return }
+        let 全部 = 存储.获取筛选记录(筛选)
+        let 结束索引 = min(每页数量 * (当前页数 + 1), 全部.count)
+        if 结束索引 > 显示列表.count {
+            显示列表 = Array(全部.prefix(结束索引))
+            当前页数 += 1
+            还有更多 = 结束索引 < 全部.count
+        } else {
+            还有更多 = false
+        }
     }
 
     // MARK: - HAR 导出
@@ -332,6 +378,10 @@ private struct 筛选面板: View {
     @Binding var 筛选: 抓包筛选条件
     var 应用回调: () -> Void
     @Environment(\.dismiss) private var dismiss
+    /// 显示保存规则弹窗
+    @State private var 显示保存规则弹窗 = false
+    /// 规则名称输入
+    @State private var 规则名称 = ""
 
     var body: some View {
         NavigationStack {
@@ -396,6 +446,47 @@ private struct 筛选面板: View {
                     }
                 }
 
+                Section("已保存规则") {
+                    if 过滤规则管理器.共享.规则数量 == 0 {
+                        Text("暂无保存的过滤规则")
+                            .foregroundColor(.secondary)
+                            .font(.system(size: 13))
+                    } else {
+                        ForEach(过滤规则管理器.共享.规则列表) { 规则 in
+                            HStack {
+                                Button {
+                                    筛选 = 规则.筛选条件
+                                } label: {
+                                    HStack {
+                                        Text(规则.名称)
+                                            .foregroundColor(.primary)
+                                        Spacer()
+                                        Image(systemName: "checkmark.circle")
+                                            .foregroundColor(.成功色)
+                                    }
+                                }
+                                Spacer()
+                                Button(role: .destructive) {
+                                    过滤规则管理器.共享.删除规则(规则.id)
+                                } label: {
+                                    Image(systemName: "trash")
+                                        .foregroundColor(.red)
+                                }
+                            }
+                        }
+                    }
+
+                    Button {
+                        显示保存规则弹窗 = true
+                    } label: {
+                        HStack {
+                            Image(systemName: "bookmark")
+                            Text("保存当前筛选")
+                                .foregroundColor(.blue)
+                        }
+                    }
+                }
+
                 Section {
                     Button(role: .destructive) {
                         筛选 = 抓包筛选条件()
@@ -418,6 +509,18 @@ private struct 筛选面板: View {
             }
             .navigationTitle("筛选")
             .navigationBarTitleDisplayMode(.inline)
+            .alert("保存过滤规则", isPresented: $显示保存规则弹窗) {
+                TextField("规则名称", text: $规则名称)
+                Button("取消", role: .cancel) {}
+                Button("保存") {
+                    if !规则名称.isEmpty {
+                        过滤规则管理器.共享.保存规则(名称: 规则名称, 筛选条件: 筛选)
+                        规则名称 = ""
+                    }
+                }
+            } message: {
+                Text("为当前筛选条件命名，方便后续快速应用")
+            }
         }
     }
 }

@@ -282,7 +282,7 @@ struct 请求头项: Codable, Equatable, Identifiable {
 // MARK: - 抓包筛选条件
 
 /// 抓包记录筛选条件
-struct 抓包筛选条件: Equatable {
+struct 抓包筛选条件: Equatable, Codable {
     /// 搜索关键词（匹配 URL/主机/路径）
     var 关键词: String = ""
     /// 方法筛选（空=全部）

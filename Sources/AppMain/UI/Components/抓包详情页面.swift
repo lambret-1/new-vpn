@@ -28,6 +28,15 @@ struct 抓包详情页面: View {
     @State private var 显示编辑重放 = false
     /// 编辑后的 URL
     @State private var 编辑URL = ""
+    /// 显示分享面板
+    @State private var 显示分享 = false
+    /// 分享文件 URL
+    @State private var 分享文件URL: URL?
+
+    /// 导出格式
+    enum 导出格式 {
+        case json, har
+    }
 
     /// 重放结果数据结构
     struct 重放结果信息 {
@@ -52,6 +61,9 @@ struct 抓包详情页面: View {
 
                 // 重放操作栏
                 重放操作栏
+
+                // 时间线
+                时间线视图
 
                 // Tab 切换
                 Picker("", selection: $当前Tab) {
@@ -88,6 +100,17 @@ struct 抓包详情页面: View {
                     } label: {
                         Label("复制 URL", systemImage: "link")
                     }
+                    Divider()
+                    Button {
+                        导出单条记录(格式: .json)
+                    } label: {
+                        Label("导出为 JSON", systemImage: "doc.text")
+                    }
+                    Button {
+                        导出单条记录(格式: .har)
+                    } label: {
+                        Label("导出为 HAR", systemImage: "doc.zipper")
+                    }
                 } label: {
                     Image(systemName: "square.and.arrow.up")
                         .foregroundColor(.primary)
@@ -98,6 +121,11 @@ struct 抓包详情页面: View {
             Button("确定", role: .cancel) {}
         } message: {
             Text("内容已复制到剪贴板")
+        }
+        .sheet(isPresented: $显示分享) {
+            if let 文件URL = 分享文件URL {
+                分享视图(活动项: [文件URL])
+            }
         }
     }
 
@@ -328,6 +356,137 @@ struct 抓包详情页面: View {
             return String(format: "%.1fKB", Double(字节数) / 1024.0)
         } else {
             return String(format: "%.2fMB", Double(字节数) / (1024.0 * 1024.0))
+        }
+    }
+
+    // MARK: - 时间线视图
+
+    private var 时间线视图: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("请求时间线")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(.primary)
+
+            if let 耗时 = 记录.耗时毫秒 {
+                // 简化时间线：请求发送 / 服务器处理 / 响应接收
+                let 发送占比 = 0.1
+                let 处理占比 = 0.7
+                let 接收占比 = 0.2
+
+                VStack(spacing: 6) {
+                    // 进度条
+                    HStack(spacing: 2) {
+                        Rectangle()
+                            .fill(Color.blue)
+                            .frame(height: 8)
+                            .frame(maxWidth: .infinity)
+                        Rectangle()
+                            .fill(Color.orange)
+                            .frame(height: 8)
+                            .frame(maxWidth: .infinity)
+                        Rectangle()
+                            .fill(Color.green)
+                            .frame(height: 8)
+                            .frame(maxWidth: .infinity)
+                    }
+                    .cornerRadius(4)
+
+                    // 时间标签
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("请求发送")
+                                .font(.system(size: 11))
+                                .foregroundColor(.blue)
+                            Text("\(Int(Double(耗时) * 发送占比))ms")
+                                .font(.system(size: 10))
+                                .foregroundColor(.secondary)
+                        }
+                        Spacer()
+                        VStack(alignment: .center, spacing: 2) {
+                            Text("服务器处理")
+                                .font(.system(size: 11))
+                                .foregroundColor(.orange)
+                            Text("\(Int(Double(耗时) * 处理占比))ms")
+                                .font(.system(size: 10))
+                                .foregroundColor(.secondary)
+                        }
+                        Spacer()
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text("响应接收")
+                                .font(.system(size: 11))
+                                .foregroundColor(.green)
+                            Text("\(Int(Double(耗时) * 接收占比))ms")
+                                .font(.system(size: 10))
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+            } else {
+                Text("请求进行中，暂无时间线数据")
+                    .font(.system(size: 12))
+                    .foregroundColor(.secondary)
+            }
+        }
+        .padding(14)
+        .background(Color.卡片背景)
+        .cornerRadius(12)
+        .padding(.horizontal, 16)
+    }
+
+    // MARK: - 导出单条记录
+
+    private func 导出单条记录(格式: 导出格式) {
+        let 内容: String
+        let 文件扩展名: String
+
+        switch 格式 {
+        case .json:
+            // 导出为 JSON 格式
+            let 字典: [String: Any] = [
+                "request": [
+                    "method": 记录.请求方法,
+                    "url": 记录.请求URL,
+                    "headers": 记录.请求头.map { ["name": $0.名称, "value": $0.值] },
+                    "bodySize": 记录.请求Body大小,
+                    "body": 记录.请求Body内容 ?? ""
+                ],
+                "response": [
+                    "status": 记录.响应状态码 ?? 0,
+                    "statusText": 记录.响应状态文本 ?? "",
+                    "headers": (记录.响应头 ?? []).map { ["name": $0.名称, "value": $0.值] },
+                    "bodySize": 记录.响应Body大小 ?? 0,
+                    "body": 记录.响应Body内容 ?? ""
+                ],
+                "timing": [
+                    "started": 记录.开始时间.timeIntervalSince1970,
+                    "durationMs": 记录.耗时毫秒 ?? 0
+                ]
+            ]
+            if let 数据 = try? JSONSerialization.data(withJSONObject: 字典, options: [.prettyPrinted]),
+               let 字符串 = String(data: 数据, encoding: .utf8) {
+                内容 = 字符串
+            } else {
+                内容 = "{}"
+            }
+            文件扩展名 = "json"
+        case .har:
+            内容 = 抓包记录.导出HAR([记录])
+            文件扩展名 = "har"
+        }
+
+        // 写入临时文件
+        let 日期格式化器 = DateFormatter()
+        日期格式化器.dateFormat = "yyyyMMdd_HHmmss"
+        let 文件名 = "capture_\(日期格式化器.string(from: Date())).\(文件扩展名)"
+        let 临时目录 = FileManager.default.temporaryDirectory
+        let 文件URL = 临时目录.appendingPathComponent(文件名)
+
+        do {
+            try 内容.write(to: 文件URL, atomically: true, encoding: .utf8)
+            分享文件URL = 文件URL
+            显示分享 = true
+        } catch {
+            NSLog("[抓包] 导出失败：\(error.localizedDescription)")
         }
     }
 
@@ -574,6 +733,19 @@ private extension Date {
         格式化器.locale = Locale(identifier: "zh_CN")
         return 格式化器.string(from: self)
     }
+}
+
+// MARK: - 分享视图
+
+/// UIActivityViewController 包装
+private struct 分享视图: UIViewControllerRepresentable {
+    let 活动项: [Any]
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: 活动项, applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
 
 // MARK: - 编辑重放页面

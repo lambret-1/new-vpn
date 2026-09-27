@@ -237,6 +237,8 @@ private struct 可滑动节点行视图: View {
     @EnvironmentObject private var 状态: AppState
     /// 测速管理器
     @EnvironmentObject private var 测速管理器: 测速管理器
+    /// 隧道管理器（连接状态下实时切换节点）
+    @EnvironmentObject private var 隧道管理: 隧道管理器
 
     /// 滑动偏移量
     @State private var 偏移量: CGFloat = 0
@@ -335,6 +337,8 @@ private struct 可滑动节点行视图: View {
         withAnimation(.easeInOut(duration: 0.2)) {
             状态.保存选中节点(节点ID: 节点.id)
         }
+        // VPN连接状态下实时切换节点：重新生成配置并通知扩展重载
+        隧道管理.切换节点并重载(节点ID: 节点.id, 节点名称: 节点.名称)
     }
 }
 

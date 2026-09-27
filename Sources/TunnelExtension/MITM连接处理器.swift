@@ -209,7 +209,6 @@ final class MITM连接处理器 {
         case errSSLSessionNotFound: return "会话未找到"
         case errSSLNegotiation: return "握手协商失败"
         case errSSLFatalAlert: return "收到致命警报"
-        case errSSLWouldBlockResume: return "会话恢复需要更多数据"
         case errSSLUnexpectedRecord: return "意外的记录"
         case errSSLDecompressFail: return "解压失败"
         case errSSLDecryptionFail: return "解密失败"
@@ -230,10 +229,7 @@ final class MITM连接处理器 {
         case errSSLPeerHandshakeFail: return "对端握手失败"
         case errSSLPeerUserCancelled: return "对端用户取消"
         case errSSLPeerNoRenegotiation: return "对端不允许重新协商"
-        case errSSLUnknownCertStatus: return "未知证书状态"
         case errSSLClientHelloReceived: return "收到客户端Hello"
-        case errSSLServerAuthCompleted: return "服务器认证完成"
-        case errSSLClientAuthCompleted: return "客户端认证完成"
         default: return "未知错误(\(状态))"
         }
     }

@@ -294,7 +294,7 @@ final class 本地HTTP代理 {
                 switch 状态 {
                 case .ready:
                     // 双向透传数据
-                    self?.双向透传(客户端: 连接, 服务器: 目标连接, 记录: &记录, 开始时间: 开始时间)
+                    self?.双向透传(客户端: 连接, 服务器: 目标连接, 记录: 记录, 开始时间: 开始时间)
                 case .failed(let 错误):
                     var 结束记录 = 记录
                     结束记录.错误信息 = 错误.localizedDescription
@@ -310,7 +310,7 @@ final class 本地HTTP代理 {
     }
 
     /// 双向透传数据（客户端 ↔ 服务器）
-    private func 双向透传(客户端: NWConnection, 服务器: NWConnection, 记录: inout 抓包记录, 开始时间: Date) {
+    private func 双向透传(客户端: NWConnection, 服务器: NWConnection, 记录: 抓包记录, 开始时间: Date) {
         var 客户端流量 = 0
         var 服务器流量 = 0
 

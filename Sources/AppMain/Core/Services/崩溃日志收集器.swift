@@ -108,10 +108,8 @@ final class 崩溃日志收集器 {
 
     /// 停止捕获崩溃日志（恢复之前的处理器）
     func 停止捕获() {
-        if let 之前 = 之前的异常处理器 {
-            let 处理器: @convention(c) (NSException) -> Void = 之前
-            NSSetUncaughtExceptionHandler(处理器)
-        }
+        // 恢复默认异常处理器
+        NSSetUncaughtExceptionHandler(nil)
         for (信号, 处理器) in 之前的Signal处理器 {
             signal(信号, 处理器)
         }

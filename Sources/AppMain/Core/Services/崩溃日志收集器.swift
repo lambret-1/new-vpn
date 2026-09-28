@@ -8,6 +8,14 @@
 import Foundation
 import UIKit
 
+/// 全局 Signal 处理器（C 函数指针不能捕获 self）
+private func 全局Signal处理器(_ 信号: Int32) {
+    崩溃日志收集器.共享.处理信号(信号)
+    // 恢复默认处理器并重新发送信号，确保 APP 正常退出
+    signal(信号, SIG_DFL)
+    raise(信号)
+}
+
 /// 崩溃日志模型
 struct 崩溃日志模型: Identifiable, Codable, Hashable {
     /// 唯一标识
@@ -91,12 +99,7 @@ final class 崩溃日志收集器 {
         // 设置 Signal 处理器
         let 信号列表: [Int32] = [SIGABRT, SIGILL, SIGSEGV, SIGFPE, SIGBUS, SIGPIPE, SIGTRAP]
         for 信号 in 信号列表 {
-            之前的Signal处理器[信号] = signal(信号) { 收到信号 in
-                崩溃日志收集器.共享.处理信号(收到信号)
-                // 恢复默认处理器并重新发送信号，确保 APP 正常退出
-                signal(收到信号, SIG_DFL)
-                raise(收到信号)
-            }
+            之前的Signal处理器[信号] = signal(信号, 全局Signal处理器)
         }
     }
 
@@ -228,10 +231,15 @@ final class 崩溃日志收集器 {
     private func 获取设备信息() -> 设备信息模型 {
         let 设备 = UIDevice.current
         let 内存 = ProcessInfo.processInfo.physicalMemory
-        let 磁盘 = FileManager.default.homeDirectoryForCurrentUser
-            .volumeAvailableCapacityForImportantUsageKey.flatMap { _ in
-                try? FileManager.default.attributesOfFileSystem(forPath: NSHomeDirectory())[.systemSize] as? UInt64
-            } ?? 0
+
+        // 获取磁盘总容量
+        let 磁盘: UInt64
+        if let 资源值 = try? URL(fileURLWithPath: NSHomeDirectory()).resourceValues(forKeys: [.volumeTotalCapacityKey]),
+           let 容量 = 资源值.volumeTotalCapacity {
+            磁盘 = UInt64(容量)
+        } else {
+            磁盘 = 0
+        }
 
         // 简单越狱检测
         let 是否越狱 = FileManager.default.fileExists(atPath: "/Applications/Cydia.app") ||

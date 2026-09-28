@@ -589,9 +589,14 @@ private struct 状态概览卡片: View {
 
 // MARK: - 详情分组
 
-private struct 详情分组<内容: View>: View {
+private struct 详情分组<Content: View>: View {
     let 标题: String
-    @ViewBuilder let 内容: () -> 内容
+    let 内容构建: () -> Content
+
+    init(标题: String, @ViewBuilder 内容: @escaping () -> Content) {
+        self.标题 = 标题
+        self.内容构建 = 内容
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -602,7 +607,7 @@ private struct 详情分组<内容: View>: View {
                 .padding(.leading, 4)
 
             VStack(spacing: 0) {
-                内容()
+                内容构建()
             }
             .padding(.horizontal, 15)
             .padding(.vertical, 4)

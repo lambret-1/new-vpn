@@ -264,9 +264,8 @@ struct 调试日志内容区: View {
     private var 日志纯文本: String {
         let 日期格式器 = DateFormatter()
         日期格式器.dateFormat = "HH:mm:ss.SSS"
-        // 先转换为 Array，避免 ReversedCollection 类型问题
-        let 正序列表 = Array(日志管理.筛选后的日志列表).reversed()
-        return 正序列表.map { 日志 in
+        // 筛选后的日志列表已经是倒序（新在上），直接 reversed() 变为正序（旧在上）
+        return 日志管理.筛选后的日志列表.reversed().map { 日志 in
             "[\(日期格式器.string(from: 日志.时间))] [\(日志.级别.rawValue)] [\(日志.模块)] \(日志.内容)"
         }.joined(separator: "\n")
     }
@@ -857,6 +856,12 @@ struct 纯文本日志视图: UIViewRepresentable {
         textView.spellCheckingType = .no
         textView.textContainerInset = UIEdgeInsets(top: 8, left: 12, bottom: 8, right: 12)
         textView.text = 日志文本
+        // 确保自动布局能正确扩展
+        textView.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        textView.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
+        textView.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        textView.setContentHuggingPriority(.defaultLow, for: .vertical)
+        textView.translatesAutoresizingMaskIntoConstraints = false
         return textView
     }
 
@@ -866,8 +871,10 @@ struct 纯文本日志视图: UIViewRepresentable {
             uiView.text = 日志文本
             if 自动滚动到底部 && !日志文本.isEmpty {
                 // 滚动到底部
-                let 底部 = NSRange(location: max(0, 日志文本.utf16.count - 1), length: 1)
-                uiView.scrollRangeToVisible(底部)
+                DispatchQueue.main.async {
+                    let 底部 = NSRange(location: max(0, 日志文本.utf16.count - 1), length: 1)
+                    uiView.scrollRangeToVisible(底部)
+                }
             }
         }
     }

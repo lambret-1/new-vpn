@@ -118,9 +118,6 @@ final class MITM连接处理器 {
         SSLSetProtocolVersionMin(上下文, .tlsProtocol12)
         SSLSetProtocolVersionMax(上下文, .tlsProtocol13)
 
-        // 不要求客户端证书
-        SSLSetClientSideAuthentication(上下文, .never)
-
         // 允许断点续连（false = 不允许，每次完整握手）
         SSLSetSessionOption(上下文, .breakOnClientAuth, false)
 

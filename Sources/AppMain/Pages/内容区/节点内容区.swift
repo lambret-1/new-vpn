@@ -233,18 +233,25 @@ private struct 分组视图: View {
     /// 节点分组上下文菜单
     @ViewBuilder
     private var 节点分组上下文菜单: some View {
-        // 分组测速
+        // 编辑分组
         Button {
-            执行分组测速()
+            编辑分组()
         } label: {
-            Label("分组测速", systemImage: "gauge")
+            Label("编辑分组", systemImage: "pencil")
         }
 
-        // 选择最快节点
+        // 更新节点（重新订阅）
         Button {
-            选择最快节点()
+            更新节点()
         } label: {
-            Label("选择最快节点", systemImage: "bolt.fill")
+            Label("更新节点", systemImage: "arrow.clockwise")
+        }
+
+        // 分享二维码
+        Button {
+            分享二维码()
+        } label: {
+            Label("分享二维码", systemImage: "qrcode")
         }
 
         // 复制分组所有节点链接
@@ -269,16 +276,101 @@ private struct 分组视图: View {
         }
     }
 
-    /// 选择最快节点并切换
-    private func 选择最快节点() {
-        let 有效节点 = 分组.节点列表.filter { $0.测速数据?.成功 == true }
-        guard let 最快节点 = 有效节点.min(by: { ($0.测速数据?.延迟毫秒 ?? Int.max) < ($1.测速数据?.延迟毫秒 ?? Int.max) }) else {
-            // 没有测速数据，先测速
-            执行分组测速()
+    /// 编辑分组（重命名）
+    private func 编辑分组() {
+        // 弹出重命名输入框
+        let 提示 = UIAlertController(title: "编辑分组", message: "输入新的分组名称", preferredStyle: .alert)
+        提示.addTextField { 文本框 in
+            文本框.text = 分组.名称
+            文本框.placeholder = "分组名称"
+        }
+        提示.addAction(UIAlertAction(title: "取消", style: .cancel))
+        提示.addAction(UIAlertAction(title: "确定", style: .default) { _ in
+            if let 新名称 = 提示.textFields?.first?.text, !新名称.isEmpty {
+                let 旧名称 = 分组.名称
+                // 更新该分组所有节点的分组名
+                for 索引 in 状态.节点列表.indices {
+                    if 状态.节点列表[索引].分组 == 旧名称 {
+                        状态.节点列表[索引].分组 = 新名称
+                    }
+                }
+                状态.节点分组列表 = Mock数据.生成节点分组(节点列表: 状态.节点列表)
+                状态.保存持久化节点()
+            }
+        })
+
+        // 获取最顶层视图控制器
+        guard let 窗口 = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .flatMap({ $0.windows })
+            .first(where: { $0.isKeyWindow }),
+              let 顶层控制器 = 窗口.rootViewController else {
             return
         }
-        状态.当前节点ID = 最快节点.id
-        隧道管理.切换节点并重载(节点ID: 最快节点.id, 节点名称: 最快节点.名称)
+        var 最顶层 = 顶层控制器
+        while let 弹出的 = 最顶层.presentedViewController {
+            最顶层 = 弹出的
+        }
+        最顶层.present(提示, animated: true)
+    }
+
+    /// 更新节点（重新订阅该分组）
+    private func 更新节点() {
+        // 查找该分组对应的订阅并更新
+        let 分组名 = 分组.名称
+        if let 订阅 = 状态.远程订阅列表.first(where: { $0.名称 == 分组名 }) {
+            // 触发订阅更新
+            NotificationCenter.default.post(name: .init("更新订阅"), object: 订阅.id)
+        }
+    }
+
+    /// 分享二维码（生成节点链接二维码）
+    private func 分享二维码() {
+        let 链接列表 = 分组.节点列表.map { 节点 -> String in
+            生成节点链接(节点)
+        }
+        let 全部链接 = 链接列表.joined(separator: "\n")
+
+        // 生成二维码
+        guard let 数据 = 全部链接.data(using: .utf8),
+              let 滤镜 = CIFilter(name: "CIQRCodeGenerator") else { return }
+        滤镜.setValue(数据, forKey: "inputMessage")
+        滤镜.setValue("H", forKey: "inputCorrectionLevel")
+
+        guard let 输出图像 = 滤镜.outputImage else { return }
+        let 缩放变换 = CGAffineTransform(scaleX: 10, y: 10)
+        let 缩放图像 = 输出图像.transformed(by: 缩放变换)
+        let 上下文 = CIContext()
+        guard let cg图像 = 上下文.createCGImage(缩放图像, from: 缩放图像.extent) else { return }
+        let ui图像 = UIImage(cgImage: cg图像)
+
+        // 分享二维码
+        let 活动控制器 = UIActivityViewController(activityItems: [ui图像], applicationActivities: nil)
+
+        // 获取最顶层视图控制器
+        guard let 窗口 = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .flatMap({ $0.windows })
+            .first(where: { $0.isKeyWindow }),
+              var 顶层控制器 = 窗口.rootViewController else {
+            return
+        }
+        while let 弹出的 = 顶层控制器.presentedViewController {
+            顶层控制器 = 弹出的
+        }
+
+        // iPad 适配
+        if let 弹出控制器 = 活动控制器.popoverPresentationController {
+            弹出控制器.sourceView = 顶层控制器.view
+            弹出控制器.sourceRect = CGRect(
+                x: 顶层控制器.view.bounds.midX,
+                y: 顶层控制器.view.bounds.midY,
+                width: 0, height: 0
+            )
+            弹出控制器.permittedArrowDirections = []
+        }
+
+        顶层控制器.present(活动控制器, animated: true)
     }
 
     /// 复制分组所有节点链接
@@ -364,6 +456,8 @@ private struct 分组视图: View {
         let 分组名 = 分组.名称
         状态.节点列表.removeAll { $0.分组 == 分组名 }
         状态.节点分组列表 = Mock数据.生成节点分组(节点列表: 状态.节点列表)
+        // 保存到持久化文件，避免删除后反复出现
+        状态.保存持久化节点()
     }
 }
 

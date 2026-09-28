@@ -139,6 +139,13 @@ final class 策略组管理器 {
         }
 
         DispatchQueue.main.async {
+            // 保留旧列表中的展开状态
+            let 旧列表 = AppState.共享.策略组列表
+            for 索引 in 策略组列表.indices {
+                if let 旧组 = 旧列表.first(where: { $0.名称 == 策略组列表[索引].名称 }) {
+                    策略组列表[索引].是否展开 = 旧组.是否展开
+                }
+            }
             AppState.共享.策略组列表 = 策略组列表
         }
     }

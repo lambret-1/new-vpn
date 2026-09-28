@@ -271,7 +271,7 @@ final class AppState: ObservableObject {
     }
 
     /// 保存订阅节点到本地
-    private func 保存持久化节点() {
+    func 保存持久化节点() {
         guard let 路径 = 节点持久化路径 else { return }
         // 只保存订阅导入的节点
         let 订阅节点 = 节点列表.filter { $0.来源类型 == "订阅导入" }

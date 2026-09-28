@@ -400,6 +400,16 @@ struct 策略组模型: Identifiable {
     let 节点延迟: [String: Int]
     /// 是否正在测速
     var 测速中: Bool = false
+    /// 是否展开
+    var 是否展开: Bool = false
+
+    /// 当前节点（计算属性，兼容旧代码）
+    var 当前节点: String? { 当前选中 }
+
+    /// 最低延迟（计算属性）
+    var 最低延迟: Int? {
+        节点延迟.values.min()
+    }
 
     /// 类型中文标题
     var 类型标题: String {

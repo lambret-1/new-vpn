@@ -144,17 +144,7 @@ private struct 主内容区: View {
         Group {
             switch 状态.当前顶部卡片 {
             case .节点:
-                // 节点内容区重构中，临时占位
-                VStack(spacing: 16) {
-                    Image(systemName: "arrow.triangle.2.circlepath")
-                        .font(.system(size: 40))
-                        .foregroundColor(.secondary)
-                    Text("节点模块重构中")
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(.secondary)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.top, 80)
+                节点内容区()
             case .策略组:
                 策略组内容区()
             case .网络活动:

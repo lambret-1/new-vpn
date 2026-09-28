@@ -104,7 +104,7 @@ private struct 内容列表栏: View {
             }
             .contentShape(Rectangle())
             .onTapGesture {
-                状态.保存选中节点(节点ID: 节点.id)
+                状态.当前节点ID = 节点.id
                 // VPN连接状态下实时切换节点
                 隧道管理.切换节点并重载(节点ID: 节点.id, 节点名称: 节点.名称)
             }

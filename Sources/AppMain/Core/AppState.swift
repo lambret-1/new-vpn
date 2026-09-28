@@ -261,8 +261,6 @@ final class AppState: ObservableObject {
         加载模拟数据()
         加载订阅列表()
         加载持久化节点()
-        // 无论是否有持久化节点，最后都恢复上次选中节点
-        恢复上次选中节点()
     }
 
     // MARK: - 节点持久化
@@ -303,37 +301,6 @@ final class AppState: ObservableObject {
 
         // 重新生成分组
         节点分组列表 = Mock数据.生成节点分组(节点列表: 节点列表)
-    }
-
-    // MARK: - 记住选中节点
-
-    /// UserDefaults 键：上次选中节点的稳定标识
-    private let 上次选中节点键 = "上次选中节点稳定标识"
-
-    /// 恢复上次选中的节点
-    private func 恢复上次选中节点() {
-        guard let 稳定标识 = UserDefaults.standard.string(forKey: 上次选中节点键),
-              !稳定标识.isEmpty else {
-            // 没有记录，选中第一个
-            当前节点ID = 节点列表.first?.id
-            return
-        }
-
-        // 根据稳定标识查找节点
-        if let 节点 = 节点列表.first(where: { $0.稳定标识 == 稳定标识 }) {
-            当前节点ID = 节点.id
-        } else {
-            // 找不到，选中第一个
-            当前节点ID = 节点列表.first?.id
-        }
-    }
-
-    /// 保存当前选中节点（切换节点时调用）
-    func 保存选中节点(节点ID: UUID) {
-        当前节点ID = 节点ID
-        if let 节点 = 节点列表.first(where: { $0.id == 节点ID }) {
-            UserDefaults.standard.set(节点.稳定标识, forKey: 上次选中节点键)
-        }
     }
 
     // MARK: - 当前节点便捷属性
@@ -418,7 +385,6 @@ final class AppState: ObservableObject {
         日志列表 = Mock数据.生成日志()
         抓包列表 = Mock数据.生成抓包会话()
         节点分组列表 = Mock数据.生成节点分组(节点列表: 节点列表)
-        // 不在此处设置当前节点ID，由恢复上次选中节点()统一处理
     }
 
     // MARK: - 分组测速
@@ -480,11 +446,6 @@ final class AppState: ObservableObject {
         节点列表.removeAll { $0.来源类型 == "订阅导入" && $0.分组 == 订阅.名称 }
         节点分组列表 = Mock数据.生成节点分组(节点列表: 节点列表)
         保存持久化节点()
-
-        // 如果当前选中节点被删除，恢复选中节点或选中第一个
-        if 当前节点 == nil {
-            恢复上次选中节点()
-        }
     }
 
     /// 删除单个节点
@@ -573,11 +534,6 @@ final class AppState: ObservableObject {
 
         // 持久化保存
         保存持久化节点()
-
-        // 如果当前选中节点被删除，恢复选中节点或选中第一个
-        if 当前节点 == nil {
-            恢复上次选中节点()
-        }
     }
 
     /// 获取指定订阅解析出的节点

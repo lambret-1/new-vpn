@@ -1676,8 +1676,8 @@ private struct 编辑订阅页面: View {
 
                         // 订阅信息
                         VStack(alignment: .leading, spacing: 8) {
-                            信息行(标签: "节点数量", 值: "\(订阅.节点数量) 个")
                             信息行(标签: "上次更新", 值: 订阅.上次更新显示)
+                            信息行(标签: "地址", 值: 订阅.地址显示)
                         }
                         .padding(.top, 8)
                     }

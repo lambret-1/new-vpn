@@ -16,8 +16,10 @@ final class VPN扩展内存监控器: ObservableObject {
 
     /// 当前 VPN 扩展内存占用（字节）
     @Published private(set) var 当前占用字节: UInt64 = 0
-    /// 采样定时器
-    private var 采样定时器: Timer?
+    /// 采样定时器（使用DispatchSourceTimer，不受RunLoop模式影响，确保稳定刷新）
+    private var 采样定时器: DispatchSourceTimer?
+    /// 定时器队列
+    private let 定时器队列 = DispatchQueue(label: "com.newvpn.tunnelMemoryMonitor", qos: .utility)
     /// App Group UserDefaults
     private var 共享默认: UserDefaults? {
         UserDefaults(suiteName: "group.com.newvpn.app")
@@ -33,16 +35,19 @@ final class VPN扩展内存监控器: ObservableObject {
         停止监控()
         // 立即读取一次
         读取扩展内存()
-        let 新定时器 = Timer.scheduledTimer(withTimeInterval: 间隔, repeats: true) { [weak self] _ in
+
+        let 定时器 = DispatchSource.makeTimerSource(queue: 定时器队列)
+        定时器.schedule(deadline: .now() + 间隔, repeating: 间隔, leeway: .milliseconds(100))
+        定时器.setEventHandler { [weak self] in
             self?.读取扩展内存()
         }
-        采样定时器 = 新定时器
-        RunLoop.main.add(新定时器, forMode: .common)
+        定时器.resume()
+        采样定时器 = 定时器
     }
 
     /// 停止 VPN 扩展内存监控
     func 停止监控() {
-        采样定时器?.invalidate()
+        采样定时器?.cancel()
         采样定时器 = nil
     }
 

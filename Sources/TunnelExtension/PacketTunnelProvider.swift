@@ -76,6 +76,8 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     private var 重连定时器: Timer?
     /// 是否正在重连中
     private var 正在重连 = false
+    /// 内存采样定时器（独立DispatchSourceTimer，确保稳定采样写入）
+    private var 内存采样定时器: DispatchSourceTimer?
 
     /// 本地抓包代理
     private var 本地抓包代理: 本地HTTP代理?
@@ -203,6 +205,9 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                 // 启动统计定时器
                 self.启动统计定时器()
 
+                // 启动独立内存采样定时器（确保扩展内存稳定写入App Group）
+                self.启动内存采样定时器()
+
                 // 启动热更新轮询定时器
                 self.启动热更新定时器()
 
@@ -241,6 +246,9 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
         // 停止统计定时器
         停止统计定时器()
+
+        // 停止内存采样定时器
+        停止内存采样定时器()
 
         // 停止热更新定时器
         停止热更新定时器()
@@ -639,6 +647,30 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         }
 
         return UInt64(任务信息.resident_size)
+    }
+
+    // MARK: - 内存采样定时器
+
+    /// 启动独立内存采样定时器（每秒采样一次扩展内存写入App Group）
+    private func 启动内存采样定时器() {
+        停止内存采样定时器()
+
+        let 定时器 = DispatchSource.makeTimerSource(queue: 扩展数据队列)
+        定时器.schedule(deadline: .now(), repeating: 1.0, leeway: .milliseconds(100))
+        定时器.setEventHandler { [weak self] in
+            guard let self = self, let 共享默认 = self.共享默认 else { return }
+            let 扩展内存 = self.获取当前进程内存占用()
+            共享默认.set(扩展内存, forKey: "tunnelMemoryBytes")
+            共享默认.synchronize()
+        }
+        定时器.resume()
+        内存采样定时器 = 定时器
+    }
+
+    /// 停止内存采样定时器
+    private func 停止内存采样定时器() {
+        内存采样定时器?.cancel()
+        内存采样定时器 = nil
     }
 
     // MARK: - DNS 查询记录

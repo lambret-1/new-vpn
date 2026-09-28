@@ -175,7 +175,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     }
 
     /// 启动 sing-box 内核并回调完成
-    private func 启动内核并完成(completionHandler: (Error?) -> Void) {
+    private func 启动内核并完成(completionHandler: @escaping (Error?) -> Void) {
             // 启动 sing-box 内核
             self.启动SingBox内核 { 内核启动成功 in
                 if 内核启动成功 {

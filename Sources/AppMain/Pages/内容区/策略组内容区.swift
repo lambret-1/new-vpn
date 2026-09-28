@@ -59,7 +59,7 @@ private struct 策略组卡片: View {
             HStack {
                 Text(组.名称)
                     .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.主文字)
+                    .foregroundColor(.primary)
                 Spacer()
                 Text(组.类型标题)
                     .font(.system(size: 11, weight: .medium))
@@ -77,7 +77,7 @@ private struct 策略组卡片: View {
                     .font(.system(size: 14))
                 Text(组.当前选中)
                     .font(.system(size: 14))
-                    .foregroundColor(.主文字)
+                    .foregroundColor(.primary)
             }
 
             // 节点数

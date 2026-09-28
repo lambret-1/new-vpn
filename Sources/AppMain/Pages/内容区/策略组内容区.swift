@@ -19,14 +19,14 @@ struct 策略组内容区: View {
     /// 搜索关键词
     @State private var 搜索关键词 = ""
     /// 排序方式
-    @State private var 排序方式: 排序方式 = .默认
+    @State private var 排序方式: 策略组排序方式 = .默认
     /// 批量测速中的组名
     @State private var 批量测速中组: String?
     /// 批量测速进度
     @State private var 批量测速进度: (已测: Int, 总数: Int) = (0, 0)
 
     /// 排序方式枚举
-    enum 排序方式: String, CaseIterable {
+    enum 策略组排序方式: String, CaseIterable {
         case 默认 = "默认"
         case 延迟升序 = "延迟↑"
         case 延迟降序 = "延迟↓"
@@ -521,8 +521,8 @@ struct 策略组模型: Identifiable {
     let 当前选中: String
     /// 组内节点数
     let 节点数量: Int
-    /// 组内节点名称列表
-    let 节点列表: [String]
+    /// 组内节点名称列表（var 支持排序修改）
+    var 节点列表: [String]
     /// 节点延迟字典（节点名: 延迟毫秒）
     let 节点延迟: [String: Int]
     /// 是否正在测速

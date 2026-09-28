@@ -145,8 +145,6 @@ private struct 主内容区: View {
             switch 状态.当前顶部卡片 {
             case .节点:
                 节点内容区()
-            case .策略组:
-                策略组内容区()
             case .网络活动:
                 网络活动内容区()
             case .重写规则:

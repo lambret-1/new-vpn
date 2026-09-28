@@ -460,11 +460,11 @@ private struct 节点双卡片: View {
         .padding(.vertical, 10)
         .frame(height: 100)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(是否选中 ? Color.主题色.opacity(0.12) : Color.卡片背景)
+        .background(Color.卡片背景)
         .cornerRadius(12)
         .overlay(
             RoundedRectangle(cornerRadius: 12)
-                .stroke(是否选中 ? Color.主题色.opacity(0.5) : Color.clear, lineWidth: 1)
+                .stroke(是否选中 ? Color.主题色 : Color.clear, lineWidth: 2)
         )
         .contentShape(Rectangle())
         .onTapGesture {

@@ -62,25 +62,6 @@ private struct 功能卡片: View {
     /// 点击回调
     let 点击: () -> Void
 
-    /// 全局应用状态（用于策略组卡片显示实时状态）
-    @EnvironmentObject private var 状态: AppState
-
-    /// 策略组当前选中节点（取第一个策略组）
-    private var 策略组当前节点: String? {
-        guard 类型 == .策略组,
-              let 第一个组 = 状态.策略组列表.first,
-              !第一个组.当前选中.isEmpty else { return nil }
-        return 第一个组.当前选中
-    }
-
-    /// 策略组当前节点延迟
-    private var 策略组延迟: String? {
-        guard 类型 == .策略组,
-              let 第一个组 = 状态.策略组列表.first,
-              !第一个组.当前选中.isEmpty else { return nil }
-        return 第一个组.延迟文本(第一个组.当前选中)
-    }
-
     var body: some View {
         Button(action: 点击) {
             ZStack(alignment: .topTrailing) {
@@ -93,24 +74,6 @@ private struct 功能卡片: View {
                     Text(类型.标题)
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(.white)
-                    // 策略组卡片显示当前节点和延迟
-                    if let 节点 = 策略组当前节点 {
-                        HStack(spacing: 3) {
-                            Text(节点)
-                                .font(.system(size: 9))
-                                .foregroundColor(.white.opacity(0.9))
-                                .lineLimit(1)
-                            if let 延迟 = 策略组延迟 {
-                                Text(延迟)
-                                    .font(.system(size: 9, weight: .medium))
-                                    .foregroundColor(.white.opacity(0.9))
-                            }
-                        }
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Color.white.opacity(0.2))
-                        .cornerRadius(4)
-                    }
                     Spacer(minLength: 0)
                 }
                 .frame(width: 宽度, height: 高度)

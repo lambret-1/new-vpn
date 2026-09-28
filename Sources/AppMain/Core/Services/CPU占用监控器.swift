@@ -7,9 +7,11 @@
 
 import Foundation
 import MachO
+import SwiftUI
+import Combine
 
 /// CPU 占用监控器：定期采样当前进程 CPU 使用率
-final class CPU占用监控器 {
+final class CPU占用监控器: ObservableObject {
     /// 共享单例
     static let 共享 = CPU占用监控器()
 

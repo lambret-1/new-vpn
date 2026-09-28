@@ -1050,7 +1050,10 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
     /// 重新加载 sing-box 内核配置
     private func 重载SingBox配置() {
-        guard singBox运行中 else { return }
+        guard singBox运行中 else {
+            记录扩展日志(级别: "警告", 模块: "sing-box", 内容: "内核未运行，跳过重载")
+            return
+        }
 
         guard let 配置路径 = singBox配置路径,
               let 配置数据 = try? Data(contentsOf: URL(fileURLWithPath: 配置路径)),
@@ -1062,7 +1065,34 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         日志.info("正在重新加载 sing-box 配置")
         记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "正在重新加载配置...")
 
-        _ = singBox桥接.重载配置(配置内容: 配置内容)
+        // 先停止当前内核
+        singBox桥接.停止内核()
+        singBox运行中 = false
+
+        // 重新获取 TUN 文件描述符（停止内核后原 fd 可能已失效）
+        let libboxFD = LibboxGetTunnelFileDescriptor()
+        var tun文件描述符 = libboxFD
+        if tun文件描述符 < 0 {
+            var 获取错误: NSError?
+            let 反射FD = Libbox平台接口OC.安全获取文件描述符(packetFlow, error: &获取错误)
+            tun文件描述符 = 反射FD
+            记录扩展日志(级别: "警告", 模块: "sing-box", 内容: "重载时 LibboxGetTunnelFileDescriptor 无效，使用反射提取 fd=\(反射FD)")
+        }
+
+        guard tun文件描述符 >= 0 else {
+            记录扩展日志(级别: "错误", 模块: "sing-box", 内容: "重载失败：无法获取有效 TUN 文件描述符")
+            return
+        }
+
+        // 使用新配置重启内核
+        let 成功 = singBox桥接.启动内核(配置内容: 配置内容, tun文件描述符: tun文件描述符)
+        if 成功 {
+            singBox运行中 = true
+            记录扩展日志(级别: "信息", 模块: "sing-box", 内容: "配置重载成功，内核已重启")
+        } else {
+            singBox运行中 = false
+            记录扩展日志(级别: "错误", 模块: "sing-box", 内容: "配置重载失败，内核启动失败，请查看上方错误日志")
+        }
     }
 
     /// 获取 sing-box 内核统计

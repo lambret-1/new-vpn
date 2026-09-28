@@ -53,8 +53,12 @@ final class 本地HTTP代理 {
     // MARK: - 启动/停止
 
     /// 启动代理服务器
-    func 启动() {
-        guard !是否运行中 else { return }
+    /// - Parameter 完成: 监听器进入 ready 状态后回调（主线程）；超时 2 秒也回调（避免阻塞内核启动）
+    func 启动(完成: ((Bool) -> Void)? = nil) {
+        guard !是否运行中 else {
+            完成?(true)
+            return
+        }
 
         let 参数 = NWParameters.tcp
         参数.allowLocalEndpointReuse = true
@@ -62,20 +66,29 @@ final class 本地HTTP代理 {
         do {
             监听器 = try NWListener(using: 参数, on: NWEndpoint.Port(integerLiteral: 监听端口))
         } catch {
-            扩展日志记录器.共享.调试("抓包代理", "创建监听器失败：\(error.localizedDescription)")
+            扩展日志记录器.共享.错误("抓包代理", "创建监听器失败：\(error.localizedDescription)")
+            完成?(false)
             return
         }
+
+        // 用信号量等待 ready，保证调用方在 sing-box 内核启动前完成端口绑定
+        let 信号量 = DispatchSemaphore(value: 0)
+        var 启动成功 = false
 
         监听器?.stateUpdateHandler = { [weak self] 状态 in
             switch 状态 {
             case .ready:
                 self?.是否运行中 = true
-                扩展日志记录器.共享.调试("抓包代理", "已启动，监听 127.0.0.1:\(self?.监听端口 ?? 0)")
+                启动成功 = true
+                扩展日志记录器.共享.信息("抓包代理", "监听 127.0.0.1:\(self?.监听端口 ?? 0) 已就绪")
+                信号量.signal()
             case .failed(let 错误):
-                扩展日志记录器.共享.调试("抓包代理", "监听器失败：\(错误.localizedDescription)")
+                扩展日志记录器.共享.错误("抓包代理", "监听器失败：\(错误.localizedDescription)")
                 self?.是否运行中 = false
+                信号量.signal()
             case .cancelled:
                 self?.是否运行中 = false
+                信号量.signal()
             default:
                 break
             }
@@ -87,6 +100,14 @@ final class 本地HTTP代理 {
         }
 
         监听器?.start(queue: 连接队列)
+
+        // 后台等待 ready（最多 2 秒），然后回调
+        DispatchQueue.global(qos: .userInitiated).async {
+            _ = 信号量.wait(timeout: .now() + 2.0)
+            DispatchQueue.main.async {
+                完成?(启动成功)
+            }
+        }
     }
 
     /// 停止代理服务器

@@ -141,37 +141,46 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                 return
             }
 
+            // 先启动本地抓包/MITM 代理并等待监听就绪，再启动 sing-box 内核。
+            // 否则内核启动后立即按路由规则 dial 127.0.0.1:8888，listener 未就绪导致 i/o timeout。
+            let 共享默认 = UserDefaults(suiteName: "group.com.newvpn.app")
+            let 抓包启用 = 共享默认?.bool(forKey: "httpCaptureEnabled") ?? false
+            let MITM启用 = 共享默认?.bool(forKey: "mitmEnabled") ?? false
+
+            if MITM启用 {
+                let 证书PEM = 共享默认?.string(forKey: "mitmCACertificate") ?? ""
+                let 私钥PEM = 共享默认?.string(forKey: "mitmCAPrivateKey") ?? ""
+                if !证书PEM.isEmpty && !私钥PEM.isEmpty {
+                    let 加载成功 = MITM证书签发器.共享.加载CA证书(证书PEM: 证书PEM, 私钥PEM: 私钥PEM)
+                    self.记录扩展日志(级别: 加载成功 ? "信息" : "错误",
+                                      模块: "MITM",
+                                      内容: 加载成功 ? "MITM CA证书和私钥加载成功" : "MITM CA证书或私钥加载失败，TLS解密功能不可用")
+                } else {
+                    self.记录扩展日志(级别: "错误", 模块: "MITM", 内容: "MITM CA证书为空，解密功能不可用")
+                }
+            }
+
+            if 抓包启用 || MITM启用 {
+                // 同步等待 listener ready（最多 2 秒），再启动内核
+                本地HTTP代理.共享.启动 { 已就绪 in
+                    self.记录扩展日志(级别: 已就绪 ? "信息" : "错误",
+                                      模块: "抓包",
+                                      内容: 已就绪 ? "本地代理 127.0.0.1:8888 监听就绪" : "本地代理监听 8888 失败/超时")
+                    self.启动内核并完成(completionHandler: completionHandler)
+                }
+            } else {
+                self.启动内核并完成(completionHandler: completionHandler)
+            }
+        }
+    }
+
+    /// 启动 sing-box 内核并回调完成
+    private func 启动内核并完成(completionHandler: (Error?) -> Void) {
             // 启动 sing-box 内核
             self.启动SingBox内核 { 内核启动成功 in
                 if 内核启动成功 {
                     self.日志.info("sing-box 内核启动成功，由内核直接处理数据包")
                     self.singBox运行中 = true
-
-                    // 检查抓包或 MITM 是否启用，启用则启动本地 HTTP 代理
-                    let 共享默认 = UserDefaults(suiteName: "group.com.newvpn.app")
-                    let 抓包启用 = 共享默认?.bool(forKey: "httpCaptureEnabled") ?? false
-                    let MITM启用 = 共享默认?.bool(forKey: "mitmEnabled") ?? false
-                    if 抓包启用 || MITM启用 {
-                        // MITM 启用时加载 CA 证书到签发器
-                        if MITM启用 {
-                            let 证书PEM = 共享默认?.string(forKey: "mitmCACertificate") ?? ""
-                            let 私钥PEM = 共享默认?.string(forKey: "mitmCAPrivateKey") ?? ""
-                            if !证书PEM.isEmpty && !私钥PEM.isEmpty {
-                                let 加载成功 = MITM证书签发器.共享.加载CA证书(证书PEM: 证书PEM, 私钥PEM: 私钥PEM)
-                                if 加载成功 {
-                                    self.记录扩展日志(级别: "信息", 模块: "MITM", 内容: "MITM CA证书和私钥加载成功，本地代理启动 127.0.0.1:8888")
-                                } else {
-                                    self.记录扩展日志(级别: "错误", 模块: "MITM", 内容: "MITM CA证书或私钥加载失败，TLS解密功能不可用")
-                                }
-                            } else {
-                                self.记录扩展日志(级别: "错误", 模块: "MITM", 内容: "MITM CA证书为空，解密功能不可用")
-                            }
-                        }
-                        if 抓包启用 {
-                            self.记录扩展日志(级别: "信息", 模块: "抓包", 内容: "HTTP抓包已启用，本地代理启动 127.0.0.1:8888")
-                        }
-                        本地HTTP代理.共享.启动()
-                    }
                 } else {
                     self.日志.error("sing-box 内核启动失败，使用基础数据包处理")
                     // 仅在内核启动失败时才启动基础数据包读取循环
@@ -193,7 +202,6 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                 self.日志.info("隧道启动成功")
                 completionHandler(nil)
             }
-        }
     }
 
     /// 隧道停止完成回调
@@ -1074,26 +1082,36 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                 // 3. 修改配置文件，添加或移除抓包入站
                 try self.更新抓包配置(抓包启用: 指令.抓包启用)
 
-                // 4. 如果抓包启用，启动本地抓包代理
+                // 4. 如果抓包启用，启动本地抓包代理并等待 ready
                 if 指令.抓包启用 {
-                    本地HTTP代理.共享.启动()
-                    self.记录扩展日志(级别: "信息", 模块: "热更新", 内容: "本地抓包代理已启动")
-                }
-
-                // 5. 重新启动 sing-box 内核
-                self.启动SingBox内核 { 成功 in
-                    if 成功 {
-                        self.singBox运行中 = true
-                        抓包存储管理器.共享.写入热更新结果(指令ID: 指令.指令ID, 成功: true)
-                        self.记录扩展日志(级别: "信息", 模块: "热更新", 内容: "热更新成功，sing-box 内核已重启")
-                    } else {
-                        抓包存储管理器.共享.写入热更新结果(指令ID: 指令.指令ID, 成功: false, 错误信息: "sing-box 内核启动失败")
-                        self.记录扩展日志(级别: "错误", 模块: "热更新", 内容: "热更新失败：sing-box 内核启动失败")
+                    本地HTTP代理.共享.启动 { 已就绪 in
+                        self.记录扩展日志(级别: 已就绪 ? "信息" : "错误",
+                                          模块: "热更新",
+                                          内容: 已就绪 ? "本地抓包代理已启动 127.0.0.1:8888" : "本地代理监听 8888 失败")
+                        // 5. 本地代理就绪后再启动 sing-box 内核，避免 dial 超时
+                        self.启动热更新后内核(指令: 指令)
                     }
+                } else {
+                    // 未启用抓包，直接重启内核
+                    self.启动热更新后内核(指令: 指令)
                 }
             } catch {
                 抓包存储管理器.共享.写入热更新结果(指令ID: 指令.指令ID, 成功: false, 错误信息: error.localizedDescription)
                 self.记录扩展日志(级别: "错误", 模块: "热更新", 内容: "热更新失败：\(error.localizedDescription)")
+            }
+        }
+    }
+
+    /// 热更新后重启 sing-box 内核
+    private func 启动热更新后内核(指令: 抓包存储管理器.热更新指令) {
+        self.启动SingBox内核 { 成功 in
+            if 成功 {
+                self.singBox运行中 = true
+                抓包存储管理器.共享.写入热更新结果(指令ID: 指令.指令ID, 成功: true)
+                self.记录扩展日志(级别: "信息", 模块: "热更新", 内容: "热更新成功，sing-box 内核已重启")
+            } else {
+                抓包存储管理器.共享.写入热更新结果(指令ID: 指令.指令ID, 成功: false, 错误信息: "sing-box 内核启动失败")
+                self.记录扩展日志(级别: "错误", 模块: "热更新", 内容: "热更新失败：sing-box 内核启动失败")
             }
         }
     }

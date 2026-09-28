@@ -18,12 +18,14 @@ struct 网络活动内容区: View {
     @StateObject private var CPU监控 = CPU占用监控器.共享
     /// 内存占用监控器
     @StateObject private var 内存监控 = 内存占用监控器.共享
+    /// VPN 扩展内存监控器
+    @StateObject private var 扩展内存监控 = VPN扩展内存监控器.共享
     /// 当前选中的连接（用于显示详情）
     @State private var 选中连接: 网络连接模型?
 
     var body: some View {
         VStack(spacing: 16) {
-            // TCP/MITM/CPU/内存 统计区
+            // TCP/扩展内存/CPU/内存 统计区
             流量统计区(
                 tcp数量: tcp数量,
                 CPU使用率: CPU监控.当前使用率,
@@ -31,6 +33,10 @@ struct 网络活动内容区: View {
                 内存占用: 内存监控.当前占用百分比,
                 内存等级: 内存监控.等级,
                 内存显示: 内存监控.占用显示,
+                扩展内存: 扩展内存监控.当前占用字节,
+                扩展内存等级: 扩展内存监控.等级,
+                扩展内存显示: 扩展内存监控.占用显示,
+                扩展内存百分比: 扩展内存监控.占用百分比,
                 总下行: 隧道管理.流量统计.下行字节,
                 总上行: 隧道管理.流量统计.上行字节
             )
@@ -60,10 +66,12 @@ struct 网络活动内容区: View {
         .onAppear {
             CPU监控.开始监控(间隔: 2.0)
             内存监控.开始监控(间隔: 2.0)
+            扩展内存监控.开始监控(间隔: 2.0)
         }
         .onDisappear {
             CPU监控.停止监控()
             内存监控.停止监控()
+            扩展内存监控.停止监控()
         }
         .sheet(item: $选中连接) { 连接 in
             连接详情页面(连接: 连接)
@@ -88,6 +96,10 @@ private struct 流量统计区: View {
     let 内存占用: Double
     let 内存等级: 内存占用监控器.内存等级
     let 内存显示: String
+    let 扩展内存: UInt64
+    let 扩展内存等级: VPN扩展内存监控器.扩展内存等级
+    let 扩展内存显示: String
+    let 扩展内存百分比: Double
     let 总下行: UInt64
     let 总上行: UInt64
 
@@ -105,8 +117,8 @@ private struct 流量统计区: View {
                 单位: "连接"
             )
 
-            // MITM 解密快捷开关
-            MITM开关卡片()
+            // VPN 扩展内存可视化
+            VPN扩展内存卡片(占用: 扩展内存百分比, 等级: 扩展内存等级, 显示: 扩展内存显示)
 
             // CPU 占用可视化
             CPU占用卡片(使用率: CPU使用率, 等级: CPU等级)
@@ -249,6 +261,62 @@ private struct 流量统计区: View {
 
             // 底部说明
             Text(String(format: "%.1f%%", 占用))
+                .font(.system(size: 10))
+                .foregroundColor(.secondary)
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(Color.页面背景)
+        .cornerRadius(10)
+    }
+
+    /// VPN 扩展内存可视化卡片（带进度条，样式与CPU/内存卡片一致）
+    private func VPN扩展内存卡片(占用: Double, 等级: VPN扩展内存监控器.扩展内存等级, 显示: String) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // 标题行
+            HStack(spacing: 6) {
+                Image(systemName: "point.3.connected.trianglepath.dotted")
+                    .font(.system(size: 14))
+                    .foregroundColor(等级.颜色)
+                Text("扩展")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.secondary)
+                Spacer()
+                Text(等级.文字)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(等级.颜色)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(等级.颜色.opacity(0.15))
+                    .cornerRadius(4)
+            }
+
+            // 数值
+            Text(显示)
+                .font(.system(size: 22, weight: .bold))
+                .foregroundColor(.primary)
+                .lineLimit(1)
+
+            // 进度条
+            GeometryReader { 几何 in
+                ZStack(alignment: .leading) {
+                    // 背景轨道
+                    RoundedRectangle(cornerRadius: 3)
+                        .fill(Color.secondary.opacity(0.2))
+                        .frame(height: 6)
+
+                    // 进度填充
+                    RoundedRectangle(cornerRadius: 3)
+                        .fill(等级.颜色)
+                        .frame(width: 几何.size.width * CGFloat(min(占用 / 100, 1.0)), height: 6)
+                }
+            }
+            .frame(height: 6)
+
+            // 底部说明
+            Text("VPN隧道进程")
                 .font(.system(size: 10))
                 .foregroundColor(.secondary)
                 .lineLimit(1)

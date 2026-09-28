@@ -602,10 +602,32 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             下行字节 = singBox桥接.下行字节
         }
 
+        // 采样 VPN 扩展进程内存占用，写入共享存储供主 APP 显示
+        let 扩展内存 = 获取当前进程内存占用()
+        共享默认.set(扩展内存, forKey: "tunnelMemoryBytes")
+
         共享默认.set(上行字节, forKey: "uploadBytes")
         共享默认.set(下行字节, forKey: "downloadBytes")
         共享默认.set(是否运行中, forKey: "tunnelRunning")
         共享默认.set(Date(), forKey: "lastStatsUpdate")
+    }
+
+    /// 获取当前进程内存占用（字节）
+    private func 获取当前进程内存占用() -> UInt64 {
+        var 任务信息 = mach_task_basic_info()
+        var 信息数 = mach_msg_type_number_t(MemoryLayout<mach_task_basic_info>.size / MemoryLayout<integer_t>.size)
+
+        let 结果 = withUnsafeMutablePointer(to: &任务信息) { 指针 in
+            指针.withMemoryRebound(to: integer_t.self, capacity: Int(信息数)) { 重绑定指针 in
+                task_info(mach_task_self_, task_flavor_t(MACH_TASK_BASIC_INFO), 重绑定指针, &信息数)
+            }
+        }
+
+        guard 结果 == KERN_SUCCESS else {
+            return 0
+        }
+
+        return UInt64(任务信息.resident_size)
     }
 
     // MARK: - DNS 查询记录

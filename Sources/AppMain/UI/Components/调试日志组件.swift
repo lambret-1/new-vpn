@@ -23,10 +23,6 @@ struct 调试日志内容区: View {
     @State private var 选中级别: 日志级别?
     /// 是否显示设置面板
     @State private var 显示设置 = false
-    /// 日志输出窗口的 ScrollView 代理
-    @State private var 滚动代理: ScrollViewProxy?
-    /// 是否显示回到顶部按钮（用户向下滚动浏览历史时显示）
-    @State private var 显示回到顶部按钮 = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -264,6 +260,15 @@ struct 调试日志内容区: View {
 
     // MARK: - 日志输出窗口
 
+    /// 日志纯文本（正序：旧日志在上，新日志在下，自动滚动到底部）
+    private var 日志纯文本: String {
+        let 日期格式器 = DateFormatter()
+        日期格式器.dateFormat = "HH:mm:ss.SSS"
+        return 日志管理.筛选后的日志列表.reversed().map { 日志 in
+            "[\(日期格式器.string(from: 日志.时间))] [\(日志.级别.rawValue)] [\(日志.模块)] \(日志.内容)"
+        }.joined(separator: "\n")
+    }
+
     private var 日志输出窗口: some View {
         ZStack {
             if 日志管理.是否加载中 {
@@ -283,89 +288,13 @@ struct 调试日志内容区: View {
                     Spacer()
                 }
             } else {
-                日志列表
+                // 纯文本日志视图：使用 UITextView 直接渲染，避免列表渲染卡顿
+                纯文本日志视图(日志文本: .constant(日志纯文本), 自动滚动到底部: true)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.页面背景)
-    }
-
-    private var 日志列表: some View {
-        ScrollViewReader { 代理 in
-            ZStack(alignment: .bottomTrailing) {
-                ScrollView {
-                    // 滚动位置检测（用于判断是否显示回到顶部按钮）
-                    几何检测视图()
-
-                    LazyVStack(spacing: 8, pinnedViews: []) {
-                        // 错误/警告/调试分组（可折叠）
-                        ForEach(日志管理.分组后的日志列表) { 分组 in
-                            日志分组视图(
-                                分组: 分组,
-                                简洁模式: 日志管理.简洁模式,
-                                复制回调: { 日志 in 复制单条日志(日志) }
-                            )
-                        }
-
-                        // 信息平铺显示（无分组）
-                        if !日志管理.未分组日志列表.isEmpty {
-                            LazyVStack(spacing: 日志管理.简洁模式 ? 2 : 4) {
-                                ForEach(日志管理.未分组日志列表) { 日志 in
-                                    日志行(
-                                        日志: 日志,
-                                        简洁模式: 日志管理.简洁模式,
-                                        复制回调: { 复制单条日志(日志) }
-                                    )
-                                    .id(日志.id)
-                                }
-                            }
-                        }
-                    }
-                    .padding(.horizontal, 15)
-                    .padding(.vertical, 8)
-                    // 顶部锚点ID，用于滚动到顶部
-                    .id("顶部锚点")
-                }
-                .onAppear {
-                    滚动代理 = 代理
-                }
-
-                // 回到顶部按钮（用户向下滚动浏览历史时显示）
-                if 显示回到顶部按钮 {
-                    Button {
-                        withAnimation {
-                            代理.scrollTo("顶部锚点", anchor: .top)
-                        }
-                    } label: {
-                        Image(systemName: "arrow.up.circle.fill")
-                            .font(.system(size: 36))
-                            .foregroundColor(.主题色)
-                            .background(Color.卡片背景)
-                            .clipShape(Circle())
-                            .shadow(radius: 4)
-                    }
-                    .padding(.trailing, 15)
-                    .padding(.bottom, 15)
-                    .transition(.opacity)
-                }
-            }
-        }
-    }
-
-    /// 滚动位置检测视图（通过PreferenceKey传递滚动偏移量）
-    private func 几何检测视图() -> some View {
-        GeometryReader { 几何 in
-            Color.clear
-                .preference(key: 滚动偏移偏好键.self, value: 几何.frame(in: .global).minY)
-        }
-        .frame(height: 0)
-        .onPreferenceChange(滚动偏移偏好键.self) { 偏移量 in
-            // 初始偏移量约为0（顶部），向下滚动时偏移量为负值
-            // 向下滚动超过100pt时显示回到顶部按钮
-            withAnimation {
-                显示回到顶部按钮 = 偏移量 < -100
-            }
-        }
     }
 
     // MARK: - 日志分组视图
@@ -902,6 +831,43 @@ private struct 分享视图: UIViewControllerRepresentable {
 
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {
         // 无需更新
+    }
+}
+
+// MARK: - 纯文本日志视图（UITextView 包装，高性能不卡顿）
+
+/// 纯文本日志视图：使用 UITextView 直接渲染纯文本，避免 SwiftUI 列表渲染开销
+struct 纯文本日志视图: UIViewRepresentable {
+    /// 日志文本
+    @Binding var 日志文本: String
+    /// 是否自动滚动到底部
+    var 自动滚动到底部: Bool = true
+
+    func makeUIView(context: Context) -> UITextView {
+        let textView = UITextView()
+        textView.isEditable = false
+        textView.isSelectable = true
+        textView.font = UIFont.monospacedSystemFont(ofSize: 11, weight: .regular)
+        textView.backgroundColor = .clear
+        textView.textColor = .label
+        textView.autocorrectionType = .no
+        textView.autocapitalizationType = .none
+        textView.spellCheckingType = .no
+        textView.textContainerInset = UIEdgeInsets(top: 8, left: 12, bottom: 8, right: 12)
+        textView.text = 日志文本
+        return textView
+    }
+
+    func updateUIView(_ uiView: UITextView, context: Context) {
+        // 只有文本变化时才更新，避免频繁重绘
+        if uiView.text != 日志文本 {
+            uiView.text = 日志文本
+            if 自动滚动到底部 {
+                // 滚动到底部
+                let 底部 = NSRange(location: max(0, 日志文本.count - 1), length: 1)
+                uiView.scrollRangeToVisible(底部)
+            }
+        }
     }
 }
 

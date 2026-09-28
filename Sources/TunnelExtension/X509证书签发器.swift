@@ -71,11 +71,16 @@ final class X509证书签发器 {
             ASN1编码器.空()
         ])
 
-        // 颁发者：从 CA 证书提取
-        guard let 颁发者 = 提取证书主题(证书: CA证书) else {
-            NSLog("[X509] 提取 CA 证书主题失败")
-            return nil
-        }
+        // 颁发者：直接构造与预生成 CA 证书完全一致的主题
+        // C=CN, ST=Guangdong, L=Dongguan, O=NewVPN, OU=MITM, CN=NewVPN MITM CA
+        let 颁发者 = 构造名称(属性: [
+            (ASN1编码器.OID.countryName, .可打印字符串("CN")),
+            (ASN1编码器.OID.stateOrProvinceName, .可打印字符串("Guangdong")),
+            (ASN1编码器.OID.localityName, .可打印字符串("Dongguan")),
+            (ASN1编码器.OID.organizationName, .可打印字符串("NewVPN")),
+            (ASN1编码器.OID.organizationalUnitName, .可打印字符串("MITM")),
+            (ASN1编码器.OID.commonName, .可打印字符串("NewVPN MITM CA"))
+        ])
 
         // 有效期
         let 现在 = Date()
@@ -214,17 +219,6 @@ final class X509证书签发器 {
 
         let 扩展序列 = ASN1编码器.序列(扩展列表)
         return ASN1编码器.上下文特定(.contextSpecific3, 值: 扩展序列)
-    }
-
-    // MARK: - 提取证书主题
-
-    /// 从 SecCertificate 提取主题名称的 DER 数据
-    private func 提取证书主题(证书: SecCertificate) -> Data? {
-        // SecCertificateCopyNormalizedSubjectSequence 返回 DER 编码的主题
-        if let 主题 = SecCertificateCopyNormalizedSubjectSequence(证书) as Data? {
-            return 主题
-        }
-        return nil
     }
 
     // MARK: - 签名

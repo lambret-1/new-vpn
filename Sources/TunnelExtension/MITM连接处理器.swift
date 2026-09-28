@@ -67,10 +67,11 @@ final class MITM连接处理器 {
 
         客户端连接.send(content: 响应数据, completion: .contentProcessed { [weak self] _ in
             guard let self = self else { return }
-            // 2. 初始化 SSL 服务端上下文
-            self.初始化SSL服务端()
-            // 3. 开始读取客户端数据并进行 TLS 握手
-            self.读取客户端数据()
+            // 2. 在处理队列中初始化 SSL 服务端并开始读取客户端数据
+            self.处理队列.async {
+                self.初始化SSL服务端()
+                self.读取客户端数据()
+            }
         })
     }
 

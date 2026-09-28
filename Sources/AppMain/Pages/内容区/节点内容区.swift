@@ -396,46 +396,16 @@ private struct 节点双卡片: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            // 顶部：协议标签 + 名称
+        VStack(alignment: .leading, spacing: 4) {
+            // 第一行：协议标签
             HStack(spacing: 4) {
                 Text(节点.协议.rawValue)
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(.system(size: 10, weight: .bold))
                     .foregroundColor(.white)
-                    .padding(.horizontal, 5)
+                    .padding(.horizontal, 6)
                     .padding(.vertical, 2)
                     .background(是否选中 ? Color.主题色 : Color.主题色.opacity(0.7))
                     .cornerRadius(4)
-
-                Text(节点.名称)
-                    .font(.system(size: 13, weight: 是否选中 ? .semibold : .regular))
-                    .lineLimit(1)
-                    .foregroundColor(.primary)
-            }
-
-            Spacer(minLength: 0)
-
-            // 中部：地址端口
-            Text("\(节点.地址):\(节点.端口)")
-                .font(.system(size: 11))
-                .foregroundColor(.secondary)
-                .lineLimit(1)
-
-            // 底部：延迟 + 选中标记
-            HStack(spacing: 4) {
-                if 测速管理器.节点测速状态[节点.id]?.是否测速中 == true {
-                    ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle(tint: .主题色))
-                        .scaleEffect(0.7)
-                } else if let 延迟 = 节点.测速数据?.延迟毫秒, 节点.测速数据?.成功 == true {
-                    Text("\(延迟)ms")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(延迟颜色)
-                } else {
-                    Text("未测速")
-                        .font(.system(size: 11))
-                        .foregroundColor(.secondary)
-                }
 
                 Spacer()
 
@@ -445,10 +415,50 @@ private struct 节点双卡片: View {
                         .foregroundColor(.主题色)
                 }
             }
+
+            // 第二行：节点名称
+            Text(节点.名称)
+                .font(.system(size: 13, weight: 是否选中 ? .semibold : .regular))
+                .lineLimit(1)
+                .foregroundColor(.primary)
+
+            // 第三行：域名/IP + 端口
+            Text("\(节点.地址):\(节点.端口)")
+                .font(.system(size: 11))
+                .foregroundColor(.secondary)
+                .lineLimit(1)
+
+            Spacer(minLength: 0)
+
+            // 第四行：延迟值
+            HStack(spacing: 4) {
+                if 测速管理器.节点测速状态[节点.id]?.是否测速中 == true {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: .主题色))
+                        .scaleEffect(0.7)
+                    Text("测速中")
+                        .font(.system(size: 11))
+                        .foregroundColor(.主题色)
+                } else if let 延迟 = 节点.测速数据?.延迟毫秒, 节点.测速数据?.成功 == true {
+                    Image(systemName: "bolt.fill")
+                        .font(.system(size: 10))
+                        .foregroundColor(延迟颜色)
+                    Text("\(延迟)ms")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(延迟颜色)
+                } else {
+                    Image(systemName: "bolt.slash")
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
+                    Text("未测速")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                }
+            }
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 10)
-        .frame(height: 90)
+        .frame(height: 100)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(是否选中 ? Color.主题色.opacity(0.12) : Color.卡片背景)
         .cornerRadius(12)

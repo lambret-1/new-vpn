@@ -63,7 +63,7 @@ private struct 策略组卡片: View {
                 Spacer()
                 Text(组.类型标题)
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(.白色)
+                    .foregroundColor(.white)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 3)
                     .background(组.类型颜色)

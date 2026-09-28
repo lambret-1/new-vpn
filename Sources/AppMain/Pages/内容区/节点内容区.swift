@@ -576,7 +576,7 @@ private struct 节点双卡片: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 6) {
             // 第一行：协议标签
             HStack(spacing: 4) {
                 Text(节点.协议.rawValue)
@@ -608,8 +608,6 @@ private struct 节点双卡片: View {
                 .foregroundColor(.secondary)
                 .lineLimit(1)
 
-            Spacer(minLength: 0)
-
             // 第四行：延迟值
             HStack(spacing: 4) {
                 if 测速管理器.节点测速状态[节点.id]?.是否测速中 == true {
@@ -638,7 +636,7 @@ private struct 节点双卡片: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 10)
-        .frame(height: 100)
+        .frame(height: 100, alignment: .top)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.卡片背景)
         .cornerRadius(12)

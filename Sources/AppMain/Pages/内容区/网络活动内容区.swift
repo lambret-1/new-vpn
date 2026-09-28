@@ -14,6 +14,8 @@ struct 网络活动内容区: View {
     @EnvironmentObject private var 状态: AppState
     /// 隧道管理器（获取真实流量统计）
     @EnvironmentObject private var 隧道管理: 隧道管理器
+    /// 当前选中的连接（用于显示详情）
+    @State private var 选中连接: 网络连接模型?
 
     var body: some View {
         VStack(spacing: 16) {
@@ -32,6 +34,10 @@ struct 网络活动内容区: View {
                 LazyVStack(spacing: 0) {
                     ForEach(状态.网络连接列表) { 连接 in
                         连接记录行(连接: 连接)
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                选中连接 = 连接
+                            }
                         if 连接.id != 状态.网络连接列表.last?.id {
                             Divider()
                                 .padding(.leading, 15)
@@ -43,6 +49,9 @@ struct 网络活动内容区: View {
             }
         }
         .padding(.horizontal, 15)
+        .fullScreenCover(item: $选中连接) { 连接 in
+            连接详情页面(连接: 连接)
+        }
     }
 
     /// TCP 连接数
@@ -411,6 +420,227 @@ private struct HTTP抓包开关卡片: View {
             抓包列表页面()
                 .environmentObject(隧道管理)
         }
+    }
+}
+
+// MARK: - 连接详情页面
+
+/// 连接详情页面：显示单个网络连接的完整信息
+struct 连接详情页面: View {
+    /// 连接数据
+    let 连接: 网络连接模型
+    /// 关闭页面回调
+    @Environment(\.dismiss) private var 关闭
+
+    /// 时间格式化器
+    private let 时间格式: DateFormatter = {
+        let 格式 = DateFormatter()
+        格式.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        return 格式
+    }()
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 16) {
+                    // 状态概览卡片
+                    状态概览卡片(连接: 连接)
+
+                    // 地址信息
+                    详情分组(标题: "地址信息") {
+                        详情行(标签: "目标地址", 值: 连接.域名 ?? "\(连接.远程地址):\(连接.远程端口)")
+                        详情分隔线()
+                        详情行(标签: "远程地址", 值: "\(连接.远程地址):\(连接.远程端口)")
+                        详情分隔线()
+                        详情行(标签: "本地地址", 值: "\(连接.本地地址):\(连接.本地端口)")
+                        if let 国家 = 连接.国家地区, !国家.isEmpty {
+                            详情分隔线()
+                            详情行(标签: "国家/地区", 值: 国家)
+                        }
+                    }
+
+                    // 连接信息
+                    详情分组(标题: "连接信息") {
+                        详情行(标签: "连接序号", 值: "#\(连接.序号)")
+                        详情分隔线()
+                        详情行(标签: "协议", 值: 连接.协议)
+                        详情分隔线()
+                        详情行(标签: "开始时间", 值: 时间格式.string(from: 连接.开始时间))
+                        详情分隔线()
+                        详情行(标签: "TLS握手", 值: "未记录")
+                        详情分隔线()
+                        详情行(标签: "连接状态", 值: 连接.已关闭 ? "已关闭" : "活跃中", 值颜色: 连接.已关闭 ? .secondary : .成功色)
+                        if let 状态码 = 连接.状态码 {
+                            详情分隔线()
+                            详情行(标签: "HTTP状态码", 值: "\(状态码)", 值颜色: 状态码颜色(状态码))
+                        }
+                    }
+
+                    // 分流与策略
+                    详情分组(标题: "分流与策略") {
+                        详情行(标签: "匹配规则", 值: 连接.匹配规则 ?? "未匹配")
+                        详情分隔线()
+                        详情行(标签: "出站策略", 值: 连接.出站策略, 值颜色: 连接.出站策略 == "direct" ? .成功色 : .主题色)
+                    }
+
+                    // 流量统计
+                    详情分组(标题: "流量统计") {
+                        详情行(标签: "上行流量", 值: 格式化字节(连接.上行字节))
+                        详情分隔线()
+                        详情行(标签: "下行流量", 值: 格式化字节(连接.下行字节))
+                        详情分隔线()
+                        详情行(标签: "总流量", 值: 格式化字节(连接.上行字节 + 连接.下行字节))
+                    }
+                }
+                .padding(15)
+            }
+            .background(Color.页面背景)
+            .navigationTitle("连接详情")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button {
+                        关闭()
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "chevron.left")
+                            Text("返回")
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// 状态码颜色
+    private func 状态码颜色(_ 码: Int) -> Color {
+        if 码 >= 200 && 码 < 300 { return .成功色 }
+        if 码 >= 300 && 码 < 400 { return .主题色 }
+        if 码 >= 400 && 码 < 500 { return .警告色 }
+        if 码 >= 500 { return .危险色 }
+        return .secondary
+    }
+
+    /// 格式化字节数
+    private func 格式化字节(_ 字节: Int64) -> String {
+        if 字节 < 1024 {
+            return "\(字节) B"
+        } else if 字节 < 1024 * 1024 {
+            return String(format: "%.2f KB", Double(字节) / 1024)
+        } else if 字节 < 1024 * 1024 * 1024 {
+            return String(format: "%.2f MB", Double(字节) / (1024 * 1024))
+        } else {
+            return String(format: "%.2f GB", Double(字节) / (1024 * 1024 * 1024))
+        }
+    }
+}
+
+// MARK: - 状态概览卡片
+
+private struct 状态概览卡片: View {
+    let 连接: 网络连接模型
+
+    var body: some View {
+        VStack(spacing: 12) {
+            // 域名/地址
+            Text(连接.域名 ?? "\(连接.远程地址):\(连接.远程端口)")
+                .font(.system(size: 18, weight: .bold))
+                .foregroundColor(.primary)
+                .lineLimit(2)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
+
+            // 状态标签
+            HStack(spacing: 8) {
+                // 协议标签
+                Text(连接.协议)
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(连接.协议 == "TCP" ? Color(red: 0.91, green: 0.36, blue: 0.20) : Color(red: 0.20, green: 0.55, blue: 0.91))
+                    .cornerRadius(6)
+
+                // 状态标签
+                Text(连接.已关闭 ? "已关闭" : "活跃中")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(连接.已关闭 ? Color.secondary : Color.成功色)
+                    .cornerRadius(6)
+
+                // 出站策略标签
+                Text(连接.出站策略 == "direct" ? "直连" : "代理")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(连接.出站策略 == "direct" ? Color.成功色 : Color.主题色)
+                    .cornerRadius(6)
+            }
+        }
+        .padding(.vertical, 20)
+        .padding(.horizontal, 16)
+        .background(Color.卡片背景)
+        .cornerRadius(12)
+    }
+}
+
+// MARK: - 详情分组
+
+private struct 详情分组<内容: View>: View {
+    let 标题: String
+    @ViewBuilder let 内容: () -> 内容
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(标题)
+                .font(.system(size: 13, weight: .bold))
+                .foregroundColor(.secondary)
+                .padding(.bottom, 8)
+                .padding(.leading, 4)
+
+            VStack(spacing: 0) {
+                内容()
+            }
+            .padding(.horizontal, 15)
+            .padding(.vertical, 4)
+            .background(Color.卡片背景)
+            .cornerRadius(12)
+        }
+    }
+}
+
+// MARK: - 详情行
+
+private struct 详情行: View {
+    let 标签: String
+    let 值: String
+    var 值颜色: Color = .primary
+
+    var body: some View {
+        HStack {
+            Text(标签)
+                .font(.system(size: 14))
+                .foregroundColor(.secondary)
+                .frame(width: 100, alignment: .leading)
+            Spacer()
+            Text(值)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(值颜色)
+                .multilineTextAlignment(.trailing)
+                .lineLimit(2)
+        }
+        .padding(.vertical, 10)
+    }
+}
+
+/// 详情分隔线
+private struct 详情分隔线: View {
+    var body: some View {
+        Divider()
+            .padding(.leading, 100)
     }
 }
 

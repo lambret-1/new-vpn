@@ -70,10 +70,10 @@ final class SingBox配置生成器 {
             clashApi: SingBoxClashAPI配置(
                 enabled: nil,
                 listen: nil,
-                externalController: "10.0.0.2/24"
+                externalController: "127.0.0.1:9090"
             )
         )
-        NSLog("[SingBox配置] Clash API 已启用：10.0.0.2/24")
+        NSLog("[SingBox配置] Clash API 已启用：127.0.0.1:9090")
 //127.0.0.1:9090
         return 配置
     }

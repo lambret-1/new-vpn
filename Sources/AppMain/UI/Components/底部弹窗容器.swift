@@ -199,6 +199,8 @@ private struct 设置视图: View {
     @State private var 显示重写规则 = false
     /// 是否显示 HTTP 抓包页面
     @State private var 显示抓包页面 = false
+    /// 是否显示崩溃日志报告页面
+    @State private var 显示崩溃日志 = false
 
     var body: some View {
         List {
@@ -392,6 +394,27 @@ private struct 设置视图: View {
                     }
                 }
                 .buttonStyle(PlainButtonStyle())
+
+                // 崩溃日志报告
+                Button {
+                    显示崩溃日志 = true
+                } label: {
+                    HStack {
+                        Label("崩溃日志报告", systemImage: "exclamationmark.triangle")
+                        Spacer()
+                        let 崩溃数量 = 崩溃日志收集器.共享.读取所有崩溃日志().count
+                        if 崩溃数量 > 0 {
+                            Text("\(崩溃数量) 条")
+                                .font(.system(size: 12))
+                                .foregroundColor(.red)
+                        }
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 13))
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .buttonStyle(PlainButtonStyle())
+
                 Label("开源许可", systemImage: "scroll")
             }
         }
@@ -442,6 +465,9 @@ private struct 设置视图: View {
         .sheet(isPresented: $显示抓包页面) {
             抓包列表页面()
                 .environmentObject(隧道管理)
+        }
+        .sheet(isPresented: $显示崩溃日志) {
+            崩溃日志报告页面()
         }
     }
 }
@@ -495,5 +521,228 @@ extension View {
     /// 添加底部弹窗容器
     func 底部弹窗(弹窗类型: Binding<底部弹窗类型?>) -> some View {
         modifier(底部弹窗容器(弹窗类型: 弹窗类型))
+    }
+}
+
+// MARK: - 崩溃日志报告页面
+
+/// 崩溃日志报告页面
+private struct 崩溃日志报告页面: View {
+    /// 崩溃日志列表
+    @State private var 崩溃日志列表: [崩溃日志模型] = []
+    /// 选中的崩溃日志（用于显示详情）
+    @State private var 选中日志: 崩溃日志模型?
+    /// 显示清除确认弹窗
+    @State private var 显示清除确认 = false
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if 崩溃日志列表.isEmpty {
+                    // 空状态
+                    VStack(spacing: 16) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 64))
+                            .foregroundColor(.成功色)
+                        Text("暂无崩溃日志")
+                            .font(.system(size: 17, weight: .medium))
+                        Text("APP 运行稳定，未检测到崩溃")
+                            .font(.system(size: 14))
+                            .foregroundColor(.secondary)
+                    }
+                } else {
+                    List {
+                        ForEach(崩溃日志列表) { 日志 in
+                            Button {
+                                选中日志 = 日志
+                            } label: {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    HStack {
+                                        Image(systemName: "exclamationmark.triangle.fill")
+                                            .font(.system(size: 14))
+                                            .foregroundColor(.red)
+                                        Text(日志.名称)
+                                            .font(.system(size: 15, weight: .medium))
+                                            .foregroundColor(.primary)
+                                        Spacer()
+                                        Text(日志.时间显示)
+                                            .font(.system(size: 11))
+                                            .foregroundColor(.secondary)
+                                    }
+                                    Text(日志.原因)
+                                        .font(.system(size: 13))
+                                        .foregroundColor(.secondary)
+                                        .lineLimit(2)
+                                    HStack(spacing: 8) {
+                                        Label(日志.app版本, systemImage: "app")
+                                            .font(.system(size: 11))
+                                            .foregroundColor(.secondary)
+                                        Label("iOS \(日志.iOS版本)", systemImage: "iphone")
+                                            .font(.system(size: 11))
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
+                                .padding(.vertical, 4)
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                Button(role: .destructive) {
+                                    崩溃日志收集器.共享.删除崩溃日志(日志.id)
+                                    崩溃日志列表 = 崩溃日志收集器.共享.读取所有崩溃日志()
+                                } label: {
+                                    Label("删除", systemImage: "trash")
+                                }
+                            }
+                        }
+                    }
+                    .listStyle(.insetGrouped)
+                }
+            }
+            .navigationTitle("崩溃日志报告")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    if !崩溃日志列表.isEmpty {
+                        Button {
+                            显示清除确认 = true
+                        } label: {
+                            Text("清除")
+                                .foregroundColor(.red)
+                        }
+                    }
+                }
+            }
+            .onAppear {
+                崩溃日志列表 = 崩溃日志收集器.共享.读取所有崩溃日志()
+            }
+            .alert("确认清除", isPresented: $显示清除确认) {
+                Button("取消", role: .cancel) {}
+                Button("清除全部", role: .destructive) {
+                    崩溃日志收集器.共享.清除所有崩溃日志()
+                    崩溃日志列表 = []
+                }
+            } message: {
+                Text("确定要清除所有崩溃日志吗？此操作不可恢复。")
+            }
+            .sheet(item: $选中日志) { 日志 in
+                崩溃日志详情页面(日志: 日志)
+            }
+        }
+    }
+}
+
+// MARK: - 崩溃日志详情页面
+
+/// 崩溃日志详情页面
+private struct 崩溃日志详情页面: View {
+    /// 崩溃日志
+    let 日志: 崩溃日志模型
+    /// 显示导出成功提示
+    @State private var 显示导出成功 = false
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    // 基本信息卡片
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .font(.system(size: 20))
+                                .foregroundColor(.red)
+                            Text(日志.名称)
+                                .font(.system(size: 18, weight: .bold))
+                            Spacer()
+                        }
+
+                        详情行(标签: "崩溃时间", 值: 日志.时间显示)
+                        详情行(标签: "崩溃原因", 值: 日志.原因)
+                        详情行(标签: "APP 版本", 值: 日志.app版本)
+                        详情行(标签: "iOS 版本", 值: 日志.iOS版本)
+                        详情行(标签: "设备型号", 值: 日志.设备信息.型号)
+                    }
+                    .padding(16)
+                    .background(Color.卡片背景)
+                    .cornerRadius(12)
+
+                    // 调用栈卡片
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            Image(systemName: "stack")
+                                .font(.system(size: 16))
+                                .foregroundColor(.主题色)
+                            Text("调用栈信息")
+                                .font(.system(size: 16, weight: .semibold))
+                            Spacer()
+                        }
+
+                        ForEach(Array(日志.调用栈.enumerated()), id: \.offset) { 索引, 栈帧 in
+                            HStack(alignment: .top, spacing: 8) {
+                                Text("\(索引)")
+                                    .font(.system(size: 11, weight: .bold))
+                                    .foregroundColor(.主题色)
+                                    .frame(width: 24, alignment: .center)
+                                Text(栈帧)
+                                    .font(.system(size: 11, design: .monospaced))
+                                    .foregroundColor(.secondary)
+                            }
+                            if 索引 < 日志.调用栈.count - 1 {
+                                Divider()
+                            }
+                        }
+                    }
+                    .padding(16)
+                    .background(Color.卡片背景)
+                    .cornerRadius(12)
+
+                    // 导出按钮
+                    Button {
+                        导出崩溃日志()
+                    } label: {
+                        HStack {
+                            Spacer()
+                            Image(systemName: "square.and.arrow.up")
+                            Text("导出崩溃报告")
+                                .font(.system(size: 16, weight: .semibold))
+                            Spacer()
+                        }
+                        .padding(.vertical, 14)
+                        .background(Color.主题色)
+                        .foregroundColor(.white)
+                        .cornerRadius(12)
+                    }
+                }
+                .padding(16)
+            }
+            .background(Color.页面背景.ignoresSafeArea())
+            .navigationTitle("崩溃详情")
+            .navigationBarTitleDisplayMode(.inline)
+            .alert("导出成功", isPresented: $显示导出成功) {
+                Button("确定", role: .cancel) {}
+            } message: {
+                Text("崩溃报告已复制到剪贴板")
+            }
+        }
+    }
+
+    /// 详情行
+    private func 详情行(标签: String, 值: String) -> some View {
+        HStack(alignment: .top) {
+            Text(标签)
+                .font(.system(size: 13))
+                .foregroundColor(.secondary)
+                .frame(width: 80, alignment: .leading)
+            Text(值)
+                .font(.system(size: 13))
+                .foregroundColor(.primary)
+            Spacer()
+        }
+    }
+
+    /// 导出崩溃日志
+    private func 导出崩溃日志() {
+        let 文本 = 崩溃日志收集器.共享.导出崩溃日志(日志)
+        UIPasteboard.general.string = 文本
+        显示导出成功 = true
     }
 }

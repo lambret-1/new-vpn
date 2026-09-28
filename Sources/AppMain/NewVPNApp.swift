@@ -84,6 +84,9 @@ struct NewVPNApp: App {
 final class AppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication,
                      didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        // 启动崩溃日志捕获
+        崩溃日志收集器.共享.开始捕获()
+
         // 注册后台订阅更新任务
         BGTaskScheduler.shared.register(
             forTaskWithIdentifier: 后台任务标识.订阅更新,

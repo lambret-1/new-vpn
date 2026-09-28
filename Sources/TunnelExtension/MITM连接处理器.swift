@@ -122,6 +122,12 @@ final class MITM连接处理器 {
         // 允许断点续连（false = 不允许，每次完整握手）
         SSLSetSessionOption(上下文, .breakOnClientAuth, false)
 
+        // ALPN 协商：本代理仅实现 HTTP/1.1，主动声明 http/1.1，
+        // 避免现代客户端（Safari/Chrome/URLSession）因请求了 h2 但未协商成功而断开连接。
+        // 参考 mitmproxy/Charles 做法：服务端只 advertise http/1.1，客户端自然降级。
+        let alpn列表 = ["http/1.1"] as CFArray
+        SSLSetALPNProtocols(上下文, alpn列表)
+
         扩展日志记录器.共享.信息("MITM", "SSL 上下文初始化完成，准备握手：\(目标域名)")
     }
 

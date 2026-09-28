@@ -386,14 +386,20 @@ FxBzaz833X+KGgOv4VBtDcY=
             if CA私钥.isEmpty {
                 CA私钥 = 默认.string(forKey: 私钥键) ?? ""
             }
-            // 标准 UserDefaults 有证书但 App Group 没有时，同步到 App Group
-            if !CA证书.isEmpty && !CA私钥.isEmpty,
-               let 共享默认 = UserDefaults(suiteName: "group.com.newvpn.app") {
-                共享默认.set(CA证书, forKey: 证书键)
-                共享默认.set(CA私钥, forKey: 私钥键)
-                共享默认.synchronize()
-            }
         }
+
+        // 仍然为空时，使用预生成的 CA 证书（确保 MITM 功能始终可用）
+        if CA证书.isEmpty {
+            CA证书 = MITM管理器.预生成CA证书
+            NSLog("[MITM] 证书为空，自动使用预生成 CA 证书")
+        }
+        if CA私钥.isEmpty {
+            CA私钥 = MITM管理器.预生成CA私钥
+            NSLog("[MITM] 私钥为空，自动使用预生成 CA 私钥")
+        }
+
+        // 保存到标准 UserDefaults 和 App Group（确保隧道扩展能读取到）
+        保存配置()
 
         NSLog("[MITM] 配置加载完成：启用=\(启用)，证书已生成=\(证书已生成)，证书长度=\(CA证书.count)")
     }

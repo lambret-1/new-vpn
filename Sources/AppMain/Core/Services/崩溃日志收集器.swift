@@ -16,6 +16,15 @@ private func 全局Signal处理器(_ 信号: Int32) {
     raise(信号)
 }
 
+/// 全局异常处理器（C 函数指针不能捕获 self）
+private func 全局异常处理器(_ 异常: NSException) {
+    崩溃日志收集器.共享.处理异常(异常)
+    // 调用之前的处理器
+    if let 之前 = 崩溃日志收集器.共享.之前的异常处理器 {
+        之前(异常)
+    }
+}
+
 /// 崩溃日志模型
 struct 崩溃日志模型: Identifiable, Codable, Hashable {
     /// 唯一标识
@@ -88,13 +97,7 @@ final class 崩溃日志收集器 {
         之前的异常处理器 = NSGetUncaughtExceptionHandler()
 
         // 设置异常处理器
-        NSSetUncaughtExceptionHandler { 异常 in
-            崩溃日志收集器.共享.处理异常(异常)
-            // 调用之前的处理器
-            if let 之前 = 崩溃日志收集器.共享.之前的异常处理器 {
-                之前(异常)
-            }
-        }
+        NSSetUncaughtExceptionHandler(全局异常处理器)
 
         // 设置 Signal 处理器
         let 信号列表: [Int32] = [SIGABRT, SIGILL, SIGSEGV, SIGFPE, SIGBUS, SIGPIPE, SIGTRAP]
@@ -116,7 +119,7 @@ final class 崩溃日志收集器 {
     // MARK: - 处理崩溃
 
     /// 处理 NSException
-    private func 处理异常(_ 异常: NSException) {
+    func 处理异常(_ 异常: NSException) {
         let 崩溃日志 = 崩溃日志模型(
             id: UUID(),
             时间: Date(),
@@ -131,7 +134,7 @@ final class 崩溃日志收集器 {
     }
 
     /// 处理 Signal
-    private func 处理信号(_ 信号: Int32) {
+    func 处理信号(_ 信号: Int32) {
         let 信号名称: String
         switch 信号 {
         case SIGABRT: 信号名称 = "SIGABRT (程序中止)"

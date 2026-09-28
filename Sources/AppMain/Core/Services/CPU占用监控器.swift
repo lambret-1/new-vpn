@@ -40,10 +40,11 @@ final class CPU占用监控器: ObservableObject {
         停止监控()
         // 立即采样一次
         采样CPU使用率()
-        采样定时器 = Timer.scheduledTimer(withTimeInterval: 间隔, repeats: true) { [weak self] _ in
+        let 新定时器 = Timer.scheduledTimer(withTimeInterval: 间隔, repeats: true) { [weak self] _ in
             self?.采样CPU使用率()
         }
-        RunLoop.main.add(采样定时器!, forMode: .common)
+        采样定时器 = 新定时器
+        RunLoop.main.add(新定时器, forMode: .common)
     }
 
     /// 停止 CPU 占用监控
@@ -88,7 +89,9 @@ final class CPU占用监控器: ObservableObject {
 
         // 释放线程列表内存
         if let 列表 = 线程列表, 线程数 > 0 {
-            vm_deallocate(mach_task_self_, vm_address_t(bitPattern: 列表), vm_size_t(Int(线程数) * MemoryLayout<thread_t>.size))
+            let 地址 = vm_address_t(UInt(bitPattern: 列表))
+            let 大小 = vm_size_t(Int(线程数) * MemoryLayout<thread_t>.size)
+            vm_deallocate(mach_task_self_, 地址, 大小)
         }
 
         // 获取当前系统时间（纳秒）

@@ -820,27 +820,22 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
     /// 记录扩展日志
     private func 记录扩展日志(级别: String, 模块: String, 内容: String) {
-        let 条目 = 扩展日志条目(id: UUID(), 时间: Date(), 级别: 级别, 模块: 模块, 内容: 内容)
-
-        // 保存到共享 UserDefaults（格式与主 App 读取一致）
-        // 必须串行化：日志回调来自多个 Go 线程，并发 decode-insert-encode-set 会丢日志并可能损坏
-        扩展数据队列.async { [weak self] in
-            guard let 自 = self, let 共享默认 = 自.共享默认 else { return }
-            var 日志列表: [扩展日志条目] = []
-            if let 日志数据 = 共享默认.data(forKey: "tunnelLogs"),
-               let 已存列表 = try? JSONDecoder().decode([扩展日志条目].self, from: 日志数据) {
-                日志列表 = 已存列表
-            }
-            日志列表.insert(条目, at: 0)
-            if 日志列表.count > 300 {
-                日志列表.removeLast(日志列表.count - 300)
-            }
-            if let 编码数据 = try? JSONEncoder().encode(日志列表) {
-                共享默认.set(编码数据, forKey: "tunnelLogs")
-            }
+        // 统一走 扩展日志记录器 单例，所有日志写入串行在同一队列，
+        // 避免与 MITM/抓包代理的日志并发读写 UserDefaults "tunnelLogs" 导致 JSON 数据损坏崩溃
+        switch 级别 {
+        case "错误":
+            扩展日志记录器.共享.错误(模块, 内容)
+        case "警告":
+            扩展日志记录器.共享.警告(模块, 内容)
+        case "调试":
+            扩展日志记录器.共享.调试(模块, 内容)
+        case "追踪":
+            扩展日志记录器.共享.追踪(模块, 内容)
+        default:
+            扩展日志记录器.共享.信息(模块, 内容)
         }
 
-        // 输出到系统日志
+        // 同时输出到 os_log（便于调试）
         switch 级别 {
         case "错误":
             日志.error("\(模块): \(内容)")

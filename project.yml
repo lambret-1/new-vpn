@@ -56,6 +56,7 @@ targets:
           - processing
         BGTaskSchedulerPermittedIdentifiers:
           - com.newvpn.app.subscriptionRefresh
+          - com.newvpn.app.vpnStatusMonitor
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.newvpn.app

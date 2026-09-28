@@ -53,6 +53,10 @@ final class 隧道管理器: NSObject, ObservableObject {
     /// 上次统计字节数
     private var 上次上行字节: UInt64 = 0
     private var 上次下行字节: UInt64 = 0
+    /// 自动切换节点次数（容错用）
+    private var 自动切换次数 = 0
+    /// 是否正在自动切换节点
+    private var 正在自动切换 = false
 
     /// 私有初始化
     private override init() {
@@ -653,6 +657,9 @@ final class 隧道管理器: NSObject, ObservableObject {
             启动统计定时器()
             // 启用 Clash API 后，启动网络活动轮询获取实时连接列表
             网络活动管理器.共享.开始轮询()
+            // 连接成功，重置自动切换计数
+            自动切换次数 = 0
+            正在自动切换 = false
         case .已断开:
             记录日志(级别: .信息, 模块: "连接", 内容: "隧道已断开")
             停止统计定时器()
@@ -665,6 +672,10 @@ final class 隧道管理器: NSObject, ObservableObject {
             记录日志(级别: .错误, 模块: "连接", 内容: "隧道连接失败")
             停止统计定时器()
             网络活动管理器.共享.停止轮询()
+            // 节点容错：连接失败时自动切换到同分组延迟最低的可用节点（最多3次）
+            if !正在自动切换 && 自动切换次数 < 3 {
+                自动切换到可用节点()
+            }
         default:
             break
         }
@@ -879,10 +890,51 @@ final class 隧道管理器: NSObject, ObservableObject {
         }
     }
 
+    // MARK: - 节点容错自动切换
+
+    /// 连接失败时自动切换到同分组延迟最低的可用节点
+    private func 自动切换到可用节点() {
+        guard let 当前节点ID = 当前连接?.节点ID,
+              let 当前节点 = AppState.共享.节点列表.first(where: { $0.id == 当前节点ID }) else {
+            return
+        }
+
+        正在自动切换 = true
+        自动切换次数 += 1
+
+        // 查找同分组的其他节点，按延迟排序
+        let 同分组节点 = AppState.共享.节点列表.filter {
+            $0.分组 == 当前节点.分组 && $0.id != 当前节点ID
+        }
+
+        // 优先选择有测速数据且延迟最低的节点
+        let 可用节点 = 同分组节点
+            .filter { $0.测速数据?.成功 == true }
+            .sorted { ($0.测速数据?.延迟毫秒 ?? Int.max) < ($1.测速数据?.延迟毫秒 ?? Int.max) }
+
+        // 如果没有测速数据的节点，选择同分组第一个节点
+        guard let 目标节点 = 可用节点.first ?? 同分组节点.first else {
+            记录日志(级别: .警告, 模块: "容错", 内容: "同分组无其他可用节点，无法自动切换")
+            正在自动切换 = false
+            return
+        }
+
+        记录日志(级别: .信息, 模块: "容错", 内容: "连接失败，自动切换到节点：\(目标节点.名称)（第\(自动切换次数)次）")
+        调试日志管理器.共享.信息("容错", "自动切换节点：\(目标节点.名称)")
+
+        // 延迟2秒后切换，避免频繁重试
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
+            guard let self = self else { return }
+            AppState.共享.当前节点ID = 目标节点.id
+            self.切换节点并重载(节点ID: 目标节点.id, 节点名称: 目标节点.名称)
+            self.正在自动切换 = false
+        }
+    }
+
     /// VPN连接状态下实时切换节点：断开后用新节点重连（参考运行模式切换，确保新配置生效）
     /// - Parameters:
-    ///   - 节点ID: 新选中的节点 ID
-    ///   - 节点名称: 新选中的节点名称
+    ///   节点ID: 新选中的节点 ID
+    ///   节点名称: 新选中的节点名称
     func 切换节点并重载(节点ID: UUID, 节点名称: String) {
         guard 当前状态.是否活动 else {
             记录日志(级别: .调试, 模块: "节点", 内容: "VPN未连接，仅切换选中节点，无需重载隧道")

@@ -65,6 +65,17 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     /// 热更新轮询定时器
     private var 热更新定时器: Timer?
 
+    /// 心跳检测定时器
+    private var 心跳定时器: Timer?
+    /// 心跳连续失败次数
+    private var 心跳失败次数 = 0
+    /// 自动重连次数
+    private var 重连次数 = 0
+    /// 重连定时器
+    private var 重连定时器: Timer?
+    /// 是否正在重连中
+    private var 正在重连 = false
+
     /// 本地抓包代理
     private var 本地抓包代理: 本地HTTP代理?
 
@@ -79,6 +90,11 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     /// 共享 UserDefaults
     private var 共享默认: UserDefaults? {
         UserDefaults(suiteName: "group.com.newvpn.app")
+    }
+
+    /// APP 是否在后台（用于低功耗模式）
+    private var APP在后台: Bool {
+        共享默认?.bool(forKey: "appInBackground") ?? false
     }
 
     // MARK: - 隧道生命周期
@@ -189,6 +205,13 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                 // 启动热更新轮询定时器
                 self.启动热更新定时器()
 
+                // 启动心跳检测定时器
+                self.启动心跳定时器()
+
+                // 重置重连计数
+                self.重连次数 = 0
+                self.心跳失败次数 = 0
+
                 // 标记运行中
                 self.是否运行中 = true
 
@@ -220,6 +243,14 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
         // 停止热更新定时器
         停止热更新定时器()
+
+        // 停止心跳定时器
+        停止心跳定时器()
+
+        // 停止重连定时器
+        重连定时器?.invalidate()
+        重连定时器 = nil
+        正在重连 = false
 
         // 保存最终统计
         保存统计数据()
@@ -836,6 +867,11 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
     /// 记录扩展日志
     private func 记录扩展日志(级别: String, 模块: String, 内容: String) {
+        // 后台低功耗模式：不记录调试日志，减少 IO
+        if APP在后台 && 级别 == "调试" {
+            return
+        }
+
         let 条目 = 扩展日志条目(id: UUID(), 时间: Date(), 级别: 级别, 模块: 模块, 内容: 内容)
 
         // 保存到共享 UserDefaults（格式与主 App 读取一致）
@@ -848,8 +884,8 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                 日志列表 = 已存列表
             }
             日志列表.insert(条目, at: 0)
-            if 日志列表.count > 300 {
-                日志列表.removeLast(日志列表.count - 300)
+            if 日志列表.count > 500 {
+                日志列表.removeLast(日志列表.count - 500)
             }
             if let 编码数据 = try? JSONEncoder().encode(日志列表) {
                 共享默认.set(编码数据, forKey: "tunnelLogs")
@@ -1124,6 +1160,111 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     private func 停止热更新定时器() {
         热更新定时器?.invalidate()
         热更新定时器 = nil
+    }
+
+    // MARK: - 心跳检测与自动重连
+
+    /// 启动心跳检测定时器（30秒一次）
+    private func 启动心跳定时器() {
+        停止心跳定时器()
+        心跳定时器 = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { [weak self] _ in
+            self?.执行心跳检测()
+        }
+        RunLoop.main.add(心跳定时器!, forMode: .common)
+        记录扩展日志(级别: "信息", 模块: "保活", 内容: "心跳检测定时器已启动，间隔30秒")
+    }
+
+    /// 停止心跳定时器
+    private func 停止心跳定时器() {
+        心跳定时器?.invalidate()
+        心跳定时器 = nil
+    }
+
+    /// 执行心跳检测：检查 sing-box 内核状态和网络连通性
+    private func 执行心跳检测() {
+        guard 是否运行中 else { return }
+
+        // 检查 sing-box 内核是否运行
+        guard singBox运行中 else {
+            心跳失败次数 += 1
+            记录扩展日志(级别: "警告", 模块: "保活", 内容: "心跳检测失败：sing-box内核未运行，连续失败\(心跳失败次数)次")
+            if 心跳失败次数 >= 3 {
+                触发自动重连()
+            }
+            return
+        }
+
+        // 检查网络连通性：通过 Clash API 获取连接数判断内核是否正常工作
+        let 配置 = URLSessionConfiguration.ephemeral
+        配置.timeoutIntervalForRequest = 5
+        let 会话 = URLSession(configuration: 配置)
+        guard let url = URL(string: "http://127.0.0.1:9090/connections") else { return }
+
+        let 任务 = 会话.dataTask(with: url) { [weak self] _, 响应, 错误 in
+            guard let self = self else { return }
+            if 错误 != nil || (响应 as? HTTPURLResponse)?.statusCode != 200 {
+                self.心跳失败次数 += 1
+                self.记录扩展日志(级别: "警告", 模块: "保活", 内容: "心跳检测失败：Clash API无响应，连续失败\(self.心跳失败次数)次")
+                if self.心跳失败次数 >= 3 {
+                    DispatchQueue.main.async {
+                        self.触发自动重连()
+                    }
+                }
+            } else {
+                // 心跳成功，重置计数
+                if self.心跳失败次数 > 0 {
+                    self.记录扩展日志(级别: "信息", 模块: "保活", 内容: "心跳检测恢复正常")
+                }
+                self.心跳失败次数 = 0
+                // 更新心跳时间戳，供 APP 后台监控
+                self.共享默认?.set(Date(), forKey: "tunnelHeartbeatTime")
+            }
+        }
+        任务.resume()
+    }
+
+    /// 触发自动重连（指数退避：3s→6s→12s→30s→60s，上限60s）
+    private func 触发自动重连() {
+        guard !正在重连 else { return }
+        正在重连 = true
+        重连次数 += 1
+
+        let 延迟秒数: TimeInterval
+        switch 重连次数 {
+        case 1: 延迟秒数 = 3
+        case 2: 延迟秒数 = 6
+        case 3: 延迟秒数 = 12
+        case 4: 延迟秒数 = 30
+        default: 延迟秒数 = 60
+        }
+
+        记录扩展日志(级别: "警告", 模块: "保活", 内容: "触发自动重连，第\(重连次数)次，延迟\(Int(延迟秒数))秒后执行")
+
+        重连定时器?.invalidate()
+        重连定时器 = Timer.scheduledTimer(withTimeInterval: 延迟秒数, repeats: false) { [weak self] _ in
+            self?.执行重连()
+        }
+    }
+
+    /// 执行重连：停止内核后重新启动
+    private func 执行重连() {
+        记录扩展日志(级别: "信息", 模块: "保活", 内容: "开始执行自动重连")
+
+        // 停止当前内核
+        停止SingBox内核()
+
+        // 延迟一小段时间后重新加载配置并启动
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+            guard let self = self else { return }
+
+            self.加载隧道配置()
+            self.设置网络配置 { _ in }
+            self.重载SingBox配置()
+
+            self.正在重连 = false
+            self.心跳失败次数 = 0
+            self.记录扩展日志(级别: "信息", 模块: "保活", 内容: "自动重连完成")
+        }
     }
 
     /// 检查并处理热更新指令

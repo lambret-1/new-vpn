@@ -7,11 +7,14 @@
 
 import SwiftUI
 import BackgroundTasks
+import UserNotifications
 
 /// 后台任务标识符
 enum 后台任务标识 {
     /// 订阅自动更新任务
     static let 订阅更新 = "com.newvpn.app.subscriptionRefresh"
+    /// VPN 状态监控任务
+    static let VPN状态监控 = "com.newvpn.app.vpnStatusMonitor"
 }
 
 @main
@@ -89,10 +92,34 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
             self.处理订阅更新任务(任务 as! BGAppRefreshTask)
         }
 
+        // 注册 VPN 状态监控后台任务
+        BGTaskScheduler.shared.register(
+            forTaskWithIdentifier: 后台任务标识.VPN状态监控,
+            using: nil
+        ) { 任务 in
+            self.处理VPN状态监控任务(任务 as! BGAppRefreshTask)
+        }
+
         // 调度下次后台任务
         调度后台订阅更新()
+        调度VPN状态监控()
 
         return true
+    }
+
+    /// APP 进入后台：通知扩展切换低功耗模式
+    func applicationDidEnterBackground(_ application: UIApplication) {
+        if let 共享默认 = UserDefaults(suiteName: "group.com.newvpn.app") {
+            共享默认.set(true, forKey: "appInBackground")
+            共享默认.set(Date(), forKey: "appBackgroundTime")
+        }
+    }
+
+    /// APP 回到前台：通知扩展恢复正常模式
+    func applicationWillEnterForeground(_ application: UIApplication) {
+        if let 共享默认 = UserDefaults(suiteName: "group.com.newvpn.app") {
+            共享默认.set(false, forKey: "appInBackground")
+        }
     }
 
     /// 处理订阅更新后台任务
@@ -124,6 +151,53 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         } catch {
             print("后台任务调度失败：\(error.localizedDescription)")
         }
+    }
+
+    /// 处理 VPN 状态监控后台任务
+    private func 处理VPN状态监控任务(_ 任务: BGAppRefreshTask) {
+        // 调度下次任务
+        调度VPN状态监控()
+
+        // 检查隧道心跳时间戳，超过3分钟无心跳则通知用户
+        if let 共享默认 = UserDefaults(suiteName: "group.com.newvpn.app"),
+           let 心跳时间 = 共享默认.object(forKey: "tunnelHeartbeatTime") as? Date,
+           共享默认.bool(forKey: "vpnEnabled") {
+            let 间隔 = Date().timeIntervalSince(心跳时间)
+            if 间隔 > 180 { // 超过3分钟无心跳
+                // 发送本地通知提醒用户
+                发送VPN异常通知()
+            }
+        }
+
+        任务.setTaskCompleted(success: true)
+    }
+
+    /// 调度 VPN 状态监控任务
+    private func 调度VPN状态监控() {
+        let 请求 = BGAppRefreshTaskRequest(identifier: 后台任务标识.VPN状态监控)
+        // 最早5分钟后执行
+        请求.earliestBeginDate = Date(timeIntervalSinceNow: 300)
+
+        do {
+            try BGTaskScheduler.shared.submit(请求)
+        } catch {
+            print("VPN状态监控任务调度失败：\(error.localizedDescription)")
+        }
+    }
+
+    /// 发送 VPN 异常本地通知
+    private func 发送VPN异常通知() {
+        let 内容 = UNMutableNotificationContent()
+        内容.title = "VPN 连接异常"
+        内容.body = "检测到 VPN 隧道心跳超时，建议检查网络或重新连接"
+        内容.sound = .default
+
+        let 请求 = UNNotificationRequest(
+            identifier: "vpnAbnormal",
+            content: 内容,
+            trigger: nil
+        )
+        UNUserNotificationCenter.current().add(请求)
     }
 }
 

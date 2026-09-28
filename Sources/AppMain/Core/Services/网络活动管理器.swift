@@ -103,11 +103,24 @@ final class 网络活动管理器 {
     func 开始轮询(间隔: TimeInterval = 2.0) {
         停止轮询()
         轮询定时器 = Timer.scheduledTimer(withTimeInterval: 间隔, repeats: true) { [weak self] _ in
+            // 后台模式下降频：检查 APP 是否在后台
+            if let 共享默认 = UserDefaults(suiteName: "group.com.newvpn.app"),
+               共享默认.bool(forKey: "appInBackground") {
+                // 后台时每10秒才真正获取一次
+                let 现在 = Date().timeIntervalSince1970
+                if 现在 - (self?.上次获取时间 ?? 0) < 10 {
+                    return
+                }
+                self?.上次获取时间 = 现在
+            }
             self?.获取连接列表()
         }
         // 立即获取一次
         获取连接列表()
     }
+
+    /// 上次获取连接列表的时间戳（后台降频用）
+    private var 上次获取时间: TimeInterval = 0
 
     /// 停止轮询
     func 停止轮询() {
@@ -165,8 +178,18 @@ final class 网络活动管理器 {
             )
         }
 
+        // 过滤掉已关闭且超过5分钟的连接（自动清理超时连接）
+        let 现在 = Date()
+        let 有效连接 = 连接列表.filter { 连接 in
+            if 连接.已关闭 {
+                // 已关闭的连接，超过5分钟自动移除
+                return 现在.timeIntervalSince(连接.开始时间) < 300
+            }
+            return true
+        }
+
         // 限制最多保留100条连接记录，超过自动删除最旧的
-        let 限制列表 = Array(连接列表.suffix(100))
+        let 限制列表 = Array(有效连接.suffix(100))
 
         // 在主线程更新 UI
         DispatchQueue.main.async {

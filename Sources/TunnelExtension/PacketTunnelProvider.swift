@@ -49,6 +49,11 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     /// sing-box 内核是否运行中
     private var singBox运行中 = false
 
+    /// operation not permitted 错误降噪：上次汇总输出时间
+    private var 上次Packet权限错误汇总时间: Date?
+    /// operation not permitted 错误计数（降噪周期内）
+    private var Packet权限错误计数 = 0
+
     /// 扩展内共享可变状态的串行队列
     /// sing-box 日志回调会在多个 Go 线程并发回调，同时主线程 Timer 也会清理 DNS 记录，
     /// 无锁并发读写字典/UserDefaults 数组会触发 Swift 独占检查崩溃或堆损坏（对应 commit eb043b4 提到的数据竞争）
@@ -415,12 +420,31 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         // IPv4 设置
         let IPv4设置 = NEIPv4Settings(addresses: ["10.0.0.2"], subnetMasks: ["255.255.255.0"])
         IPv4设置.includedRoutes = [NEIPv4Route.default()]
-        IPv4设置.excludedRoutes = [
+
+        // 排除路由：私有地址 + 代理服务器地址 + DNS 服务器地址
+        // 排除这些地址后，它们的流量直接走物理网卡，不会被 TUN 捕获，避免回环
+        var 排除路由: [NEIPv4Route] = [
             NEIPv4Route(destinationAddress: "10.0.0.0", subnetMask: "255.0.0.0"),
             NEIPv4Route(destinationAddress: "172.16.0.0", subnetMask: "255.240.0.0"),
             NEIPv4Route(destinationAddress: "192.168.0.0", subnetMask: "255.255.0.0"),
-            NEIPv4Route(destinationAddress: "127.0.0.0", subnetMask: "255.0.0.0")
+            NEIPv4Route(destinationAddress: "127.0.0.0", subnetMask: "255.0.0.0"),
+            // DNS 服务器地址直连，避免 DNS 查询走 TUN 回环
+            NEIPv4Route(destinationAddress: "223.5.5.5", subnetMask: "255.255.255.255"),
+            NEIPv4Route(destinationAddress: "8.8.8.8", subnetMask: "255.255.255.255")
         ]
+
+        // 代理服务器地址直连（如果是 IP 地址）
+        if let 代理配置 = 隧道配置["proxy"] as? [String: Any],
+           let 代理服务器 = 代理配置["server"] as? String,
+           !代理服务器.isEmpty {
+            let 是否IP = 代理服务器.allSatisfy({ $0.isNumber || $0 == "." })
+            if 是否IP {
+                排除路由.append(NEIPv4Route(destinationAddress: 代理服务器, subnetMask: "255.255.255.255"))
+                NSLog("[隧道] 代理服务器地址已加入排除路由：\(代理服务器)")
+            }
+        }
+
+        IPv4设置.excludedRoutes = 排除路由
         设置.ipv4Settings = IPv4设置
 
         // DNS 设置
@@ -941,6 +965,26 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             case 5: 级别字符串 = "致命"
             default: 级别字符串 = "未知"
             }
+
+            // operation not permitted 错误降噪：iOS 沙盒不支持出站 packet 监听，属良性错误
+            // 10 秒内同类错误只输出一条汇总，避免刷屏
+            if 内容.contains("listen outbound packet connection: operation not permitted") {
+                self.扩展数据队列.async {
+                    self.Packet权限错误计数 += 1
+                    let 现在 = Date()
+                    if let 上次 = self.上次Packet权限错误汇总时间,
+                       现在.timeIntervalSince(上次) < 10 {
+                        return // 降噪周期内，跳过单条输出
+                    }
+                    let 计数 = self.Packet权限错误计数
+                    self.Packet权限错误计数 = 0
+                    self.上次Packet权限错误汇总时间 = 现在
+                    self.记录扩展日志(级别: "警告", 模块: "sing-box内核",
+                        内容: "【出站Packet权限受限】iOS不支持出站packet监听，UDP无法代理，TCP/MITM不受影响。近10秒累计\(计数)条")
+                }
+                return
+            }
+
             // 调试日志总开关：关闭时不写入 UserDefaults（减少 IO），但仍解析 DNS 查询记录
             let 调试日志开启 = self.共享默认?.bool(forKey: "debugLogEnabled") ?? true
             if 调试日志开启 {

@@ -243,10 +243,12 @@ final class SingBox配置生成器 {
         }
 
         // Direct 出站（标签大写参考官方客户端）
-        // 不绑定物理网卡：绑定接口时 sing-box 尝试在物理接口创建 UDP packet 监听器，
-        // iOS 沙盒无原始套接字权限，报 operation not permitted。
-        // 回环防护由路由规则保证：代理服务器地址 + DNS 服务器地址 + 私有/局域网地址均直连
-        出站列表.append(SingBox出站配置.direct出站(标签: "DIRECT", 绑定接口: nil))
+        // 必须绑定物理网卡：否则直连流量走默认路由(TUN)形成回环导致 connection refused
+        // UDP packet 监听器在 iOS 沙盒报 operation not permitted 属良性，TCP 连接不受影响
+        // 所有非 DNS UDP 流量已被路由规则 REJECT，DIRECT 实际只处理 TCP
+        let 活动接口 = 检测当前活动物理网卡()
+        NSLog("[SingBox配置] DIRECT 出站绑定物理网卡：%@", 活动接口)
+        出站列表.append(SingBox出站配置.direct出站(标签: "DIRECT", 绑定接口: 活动接口))
 
         // Block 出站
         出站列表.append(SingBox出站配置.block出站(标签: "REJECT"))
@@ -511,10 +513,10 @@ final class SingBox配置生成器 {
 
         return SingBox路由配置(
             final: 最终出站,
-            // 启用 auto_detect_interface：sing-box 在路由层面自动检测活动物理网卡，
-            // 替代 DIRECT 出站的 bind_interface，避免出站层面绑定接口时
-            // 尝试创建 UDP packet 监听器导致 iOS 沙盒 operation not permitted
-            autoDetectInterface: true,
+            // 关闭 auto_detect_interface：iOS libbox 的 getInterfaces 返回对象属性不匹配
+            // 会导致 "no available network interface"。
+            // 回环防护由系统 NEPacketTunnelNetworkSettings 的 excludedRoutes 排除代理/DNS 地址保证
+            autoDetectInterface: false,
             rules: 规则列表
         )
     }

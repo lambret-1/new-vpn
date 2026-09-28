@@ -109,7 +109,7 @@ struct 策略组内容区: View {
                     HStack(spacing: 12) {
                         // 排序选择
                         Menu {
-                            ForEach(排序方式.allCases, id: \.self) { 方式 in
+                            ForEach(策略组排序方式.allCases, id: \.self) { 方式 in
                                 Button(action: { 排序方式 = 方式 }) {
                                     HStack {
                                         Text(方式.rawValue)

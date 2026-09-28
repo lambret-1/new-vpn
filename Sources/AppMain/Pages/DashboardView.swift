@@ -22,20 +22,25 @@ struct DashboardView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // 可滚动内容区
-            ScrollView {
-                VStack(spacing: 16) {
-                    // 顶部状态区
-                    顶部状态区()
-                        .padding(.horizontal, 16)
-                        .padding(.top, 8)
+            // 顶部状态区（固定，不随内容滚动）
+            顶部状态区()
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
 
-                    // 横向功能卡片栏
-                    顶部功能卡片栏()
+            // 横向功能卡片栏（固定）
+            顶部功能卡片栏()
 
-                    // 主内容区（根据选中卡片切换）
-                    主内容区()
-                        .padding(.bottom, 16)
+            // 内容区：调试日志页自带滚动且需要占满剩余高度，不能包在 ScrollView 里
+            // （ScrollView 内 maxHeight: .infinity 会坍缩为 0，导致 UITextView 日志窗口不可见）
+            if 状态.当前顶部卡片 == .调试日志 {
+                调试日志内容区()
+                    .padding(.bottom, 16)
+            } else {
+                ScrollView {
+                    VStack(spacing: 16) {
+                        主内容区()
+                            .padding(.bottom, 16)
+                    }
                 }
             }
 
@@ -141,8 +146,9 @@ private struct 主内容区: View {
                 分流规则内容区()
             case .日志:
                 日志内容区()
+            // .调试日志 在 DashboardView 顶层单独处理（不包 ScrollView，保证日志窗口占满高度）
             case .调试日志:
-                调试日志内容区()
+                EmptyView()
             }
         }
         .animation(.easeInOut(duration: 0.2), value: 状态.当前顶部卡片)

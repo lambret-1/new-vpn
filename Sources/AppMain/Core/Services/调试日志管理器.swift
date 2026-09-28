@@ -148,6 +148,11 @@ final class 调试日志管理器: ObservableObject {
 
         // 启动扩展日志读取定时器
         启动扩展日志读取定时器()
+
+        // 启动批量刷新定时器（App 生命周期内常驻，避免懒启动竞态导致日志卡死）
+        DispatchQueue.main.async { [weak self] in
+            self?.启动批量刷新定时器()
+        }
     }
 
     // MARK: - 配置持久化
@@ -204,7 +209,9 @@ final class 调试日志管理器: ObservableObject {
             return
         }
 
-        for 扩展日志 in 扩展日志列表 {
+        // 扩展端将新日志插入数组头部（新→旧），这里倒序遍历，保证追加到日志列表后保持旧→新顺序
+        var 新条目: [日志模型] = []
+        for 扩展日志 in 扩展日志列表.reversed() {
             let id字符串 = 扩展日志.id.uuidString
             guard !已读取扩展日志ID.contains(id字符串) else { continue }
             已读取扩展日志ID.insert(id字符串)
@@ -217,14 +224,17 @@ final class 调试日志管理器: ObservableObject {
                 模块: "扩展-\(扩展日志.模块)",
                 内容: 扩展日志.内容
             )
-
-            DispatchQueue.main.async { [weak self] in
-                self?.日志列表.append(日志)
-                self?.清理超出缓冲区()
-            }
+            新条目.append(日志)
 
             // 异步写入文件
             写入文件日志(日志)
+        }
+
+        guard !新条目.isEmpty else { return }
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            self.日志列表.append(contentsOf: 新条目)
+            self.清理超出缓冲区()
         }
     }
 
@@ -286,15 +296,10 @@ final class 调试日志管理器: ObservableObject {
             )
 
             // 写入内存缓冲区（批量刷新到UI，避免单条频繁触发视图重绘）
+            // 批量刷新定时器在 init 中已常驻启动，这里只负责入队，不再做懒启动判断
             self.缓冲区队列.async { [weak self] in
                 guard let self = self else { return }
                 self.内存缓冲区.append(日志)
-                // 确保批量刷新定时器已启动
-                if self.批量刷新定时器 == nil {
-                    DispatchQueue.main.async {
-                        self.启动批量刷新定时器()
-                    }
-                }
             }
 
             // 异步写入文件
@@ -306,20 +311,24 @@ final class 调试日志管理器: ObservableObject {
 
     // MARK: - 批量刷新
 
-    /// 启动批量刷新定时器
+    /// 启动批量刷新定时器（App 生命周期内常驻，加入 common 模式确保 UITextView 滚动时也能刷新）
     private func 启动批量刷新定时器() {
+        // 已存在则不重复创建
+        guard 批量刷新定时器 == nil else { return }
         let 间隔 = TimeInterval(max(50, 配置.批量刷新间隔毫秒)) / 1000.0
-        批量刷新定时器 = Timer.scheduledTimer(withTimeInterval: 间隔, repeats: true) { [weak self] _ in
+        let 定时器 = Timer(timeInterval: 间隔, repeats: true) { [weak self] _ in
             self?.执行批量刷新()
         }
-        // 立即执行一次
+        // 加入 common 模式，避免 UIScrollView/UITextView 追踪时定时器暂停
+        RunLoop.main.add(定时器, forMode: .common)
+        批量刷新定时器 = 定时器
+        // 立即执行一次，保证首批日志不等待一个完整周期
         执行批量刷新()
     }
 
-    /// 停止批量刷新定时器
+    /// 停止批量刷新定时器（保留方法但不再真正停止，避免页面切换后日志卡死）
     private func 停止批量刷新定时器() {
-        批量刷新定时器?.invalidate()
-        批量刷新定时器 = nil
+        // 定时器常驻，不 invalidate；仅在需要彻底释放时调用
     }
 
     /// 执行批量刷新：将内存缓冲区日志批量追加到日志列表

@@ -968,6 +968,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
             // operation not permitted 错误降噪：iOS 沙盒不支持出站 packet 监听，属良性错误
             // 10 秒内同类错误只输出一条汇总，避免刷屏
+            // 纳入内核日志采集开关控制，关闭时不输出
             if 内容.contains("listen outbound packet connection: operation not permitted") {
                 self.扩展数据队列.async {
                     self.Packet权限错误计数 += 1
@@ -979,8 +980,12 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                     let 计数 = self.Packet权限错误计数
                     self.Packet权限错误计数 = 0
                     self.上次Packet权限错误汇总时间 = 现在
-                    self.记录扩展日志(级别: "警告", 模块: "sing-box内核",
-                        内容: "【出站Packet权限受限】iOS不支持出站packet监听，UDP无法代理，TCP/MITM不受影响。近10秒累计\(计数)条")
+                    // 只有内核日志采集开关开启时才输出汇总警告
+                    let 调试日志开启 = self.共享默认?.bool(forKey: "debugLogEnabled") ?? true
+                    if 调试日志开启 {
+                        self.记录扩展日志(级别: "警告", 模块: "sing-box内核",
+                            内容: "【出站Packet权限受限】iOS不支持出站packet监听，UDP无法代理，TCP/MITM不受影响。近10秒累计\(计数)条")
+                    }
                 }
                 return
             }

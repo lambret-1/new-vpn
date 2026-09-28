@@ -276,9 +276,21 @@ private struct 分组视图: View {
         }
     }
 
-    /// 编辑分组（重命名）
+    /// 编辑分组（完整编辑订阅信息）
     private func 编辑分组() {
-        // 弹出重命名输入框
+        // 查找该分组对应的订阅
+        let 分组名 = 分组.名称
+        guard let 订阅 = 状态.远程订阅列表.first(where: { $0.名称 == 分组名 }) else {
+            // 非订阅分组，仅支持重命名
+            重命名分组()
+            return
+        }
+        // 弹出编辑订阅页面
+        显示编辑订阅页面(订阅)
+    }
+
+    /// 重命名分组（非订阅分组）
+    private func 重命名分组() {
         let 提示 = UIAlertController(title: "编辑分组", message: "输入新的分组名称", preferredStyle: .alert)
         提示.addTextField { 文本框 in
             文本框.text = 分组.名称
@@ -288,7 +300,6 @@ private struct 分组视图: View {
         提示.addAction(UIAlertAction(title: "确定", style: .default) { _ in
             if let 新名称 = 提示.textFields?.first?.text, !新名称.isEmpty {
                 let 旧名称 = 分组.名称
-                // 更新该分组所有节点的分组名
                 for 索引 in 状态.节点列表.indices {
                     if 状态.节点列表[索引].分组 == 旧名称 {
                         状态.节点列表[索引].分组 = 新名称
@@ -298,54 +309,101 @@ private struct 分组视图: View {
                 状态.保存持久化节点()
             }
         })
+        弹出视图控制器(提示)
+    }
 
-        // 获取最顶层视图控制器
-        guard let 窗口 = UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene })
-            .flatMap({ $0.windows })
-            .first(where: { $0.isKeyWindow }),
-              let 顶层控制器 = 窗口.rootViewController else {
-            return
+    /// 显示编辑订阅页面
+    private func 显示编辑订阅页面(_ 订阅: 远程订阅模型) {
+        // 创建编辑订阅页面
+        let 编辑页面 = 编辑订阅视图控制器(订阅: 订阅) { 新名称, 新地址 in
+            // 更新订阅信息
+            if let 索引 = 状态.远程订阅列表.firstIndex(where: { $0.id == 订阅.id }) {
+                状态.远程订阅列表[索引].名称 = 新名称
+                状态.远程订阅列表[索引].地址 = 新地址
+                状态.保存订阅列表()
+                // 更新节点分组名称
+                let 旧名称 = 订阅.名称
+                for 节点索引 in 状态.节点列表.indices {
+                    if 状态.节点列表[节点索引].分组 == 旧名称 {
+                        状态.节点列表[节点索引].分组 = 新名称
+                    }
+                }
+                状态.节点分组列表 = Mock数据.生成节点分组(节点列表: 状态.节点列表)
+                状态.保存持久化节点()
+            }
         }
-        var 最顶层 = 顶层控制器
-        while let 弹出的 = 最顶层.presentedViewController {
-            最顶层 = 弹出的
-        }
-        最顶层.present(提示, animated: true)
+        弹出视图控制器(编辑页面)
     }
 
     /// 更新节点（重新订阅该分组）
     private func 更新节点() {
-        // 查找该分组对应的订阅并更新
         let 分组名 = 分组.名称
-        if let 订阅 = 状态.远程订阅列表.first(where: { $0.名称 == 分组名 }) {
-            // 触发订阅更新
-            NotificationCenter.default.post(name: .init("更新订阅"), object: 订阅.id)
+        guard let 订阅 = 状态.远程订阅列表.first(where: { $0.名称 == 分组名 }) else {
+            // 非订阅分组，提示无法更新
+            提示信息("该分组不是订阅分组，无法更新")
+            return
+        }
+        // 直接调用更新订阅方法
+        状态.更新订阅(订阅ID: 订阅.id) { 结果 in
+            DispatchQueue.main.async {
+                switch 结果 {
+                case .success:
+                    提示信息("节点更新成功")
+                case .failure(let 错误):
+                    提示信息("更新失败：\(错误.localizedDescription)")
+                }
+            }
         }
     }
 
-    /// 分享二维码（生成节点链接二维码）
+    /// 分享二维码（生成订阅地址二维码）
     private func 分享二维码() {
-        let 链接列表 = 分组.节点列表.map { 节点 -> String in
-            生成节点链接(节点)
+        let 分组名 = 分组.名称
+        // 优先使用订阅地址生成二维码
+        if let 订阅 = 状态.远程订阅列表.first(where: { $0.名称 == 分组名 }),
+           !订阅.地址.isEmpty {
+            生成并分享二维码(内容: 订阅.地址, 标题: "订阅地址")
+        } else if let 第一个节点 = 分组.节点列表.first {
+            // 非订阅分组，使用第一个节点链接生成二维码
+            let 链接 = 生成节点链接(第一个节点)
+            生成并分享二维码(内容: 链接, 标题: 第一个节点.名称)
+        } else {
+            提示信息("分组内无节点，无法生成二维码")
         }
-        let 全部链接 = 链接列表.joined(separator: "\n")
+    }
 
-        // 生成二维码
-        guard let 数据 = 全部链接.data(using: .utf8),
-              let 滤镜 = CIFilter(name: "CIQRCodeGenerator") else { return }
+    /// 生成并分享二维码
+    private func 生成并分享二维码(内容: String, 标题: String) {
+        guard let 数据 = 内容.data(using: .utf8),
+              let 滤镜 = CIFilter(name: "CIQRCodeGenerator") else {
+            提示信息("二维码生成失败")
+            return
+        }
         滤镜.setValue(数据, forKey: "inputMessage")
-        滤镜.setValue("H", forKey: "inputCorrectionLevel")
+        滤镜.setValue("M", forKey: "inputCorrectionLevel")
 
-        guard let 输出图像 = 滤镜.outputImage else { return }
-        let 缩放变换 = CGAffineTransform(scaleX: 10, y: 10)
+        guard let 输出图像 = 滤镜.outputImage else {
+            提示信息("二维码生成失败")
+            return
+        }
+
+        // 缩放并转换为 UIImage
+        let 缩放变换 = CGAffineTransform(scaleX: 20, y: 20)
         let 缩放图像 = 输出图像.transformed(by: 缩放变换)
         let 上下文 = CIContext()
-        guard let cg图像 = 上下文.createCGImage(缩放图像, from: 缩放图像.extent) else { return }
+        guard let cg图像 = 上下文.createCGImage(缩放图像, from: 缩放图像.extent) else {
+            提示信息("二维码生成失败")
+            return
+        }
         let ui图像 = UIImage(cgImage: cg图像)
 
-        // 分享二维码
-        let 活动控制器 = UIActivityViewController(activityItems: [ui图像], applicationActivities: nil)
+        // 保存到临时文件并分享
+        let 临时路径 = FileManager.default.temporaryDirectory.appendingPathComponent("\(标题).png")
+        if let png数据 = ui图像.pngData() {
+            try? png数据.write(to: 临时路径)
+        }
+
+        let 活动控制器 = UIActivityViewController(activityItems: [ui图像, 标题], applicationActivities: nil)
 
         // 获取最顶层视图控制器
         guard let 窗口 = UIApplication.shared.connectedScenes
@@ -371,6 +429,28 @@ private struct 分组视图: View {
         }
 
         顶层控制器.present(活动控制器, animated: true)
+    }
+
+    /// 提示信息
+    private func 提示信息(_ 消息: String) {
+        let 提示 = UIAlertController(title: "提示", message: 消息, preferredStyle: .alert)
+        提示.addAction(UIAlertAction(title: "确定", style: .default))
+        弹出视图控制器(提示)
+    }
+
+    /// 弹出视图控制器
+    private func 弹出视图控制器(_ 控制器: UIViewController) {
+        guard let 窗口 = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .flatMap({ $0.windows })
+            .first(where: { $0.isKeyWindow }),
+              var 顶层控制器 = 窗口.rootViewController else {
+            return
+        }
+        while let 弹出的 = 顶层控制器.presentedViewController {
+            顶层控制器 = 弹出的
+        }
+        顶层控制器.present(控制器, animated: true)
     }
 
     /// 复制分组所有节点链接
@@ -1488,6 +1568,155 @@ private struct 移动分组页面: View {
     private func 显示错误(_ 消息: String) {
         错误消息 = 消息
         显示错误提示 = true
+    }
+}
+
+// MARK: - 编辑订阅视图控制器
+
+/// 编辑订阅视图控制器（UIKit 实现，支持名称和地址编辑）
+class 编辑订阅视图控制器: UIViewController {
+    /// 原始订阅
+    private let 订阅: 远程订阅模型
+    /// 完成回调（新名称，新地址）
+    private let 完成: (String, String) -> Void
+
+    /// 名称输入框
+    private let 名称输入框 = UITextField()
+    /// 地址输入框
+    private let 地址输入框 = UITextField()
+
+    init(订阅: 远程订阅模型, 完成: @escaping (String, String) -> Void) {
+        self.订阅 = 订阅
+        self.完成 = 完成
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        设置界面()
+    }
+
+    private func 设置界面() {
+        view.backgroundColor = .systemBackground
+        title = "编辑订阅"
+
+        // 导航栏按钮
+        navigationItem.leftBarButtonItem = UIBarButtonItem(
+            barButtonSystemItem: .cancel,
+            target: self,
+            action: #selector(取消)
+        )
+        navigationItem.rightBarButtonItem = UIBarButtonItem(
+            barButtonSystemItem: .save,
+            target: self,
+            action: #selector(保存)
+        )
+
+        // 滚动视图
+        let 滚动视图 = UIScrollView()
+        滚动视图.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(滚动视图)
+
+        // 内容容器
+        let 容器 = UIView()
+        容器.translatesAutoresizingMaskIntoConstraints = false
+        滚动视图.addSubview(容器)
+
+        // 名称标签
+        let 名称标签 = UILabel()
+        名称标签.text = "订阅名称"
+        名称标签.font = .systemFont(ofSize: 14, weight: .medium)
+        名称标签.translatesAutoresizingMaskIntoConstraints = false
+        容器.addSubview(名称标签)
+
+        // 名称输入框
+        名称输入框.text = 订阅.名称
+        名称输入框.placeholder = "请输入订阅名称"
+        名称输入框.borderStyle = .roundedRect
+        名称输入框.font = .systemFont(ofSize: 14)
+        名称输入框.translatesAutoresizingMaskIntoConstraints = false
+        容器.addSubview(名称输入框)
+
+        // 地址标签
+        let 地址标签 = UILabel()
+        地址标签.text = "资源网址"
+        地址标签.font = .systemFont(ofSize: 14, weight: .medium)
+        地址标签.translatesAutoresizingMaskIntoConstraints = false
+        容器.addSubview(地址标签)
+
+        // 地址输入框
+        地址输入框.text = 订阅.地址
+        地址输入框.placeholder = "请输入订阅地址 URL"
+        地址输入框.borderStyle = .roundedRect
+        地址输入框.font = .systemFont(ofSize: 14)
+        地址输入框.autocapitalizationType = .none
+        地址输入框.keyboardType = .URL
+        地址输入框.translatesAutoresizingMaskIntoConstraints = false
+        容器.addSubview(地址输入框)
+
+        // 约束
+        NSLayoutConstraint.activate([
+            滚动视图.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            滚动视图.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            滚动视图.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            滚动视图.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+
+            容器.topAnchor.constraint(equalTo: 滚动视图.topAnchor),
+            容器.leadingAnchor.constraint(equalTo: 滚动视图.leadingAnchor),
+            容器.trailingAnchor.constraint(equalTo: 滚动视图.trailingAnchor),
+            容器.bottomAnchor.constraint(equalTo: 滚动视图.bottomAnchor),
+            容器.widthAnchor.constraint(equalTo: 滚动视图.widthAnchor),
+
+            名称标签.topAnchor.constraint(equalTo: 容器.topAnchor, constant: 20),
+            名称标签.leadingAnchor.constraint(equalTo: 容器.leadingAnchor, constant: 16),
+            名称标签.trailingAnchor.constraint(equalTo: 容器.trailingAnchor, constant: -16),
+
+            名称输入框.topAnchor.constraint(equalTo: 名称标签.bottomAnchor, constant: 8),
+            名称输入框.leadingAnchor.constraint(equalTo: 容器.leadingAnchor, constant: 16),
+            名称输入框.trailingAnchor.constraint(equalTo: 容器.trailingAnchor, constant: -16),
+            名称输入框.heightAnchor.constraint(equalToConstant: 44),
+
+            地址标签.topAnchor.constraint(equalTo: 名称输入框.bottomAnchor, constant: 20),
+            地址标签.leadingAnchor.constraint(equalTo: 容器.leadingAnchor, constant: 16),
+            地址标签.trailingAnchor.constraint(equalTo: 容器.trailingAnchor, constant: -16),
+
+            地址输入框.topAnchor.constraint(equalTo: 地址标签.bottomAnchor, constant: 8),
+            地址输入框.leadingAnchor.constraint(equalTo: 容器.leadingAnchor, constant: 16),
+            地址输入框.trailingAnchor.constraint(equalTo: 容器.trailingAnchor, constant: -16),
+            地址输入框.heightAnchor.constraint(equalToConstant: 44),
+            地址输入框.bottomAnchor.constraint(equalTo: 容器.bottomAnchor, constant: -20)
+        ])
+    }
+
+    @objc private func 取消() {
+        dismiss(animated: true)
+    }
+
+    @objc private func 保存() {
+        let 新名称 = 名称输入框.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let 新地址 = 地址输入框.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+
+        guard !新名称.isEmpty else {
+            显示错误提示("订阅名称不能为空")
+            return
+        }
+        guard !新地址.isEmpty else {
+            显示错误提示("订阅地址不能为空")
+            return
+        }
+
+        完成(新名称, 新地址)
+        dismiss(animated: true)
+    }
+
+    private func 显示错误提示(_ 消息: String) {
+        let 提示 = UIAlertController(title: "错误", message: 消息, preferredStyle: .alert)
+        提示.addAction(UIAlertAction(title: "确定", style: .default))
+        present(提示, animated: true)
     }
 }
 

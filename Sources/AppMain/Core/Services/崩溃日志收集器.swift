@@ -82,7 +82,7 @@ final class 崩溃日志收集器 {
     private let 最大数量 = 50
 
     /// 之前的异常处理器
-    private var 之前的异常处理器: NSUncaughtExceptionHandler?
+    var 之前的异常处理器: NSUncaughtExceptionHandler?
     /// 之前的 Signal 处理器
     private var 之前的Signal处理器: [Int32: sig_t] = [:]
 

@@ -189,28 +189,33 @@ final class SingBox内核桥接 {
     func 更新统计() {
         guard 是否运行中, let 服务 = 服务 else { return }
 
-        // 尝试通过 KVC 获取上行/下行字节统计
-        // libbox 不同版本属性名可能不同，逐一尝试常见命名
+        // 通过 NSSelectorFromString + perform 探测属性，避免 KVC value(forKey:) 在属性不存在时
+        // 抛 NSUnknownKeyException 导致扩展崩溃（之前用 value(forKey:) 遍历键名，第一个不存在的键直接 crash）
         let 上行键名列表 = ["uploadBytes", "upload", "upBytes", "txBytes", "sentBytes"]
         let 下行键名列表 = ["downloadBytes", "download", "downBytes", "rxBytes", "receivedBytes"]
 
         for 键名 in 上行键名列表 {
-            if let 值 = (服务 as AnyObject).value(forKey: 键名) as? NSNumber {
+            let 选择子 = NSSelectorFromString(键名)
+            guard 服务.responds(to: 选择子) else { continue }
+            if let 值 = (服务 as AnyObject).perform(选择子)?.takeUnretainedValue() as? NSNumber {
                 上行字节 = 值.uint64Value
                 break
             }
         }
 
         for 键名 in 下行键名列表 {
-            if let 值 = (服务 as AnyObject).value(forKey: 键名) as? NSNumber {
+            let 选择子 = NSSelectorFromString(键名)
+            guard 服务.responds(to: 选择子) else { continue }
+            if let 值 = (服务 as AnyObject).perform(选择子)?.takeUnretainedValue() as? NSNumber {
                 下行字节 = 值.uint64Value
                 break
             }
         }
 
         // 尝试调用 stats 方法获取统计字典
-        if 服务.responds(to: NSSelectorFromString("stats")) {
-            if let 统计 = (服务 as AnyObject).perform(NSSelectorFromString("stats"))?.takeUnretainedValue() as? [String: Any] {
+        let 统计选择子 = NSSelectorFromString("stats")
+        if 服务.responds(to: 统计选择子) {
+            if let 统计 = (服务 as AnyObject).perform(统计选择子)?.takeUnretainedValue() as? [String: Any] {
                 if let 上行 = 统计["upload"] as? UInt64 { 上行字节 = 上行 }
                 if let 下行 = 统计["download"] as? UInt64 { 下行字节 = 下行 }
                 if let 上行 = 统计["up"] as? UInt64 { 上行字节 = 上行 }

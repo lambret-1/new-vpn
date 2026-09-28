@@ -62,9 +62,14 @@ final class VPN扩展内存监控器: ObservableObject {
 
     // MARK: - 显示属性
 
-    /// 当前内存占用显示文字（自动格式化）
+    /// 当前内存占用显示文字（自动格式化，精确到小数点后两位）
     var 占用显示: String {
         字节格式化(当前占用字节)
+    }
+
+    /// 重置为0（VPN断开时调用）
+    func 重置为零() {
+        当前占用字节 = 0
     }
 
     /// VPN 扩展内存等级（扩展内存限制严格，阈值较低）
@@ -116,14 +121,16 @@ final class VPN扩展内存监控器: ObservableObject {
 
     // MARK: - 辅助方法
 
-    /// 字节格式化
+    /// 字节格式化（精确到小数点后两位，便于观察变化）
     private func 字节格式化(_ 字节: UInt64) -> String {
-        if 字节 < 1024 {
+        if 字节 == 0 {
+            return "0 B"
+        } else if 字节 < 1024 {
             return "\(字节) B"
         } else if 字节 < 1024 * 1024 {
-            return String(format: "%.1f KB", Double(字节) / 1024)
+            return String(format: "%.2f KB", Double(字节) / 1024)
         } else {
-            return String(format: "%.1f MB", Double(字节) / (1024 * 1024))
+            return String(format: "%.2f MB", Double(字节) / (1024 * 1024))
         }
     }
 }

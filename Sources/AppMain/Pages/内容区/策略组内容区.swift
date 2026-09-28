@@ -16,36 +16,10 @@ struct 策略组内容区: View {
     @EnvironmentObject private var 隧道管理: 隧道管理器
     /// 展开的组名集合
     @State private var 展开组集合: Set<String> = []
-    /// 搜索关键词
-    @State private var 搜索关键词 = ""
-    /// 排序方式
-    @State private var 排序方式: 策略组排序方式 = .默认
     /// 批量测速中的组名
     @State private var 批量测速中组: String?
     /// 批量测速进度
     @State private var 批量测速进度: (已测: Int, 总数: Int) = (0, 0)
-
-    /// 排序方式枚举
-    enum 策略组排序方式: String, CaseIterable {
-        case 默认 = "默认"
-        case 延迟升序 = "延迟↑"
-        case 延迟降序 = "延迟↓"
-        case 名称 = "名称"
-    }
-
-    /// 过滤后的策略组列表
-    private var 过滤后列表: [策略组模型] {
-        var 列表 = 状态.策略组列表
-        // 搜索过滤
-        if !搜索关键词.isEmpty {
-            列表 = 列表.filter { 组 in
-                组.名称.localizedCaseInsensitiveContains(搜索关键词) ||
-                组.当前选中.localizedCaseInsensitiveContains(搜索关键词) ||
-                组.节点列表.contains { $0.localizedCaseInsensitiveContains(搜索关键词) }
-            }
-        }
-        return 列表
-    }
 
     var body: some View {
         VStack(spacing: 10) {
@@ -81,86 +55,12 @@ struct 策略组内容区: View {
                 .frame(maxWidth: .infinity)
                 .padding(.top, 60)
             } else {
-                // 搜索栏 + 工具栏
-                VStack(spacing: 8) {
-                    // 搜索框
-                    HStack(spacing: 8) {
-                        Image(systemName: "magnifyingglass")
-                            .foregroundColor(.secondary)
-                            .font(.system(size: 14))
-                        TextField("搜索策略组或节点", text: $搜索关键词)
-                            .font(.system(size: 14))
-                            .textFieldStyle(PlainTextFieldStyle())
-                        if !搜索关键词.isEmpty {
-                            Button(action: { 搜索关键词 = "" }) {
-                                Image(systemName: "xmark.circle.fill")
-                                    .foregroundColor(.secondary)
-                                    .font(.system(size: 14))
-                            }
-                            .buttonStyle(PlainButtonStyle())
-                        }
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(Color.卡片背景)
-                    .cornerRadius(10)
-
-                    // 工具栏：排序 + 全部展开/收起
-                    HStack(spacing: 12) {
-                        // 排序选择
-                        Menu {
-                            ForEach(策略组排序方式.allCases, id: \.self) { 方式 in
-                                Button(action: { 排序方式 = 方式 }) {
-                                    HStack {
-                                        Text(方式.rawValue)
-                                        if 排序方式 == 方式 {
-                                            Image(systemName: "checkmark")
-                                        }
-                                    }
-                                }
-                            }
-                        } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: "arrow.up.arrow.down")
-                                    .font(.system(size: 12))
-                                Text(排序方式.rawValue)
-                                    .font(.system(size: 12))
-                            }
-                            .foregroundColor(.secondary)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(Color.卡片背景)
-                            .cornerRadius(8)
-                        }
-
-                        Spacer()
-
-                        // 全部展开/收起
-                        Button(action: 切换全部展开) {
-                            HStack(spacing: 4) {
-                                Image(systemName: 全部展开 ? "chevron.down" : "chevron.up")
-                                    .font(.system(size: 12))
-                                Text(全部展开 ? "全部收起" : "全部展开")
-                                    .font(.system(size: 12))
-                            }
-                            .foregroundColor(.secondary)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(Color.卡片背景)
-                            .cornerRadius(8)
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                    }
-                }
-                .padding(.horizontal, 15)
-                .padding(.top, 8)
-
-                // 策略组列表
+                // 策略组列表（节点默认按延迟由低到高排序）
                 ScrollView {
                     VStack(spacing: 12) {
-                        ForEach(过滤后列表) { 组 in
+                        ForEach(状态.策略组列表) { 组 in
                             策略组卡片(
-                                组: 排序后节点(组),
+                                组: 按延迟升序排序(组),
                                 展开: 展开组集合.contains(组.名称),
                                 批量测速中: 批量测速中组 == 组.名称,
                                 批量测速进度: 批量测速中组 == 组.名称 ? 批量测速进度 : nil
@@ -172,7 +72,7 @@ struct 策略组内容区: View {
                         }
                     }
                     .padding(.horizontal, 15)
-                    .padding(.top, 4)
+                    .padding(.top, 8)
                     .padding(.bottom, 16)
                 }
             }
@@ -185,20 +85,6 @@ struct 策略组内容区: View {
         }
     }
 
-    /// 是否全部展开
-    private var 全部展开: Bool {
-        展开组集合.count == 状态.策略组列表.count && !状态.策略组列表.isEmpty
-    }
-
-    /// 切换全部展开/收起
-    private func 切换全部展开() {
-        if 全部展开 {
-            展开组集合.removeAll()
-        } else {
-            展开组集合 = Set(状态.策略组列表.map { $0.名称 })
-        }
-    }
-
     /// 切换组展开状态
     private func 切换展开(_ 组名: String) {
         if 展开组集合.contains(组名) {
@@ -208,26 +94,13 @@ struct 策略组内容区: View {
         }
     }
 
-    /// 排序后节点列表
-    private func 排序后节点(_ 组: 策略组模型) -> 策略组模型 {
+    /// 节点按延迟由低到高排序
+    private func 按延迟升序排序(_ 组: 策略组模型) -> 策略组模型 {
         var 排序组 = 组
-        switch 排序方式 {
-        case .默认:
-            break
-        case .延迟升序:
-            排序组.节点列表 = 组.节点列表.sorted { 节点1, 节点2 in
-                let 延迟1 = 组.节点延迟[节点1] ?? Int.max
-                let 延迟2 = 组.节点延迟[节点2] ?? Int.max
-                return 延迟1 < 延迟2
-            }
-        case .延迟降序:
-            排序组.节点列表 = 组.节点列表.sorted { 节点1, 节点2 in
-                let 延迟1 = 组.节点延迟[节点1] ?? -1
-                let 延迟2 = 组.节点延迟[节点2] ?? -1
-                return 延迟1 > 延迟2
-            }
-        case .名称:
-            排序组.节点列表 = 组.节点列表.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+        排序组.节点列表 = 组.节点列表.sorted { 节点1, 节点2 in
+            let 延迟1 = 组.节点延迟[节点1] ?? Int.max
+            let 延迟2 = 组.节点延迟[节点2] ?? Int.max
+            return 延迟1 < 延迟2
         }
         return 排序组
     }

@@ -104,6 +104,7 @@ enum 应用主题: String, CaseIterable {
 /// 顶部横向滑动功能卡片类型
 enum 顶部卡片类型: String, CaseIterable, Identifiable {
     case 节点
+    case 策略组
     case 网络活动
     case 重写规则
     case 分流规则
@@ -119,6 +120,7 @@ enum 顶部卡片类型: String, CaseIterable, Identifiable {
     var 背景色: Color {
         switch self {
         case .节点: return Color(red: 0.24, green: 0.77, blue: 0.82)
+        case .策略组: return Color(red: 0.98, green: 0.72, blue: 0.20)
         case .网络活动: return Color(red: 0.91, green: 0.36, blue: 0.20)
         case .重写规则: return Color(red: 0.99, green: 0.33, blue: 0.63)
         case .分流规则: return Color(red: 0.35, green: 0.78, blue: 0.98)
@@ -131,6 +133,7 @@ enum 顶部卡片类型: String, CaseIterable, Identifiable {
     var 图标: String {
         switch self {
         case .节点: return "server.rack"
+        case .策略组: return "square.stack.3d.up"
         case .网络活动: return "list.clipboard"
         case .重写规则: return "pencil"
         case .分流规则: return "arrow.triangle.branch"
@@ -245,6 +248,8 @@ final class AppState: ObservableObject {
     @Published var 网络连接列表: [网络连接模型] = []
     /// 节点分组列表（按分组名聚合）
     @Published var 节点分组列表: [节点分组模型] = []
+    /// 策略组列表（selector/urltest）
+    @Published var 策略组列表: [策略组模型] = []
     /// 远程订阅列表
     @Published var 远程订阅列表: [远程订阅模型] = []
 

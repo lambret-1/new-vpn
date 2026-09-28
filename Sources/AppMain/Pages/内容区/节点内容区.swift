@@ -125,6 +125,12 @@ private struct 分组视图: View {
     @State private var 显示编辑页面 = false
     /// 当前编辑的订阅
     @State private var 当前编辑订阅: 远程订阅模型?
+    /// 显示二维码弹窗
+    @State private var 显示二维码弹窗 = false
+    /// 二维码图像
+    @State private var 二维码图像: UIImage?
+    /// 二维码标题
+    @State private var 二维码标题 = ""
 
     /// 双卡片网格列定义
     private let 网格列 = [
@@ -216,6 +222,11 @@ private struct 分组视图: View {
                     }
                     显示编辑页面 = false
                 }
+            }
+        }
+        .sheet(isPresented: $显示二维码弹窗) {
+            if let 图像 = 二维码图像 {
+                二维码弹窗视图(图像: 图像, 标题: 二维码标题)
             }
         }
     }
@@ -361,66 +372,31 @@ private struct 分组视图: View {
         }
     }
 
-    /// 分享二维码（生成订阅地址二维码）
+    /// 分享二维码（生成订阅地址二维码，直接弹窗显示）
     private func 分享二维码() {
         let 分组名 = 分组.名称
         // 优先使用订阅地址生成二维码
         if let 订阅 = 状态.远程订阅列表.first(where: { $0.名称 == 分组名 }),
            !订阅.地址.isEmpty {
-            生成并分享二维码(内容: 订阅.地址, 标题: "订阅地址")
+            显示二维码弹窗(内容: 订阅.地址, 标题: "订阅地址")
         } else if let 第一个节点 = 分组.节点列表.first {
             // 非订阅分组，使用第一个节点链接生成二维码
             let 链接 = 生成节点链接(第一个节点)
-            生成并分享二维码(内容: 链接, 标题: 第一个节点.名称)
+            显示二维码弹窗(内容: 链接, 标题: 第一个节点.名称)
         } else {
             提示信息("分组内无节点，无法生成二维码")
         }
     }
 
-    /// 生成并分享二维码
-    private func 生成并分享二维码(内容: String, 标题: String) {
-        // 生成二维码图像
-        guard let 二维码图像 = 生成二维码图像(内容: 内容) else {
+    /// 显示二维码弹窗
+    private func 显示二维码弹窗(内容: String, 标题: String) {
+        guard let 图像 = 生成二维码图像(内容: 内容) else {
             提示信息("二维码生成失败")
             return
         }
-
-        // 保存到临时文件
-        let 临时路径 = FileManager.default.temporaryDirectory.appendingPathComponent("\(标题).png")
-        if let png数据 = 二维码图像.pngData() {
-            try? png数据.write(to: 临时路径)
-        }
-
-        // 分享二维码
-        let 活动控制器 = UIActivityViewController(
-            activityItems: [二维码图像, 标题],
-            applicationActivities: nil
-        )
-
-        // 获取最顶层视图控制器
-        guard let 窗口 = UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene })
-            .flatMap({ $0.windows })
-            .first(where: { $0.isKeyWindow }),
-              var 顶层控制器 = 窗口.rootViewController else {
-            return
-        }
-        while let 弹出的 = 顶层控制器.presentedViewController {
-            顶层控制器 = 弹出的
-        }
-
-        // iPad 适配
-        if let 弹出控制器 = 活动控制器.popoverPresentationController {
-            弹出控制器.sourceView = 顶层控制器.view
-            弹出控制器.sourceRect = CGRect(
-                x: 顶层控制器.view.bounds.midX,
-                y: 顶层控制器.view.bounds.midY,
-                width: 0, height: 0
-            )
-            弹出控制器.permittedArrowDirections = []
-        }
-
-        顶层控制器.present(活动控制器, animated: true)
+        二维码图像 = 图像
+        二维码标题 = 标题
+        显示二维码弹窗 = true
     }
 
     /// 生成二维码图像（带白色背景，确保可扫描）
@@ -1598,6 +1574,77 @@ private struct 移动分组页面: View {
     private func 显示错误(_ 消息: String) {
         错误消息 = 消息
         显示错误提示 = true
+    }
+}
+
+// MARK: - 二维码弹窗视图
+
+/// 二维码弹窗视图
+private struct 二维码弹窗视图: View {
+    /// 二维码图像
+    let 图像: UIImage
+    /// 标题
+    let 标题: String
+    /// 环境
+    @Environment(\.dismiss) private var 关闭
+
+    var body: some View {
+        NavigationView {
+            VStack(spacing: 24) {
+                Spacer()
+
+                // 标题
+                Text(标题)
+                    .font(.system(size: 18, weight: .semibold))
+
+                // 二维码图像
+                Image(uiImage: 图像)
+                    .resizable()
+                    .interpolation(.none)
+                    .scaledToFit()
+                    .frame(width: 240, height: 240)
+                    .padding(16)
+                    .background(Color.white)
+                    .cornerRadius(16)
+                    .shadow(color: .black.opacity(0.1), radius: 12, x: 0, y: 4)
+
+                // 提示文字
+                Text("使用相机或扫码工具扫描")
+                    .font(.system(size: 14))
+                    .foregroundColor(.secondary)
+
+                Spacer()
+
+                // 关闭按钮
+                Button {
+                    关闭()
+                } label: {
+                    HStack {
+                        Spacer()
+                        Text("关闭")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(.white)
+                        Spacer()
+                    }
+                    .padding(.vertical, 14)
+                    .background(Color.主题色)
+                    .cornerRadius(12)
+                }
+            }
+            .padding(24)
+            .background(Color.页面背景.ignoresSafeArea())
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        关闭()
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+        }
     }
 }
 

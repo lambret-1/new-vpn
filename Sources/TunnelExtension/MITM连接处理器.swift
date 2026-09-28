@@ -114,12 +114,17 @@ final class MITM连接处理器 {
             扩展日志记录器.共享.错误("MITM", "获取服务器身份失败：\(目标域名)")
         }
 
-        // 允许 TLS 1.0 到 1.3（兼容旧客户端）
-        SSLSetProtocolVersionMin(上下文, .tlsProtocol1)
+        // 允许 TLS 1.2 到 1.3（现代浏览器最低支持 1.2）
+        SSLSetProtocolVersionMin(上下文, .tlsProtocol12)
         SSLSetProtocolVersionMax(上下文, .tlsProtocol13)
+
+        // 不要求客户端证书
+        SSLSetClientSideAuthentication(上下文, .never)
 
         // 允许断点续连（false = 不允许，每次完整握手）
         SSLSetSessionOption(上下文, .breakOnClientAuth, false)
+
+        扩展日志记录器.共享.信息("MITM", "SSL 上下文初始化完成，准备握手：\(目标域名)")
     }
 
     // MARK: - SSL IO 回调

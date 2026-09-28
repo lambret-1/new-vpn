@@ -164,6 +164,9 @@ final class MITM证书签发器 {
 
         扩展日志记录器.共享.信息("MITM", "域名证书签发成功：\(域名)，DER长度=\(证书DER.count)")
 
+        // 验证证书是否由 CA 正确签发（SecTrust 验证）
+        验证证书链(服务器证书: 服务器证书, CA证书: ca证书, 域名: 域名)
+
         // 4. 将服务器证书和私钥添加到钥匙串，创建 SecIdentity
         let 标签 = "com.newvpn.mitm.\(域名)"
         guard let 身份 = 创建身份(证书: 服务器证书, 私钥: 服务器私钥, 标签: 标签) else {
@@ -304,6 +307,33 @@ final class MITM证书签发器 {
     func 清空缓存() {
         缓存队列.async {
             self.证书缓存.removeAll()
+        }
+    }
+
+    // MARK: - 证书链验证
+
+    /// 验证服务器证书是否由 CA 正确签发
+    private func 验证证书链(服务器证书: SecCertificate, CA证书: SecCertificate, 域名: String) {
+        let 策略 = SecPolicyCreateSSL(true, 域名 as CFString)
+        var 可选信任: SecTrust?
+        let 创建状态 = SecTrustCreateWithCertificates([服务器证书, CA证书] as CFArray, 策略, &可选信任)
+        guard 创建状态 == errSecSuccess, let 信任 = 可选信任 else {
+            扩展日志记录器.共享.错误("MITM", "SecTrust 创建失败：\(创建状态) (\(域名))")
+            return
+        }
+
+        // 设置 CA 证书为锚点
+        SecTrustSetAnchorCertificates(信任, [CA证书] as CFArray)
+        SecTrustSetAnchorCertificatesOnly(信任, true)
+
+        // 同步评估
+        var 错误: CFError?
+        let 结果 = SecTrustEvaluateWithError(信任, &错误)
+        if 结果 {
+            扩展日志记录器.共享.追踪("MITM", "证书链验证通过：\(域名)")
+        } else {
+            let 错误描述 = 错误?.localizedDescription ?? "未知错误"
+            扩展日志记录器.共享.错误("MITM", "证书链验证失败：\(域名) - \(错误描述)")
         }
     }
 }

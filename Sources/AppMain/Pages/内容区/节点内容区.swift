@@ -15,8 +15,6 @@ struct 节点内容区: View {
     @EnvironmentObject private var 测速管理器: 测速管理器
     /// 隧道管理器
     @EnvironmentObject private var 隧道管理: 隧道管理器
-    /// 策略组管理器
-    @EnvironmentObject private var 策略组管理: 策略组管理器
 
     /// 当前显示模式
     @State private var 当前模式: 显示模式 = .节点
@@ -24,7 +22,7 @@ struct 节点内容区: View {
     private let 模式键 = "节点内容区显示模式"
 
     /// 显示模式枚举
-    private enum 显示模式: String {
+    enum 显示模式: String {
         case 节点 = "节点模式"
         case 策略 = "策略模式"
     }
@@ -484,7 +482,6 @@ private struct 节点双卡片: View {
 
 /// 策略模式视图：sing-box 策略组列表
 private struct 策略模式视图: View {
-    @EnvironmentObject private var 策略组管理: 策略组管理器
     @EnvironmentObject private var 状态: AppState
     @EnvironmentObject private var 测速管理器: 测速管理器
     @EnvironmentObject private var 隧道管理: 隧道管理器
@@ -519,12 +516,12 @@ private struct 策略模式视图: View {
             .padding(.horizontal, 15)
             .padding(.vertical, 8)
 
-            if 策略组管理.策略组列表.isEmpty {
+            if 状态.策略组列表.isEmpty {
                 策略空状态视图()
             } else {
                 ScrollView {
                     LazyVStack(spacing: 12) {
-                        ForEach($策略组管理.策略组列表) { $策略组 in
+                        ForEach($状态.策略组列表) { $策略组 in
                             策略组视图(策略组: $策略组)
                         }
                     }
@@ -537,8 +534,8 @@ private struct 策略模式视图: View {
 
     /// 全部测速
     private func 全部测速() {
-        for 策略组 in 策略组管理.策略组列表 {
-            策略组管理.测速(组名: 策略组.名称) { _ in }
+        for 策略组 in 状态.策略组列表 {
+            策略组管理器.共享.测速(组名: 策略组.名称) { _ in }
         }
     }
 }
@@ -548,7 +545,6 @@ private struct 策略模式视图: View {
 /// 策略组视图
 private struct 策略组视图: View {
     @Binding var 策略组: 策略组模型
-    @EnvironmentObject private var 策略组管理: 策略组管理器
     @EnvironmentObject private var 状态: AppState
     @EnvironmentObject private var 测速管理器: 测速管理器
     @EnvironmentObject private var 隧道管理: 隧道管理器
@@ -653,7 +649,6 @@ private struct 策略节点卡片: View {
     let 可手动切换: Bool
     let 延迟: Int?
 
-    @EnvironmentObject private var 策略组管理: 策略组管理器
     @State private var 显示Toast = false
     @State private var Toast消息 = ""
 
@@ -728,7 +723,7 @@ private struct 策略节点卡片: View {
 
     /// 切换节点
     private func 切换节点() {
-        策略组管理.切换节点(组名: 组名, 节点名: 节点名) { 成功 in
+        策略组管理器.共享.切换节点(组名: 组名, 节点名: 节点名) { 成功 in
             DispatchQueue.main.async {
                 if 成功 {
                     显示Toast消息("已切换到 \(节点名)")
@@ -1212,6 +1207,5 @@ private struct 移动分组页面: View {
         .environmentObject(AppState.共享)
         .environmentObject(测速管理器.共享)
         .environmentObject(隧道管理器.共享)
-        .environmentObject(策略组管理器.共享)
         .background(Color.页面背景)
 }

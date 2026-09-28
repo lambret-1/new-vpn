@@ -10,6 +10,10 @@ import MachO
 import SwiftUI
 import Combine
 
+/// iOS 上 thread_basic_info 相关常量手动定义
+private let THREAD_BASIC_INFO_FLAVOR: thread_flavor_t = UInt32(THREAD_BASIC_INFO)
+private let THREAD_BASIC_INFO_COUNT_VALUE = mach_msg_type_number_t(MemoryLayout<thread_basic_info>.size / MemoryLayout<integer_t>.size)
+
 /// CPU 占用监控器：定期采样当前进程 CPU 使用率
 final class CPU占用监控器: ObservableObject {
     /// 共享单例
@@ -67,11 +71,11 @@ final class CPU占用监控器: ObservableObject {
         for 索引 in 0..<Int(线程数) {
             guard let 线程 = 线程列表?[索引] else { continue }
             var 线程信息 = thread_basic_info()
-            var 信息数 = mach_msg_type_number_t(THREAD_BASIC_INFO_COUNT)
+            var 信息数 = THREAD_BASIC_INFO_COUNT_VALUE
 
             let 结果 = withUnsafeMutablePointer(to: &线程信息) { 指针 in
                 指针.withMemoryRebound(to: integer_t.self, capacity: Int(信息数)) { 重绑定指针 in
-                    thread_info(线程, THREAD_BASIC_INFO, 重绑定指针, &信息数)
+                    thread_info(线程, THREAD_BASIC_INFO_FLAVOR, 重绑定指针, &信息数)
                 }
             }
 

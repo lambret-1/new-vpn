@@ -69,21 +69,29 @@ final class CPU占用监控器: ObservableObject {
         var 总使用时间: UInt64 = 0
 
         // 遍历所有线程，累加用户态和内核态使用时间
-        for 索引 in 0..<Int(线程数) {
-            guard let 线程 = 线程列表?[索引] else { continue }
-            var 线程信息 = thread_basic_info()
-            var 信息数 = THREAD_BASIC_INFO_COUNT_VALUE
+        if let 列表 = 线程列表 {
+            for 索引 in 0..<Int(线程数) {
+                let 线程 = 列表[索引]
+                var 线程信息 = thread_basic_info()
+                var 信息数 = THREAD_BASIC_INFO_COUNT_VALUE
 
-            let 结果 = withUnsafeMutablePointer(to: &线程信息) { 指针 in
-                指针.withMemoryRebound(to: integer_t.self, capacity: Int(信息数)) { 重绑定指针 in
-                    thread_info(线程, THREAD_BASIC_INFO_FLAVOR, 重绑定指针, &信息数)
+                let 结果 = withUnsafeMutablePointer(to: &线程信息) { 指针 in
+                    指针.withMemoryRebound(to: integer_t.self, capacity: Int(信息数)) { 重绑定指针 in
+                        thread_info(线程, THREAD_BASIC_INFO_FLAVOR, 重绑定指针, &信息数)
+                    }
                 }
-            }
 
-            if 结果 == KERN_SUCCESS {
-                let 用户时间 = UInt64(线程信息.user_time.seconds) * 1_000_000 + UInt64(线程信息.user_time.microseconds)
-                let 系统时间 = UInt64(线程信息.system_time.seconds) * 1_000_000 + UInt64(线程信息.system_time.microseconds)
-                总使用时间 += 用户时间 + 系统时间
+                if 结果 == KERN_SUCCESS {
+                    // 安全转换：seconds 可能为负数，使用 max(0, ...) 避免 UInt64 转换崩溃
+                    let 用户秒 = UInt64(max(0, 线程信息.user_time.seconds))
+                    let 用户微秒 = UInt64(max(0, 线程信息.user_time.microseconds))
+                    let 系统秒 = UInt64(max(0, 线程信息.system_time.seconds))
+                    let 系统微秒 = UInt64(max(0, 线程信息.system_time.microseconds))
+
+                    let 用户时间 = 用户秒 * 1_000_000 + 用户微秒
+                    let 系统时间 = 系统秒 * 1_000_000 + 系统微秒
+                    总使用时间 = 总使用时间 &+ 用户时间 &+ 系统时间 // 使用溢出加法避免崩溃
+                }
             }
         }
 
@@ -97,17 +105,17 @@ final class CPU占用监控器: ObservableObject {
         // 获取当前系统时间（纳秒）
         let 当前系统时间 = DispatchTime.now().uptimeNanoseconds
 
-        // 计算 CPU 使用率
+        // 计算 CPU 使用率（使用溢出减法避免下溢崩溃）
         if 上次总使用时间 > 0 && 上次系统时间 > 0 {
-            let 使用时间差 = Double(总使用时间 - 上次总使用时间) // 微秒
-            let 系统时间差 = Double(当前系统时间 - 上次系统时间) / 1000 // 纳秒转微秒
+            let 使用时间差 = 总使用时间 >= 上次总使用时间 ? Double(总使用时间 &- 上次总使用时间) : 0
+            let 系统时间差 = 当前系统时间 >= 上次系统时间 ? Double(当前系统时间 &- 上次系统时间) / 1000 : 0
 
             if 系统时间差 > 0 {
                 // CPU 使用率 = 使用时间差 / 系统时间差 * 100
                 // 多核 CPU 可能超过 100%，限制在 0-100 范围显示
                 let 使用率 = min(max(使用时间差 / 系统时间差 * 100, 0), 100)
-                DispatchQueue.main.async {
-                    self.当前使用率 = 使用率
+                DispatchQueue.main.async { [weak self] in
+                    self?.当前使用率 = 使用率
                 }
             }
         }

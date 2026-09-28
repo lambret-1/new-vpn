@@ -176,6 +176,9 @@ private struct 分组视图: View {
                     分组.是否展开.toggle()
                 }
             }
+            .contextMenu {
+                节点分组上下文菜单
+            }
 
             // 展开的节点双卡片网格
             if 分组.是否展开 {
@@ -223,6 +226,144 @@ private struct 分组视图: View {
                 }
             }
         )
+    }
+
+    // MARK: - 分组上下文菜单
+
+    /// 节点分组上下文菜单
+    @ViewBuilder
+    private var 节点分组上下文菜单: some View {
+        // 分组测速
+        Button {
+            执行分组测速()
+        } label: {
+            Label("分组测速", systemImage: "gauge")
+        }
+
+        // 选择最快节点
+        Button {
+            选择最快节点()
+        } label: {
+            Label("选择最快节点", systemImage: "bolt.fill")
+        }
+
+        // 复制分组所有节点链接
+        Button {
+            复制分组所有链接()
+        } label: {
+            Label("复制全部节点链接", systemImage: "doc.on.doc")
+        }
+
+        // 展开/收起全部分组
+        Button {
+            分组.是否展开.toggle()
+        } label: {
+            Label(分组.是否展开 ? "收起分组" : "展开分组", systemImage: 分组.是否展开 ? "chevron.up" : "chevron.down")
+        }
+
+        // 删除分组（ destructive）
+        Button(role: .destructive) {
+            删除分组()
+        } label: {
+            Label("删除分组", systemImage: "trash")
+        }
+    }
+
+    /// 选择最快节点并切换
+    private func 选择最快节点() {
+        let 有效节点 = 分组.节点列表.filter { $0.测速数据?.成功 == true }
+        guard let 最快节点 = 有效节点.min(by: { ($0.测速数据?.延迟毫秒 ?? Int.max) < ($1.测速数据?.延迟毫秒 ?? Int.max) }) else {
+            // 没有测速数据，先测速
+            执行分组测速()
+            return
+        }
+        状态.当前节点ID = 最快节点.id
+        隧道管理.切换节点并重载(节点ID: 最快节点.id, 节点名称: 最快节点.名称)
+    }
+
+    /// 复制分组所有节点链接
+    private func 复制分组所有链接() {
+        let 链接列表 = 分组.节点列表.map { 节点 -> String in
+            生成节点链接(节点)
+        }
+        let 全部链接 = 链接列表.joined(separator: "\n")
+        UIPasteboard.general.string = 全部链接
+    }
+
+    /// 生成单个节点链接
+    private func 生成节点链接(_ 节点: 节点模型) -> String {
+        let 名称编码 = 节点.名称.addingPercentEncoding(withAllowedCharacters: .urlFragmentAllowed) ?? 节点.名称
+
+        switch 节点.协议 {
+        case .vless:
+            var 参数 = [String]()
+            参数.append("encryption=none")
+            参数.append("type=\(节点.传输类型 == .ws ? "ws" : "tcp")")
+            if let 路径 = 节点.ws路径, !路径.isEmpty {
+                参数.append("path=\(路径.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? 路径)")
+            }
+            if let 主机 = 节点.ws主机, !主机.isEmpty {
+                参数.append("host=\(主机)")
+            }
+            if 节点.启用TLS {
+                参数.append("security=tls")
+                if let sni = 节点.服务器名称, !sni.isEmpty {
+                    参数.append("sni=\(sni)")
+                }
+            } else {
+                参数.append("security=none")
+            }
+            let uuid = 节点.用户标识 ?? ""
+            return "vless://\(uuid)@\(节点.地址):\(节点.端口)?\(参数.joined(separator: "&"))#\(名称编码)"
+
+        case .vmess:
+            let vmess字典: [String: Any] = [
+                "v": "2", "ps": 节点.名称, "add": 节点.地址,
+                "port": "\(节点.端口)", "id": 节点.用户标识 ?? "",
+                "aid": "0", "scy": "auto",
+                "net": 节点.传输类型 == .ws ? "ws" : "tcp",
+                "type": "none", "host": 节点.ws主机 ?? "",
+                "path": 节点.ws路径 ?? "",
+                "tls": 节点.启用TLS ? "tls" : "",
+                "sni": 节点.服务器名称 ?? ""
+            ]
+            if let json数据 = try? JSONSerialization.data(withJSONObject: vmess字典),
+               let json字符串 = String(data: json数据, encoding: .utf8) {
+                let base64 = json字符串.data(using: .utf8)?.base64EncodedString() ?? ""
+                return "vmess://\(base64)"
+            }
+            return "vmess://\(节点.地址):\(节点.端口)"
+
+        case .trojan:
+            var 参数 = [String]()
+            参数.append("type=\(节点.传输类型 == .ws ? "ws" : "tcp")")
+            if let 路径 = 节点.ws路径, !路径.isEmpty {
+                参数.append("path=\(路径.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? 路径)")
+            }
+            if let 主机 = 节点.ws主机, !主机.isEmpty {
+                参数.append("host=\(主机)")
+            }
+            if 节点.启用TLS {
+                参数.append("security=tls")
+                if let sni = 节点.服务器名称, !sni.isEmpty {
+                    参数.append("sni=\(sni)")
+                }
+            }
+            let 密码 = 节点.用户标识 ?? ""
+            return "trojan://\(密码)@\(节点.地址):\(节点.端口)?\(参数.joined(separator: "&"))#\(名称编码)"
+
+        case .shadowsocks:
+            let 方法密码 = "\(节点.用户标识 ?? "")"
+            let base64 = 方法密码.data(using: .utf8)?.base64EncodedString() ?? ""
+            return "ss://\(base64)@\(节点.地址):\(节点.端口)#\(名称编码)"
+        }
+    }
+
+    /// 删除分组（删除该分组所有节点）
+    private func 删除分组() {
+        let 分组名 = 分组.名称
+        状态.节点列表.removeAll { $0.分组 == 分组名 }
+        状态.节点分组列表 = Mock数据.生成节点分组(节点列表: 状态.节点列表)
     }
 }
 
@@ -619,6 +760,9 @@ private struct 策略组视图: View {
                     策略组.是否展开.toggle()
                 }
             }
+            .contextMenu {
+                策略分组上下文菜单
+            }
 
             // 展开的节点双卡片网格
             if 策略组.是否展开 {
@@ -635,6 +779,49 @@ private struct 策略组视图: View {
                 }
                 .transition(.opacity)
             }
+        }
+    }
+
+    // MARK: - 策略分组上下文菜单
+
+    /// 策略分组上下文菜单
+    @ViewBuilder
+    private var 策略分组上下文菜单: some View {
+        // 组内测速
+        Button {
+            策略组管理器.共享.测速(组名: 策略组.名称) { _ in }
+        } label: {
+            Label("组内测速", systemImage: "gauge")
+        }
+
+        // 复制当前节点
+        Button {
+            if let 当前节点 = 策略组.当前节点 {
+                UIPasteboard.general.string = 当前节点
+            }
+        } label: {
+            Label("复制当前节点", systemImage: "doc.on.doc")
+        }
+
+        // 复制组名
+        Button {
+            UIPasteboard.general.string = 策略组.名称
+        } label: {
+            Label("复制组名", systemImage: "textformat")
+        }
+
+        // 展开/收起
+        Button {
+            策略组.是否展开.toggle()
+        } label: {
+            Label(策略组.是否展开 ? "收起分组" : "展开分组", systemImage: 策略组.是否展开 ? "chevron.up" : "chevron.down")
+        }
+
+        // 类型说明
+        Button {
+            // 类型说明通过 Toast 或 Alert 展示
+        } label: {
+            Label("类型说明：\(策略组.类型标题)", systemImage: "info.circle")
         }
     }
 }

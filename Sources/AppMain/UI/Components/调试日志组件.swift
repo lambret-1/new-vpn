@@ -264,7 +264,9 @@ struct 调试日志内容区: View {
     private var 日志纯文本: String {
         let 日期格式器 = DateFormatter()
         日期格式器.dateFormat = "HH:mm:ss.SSS"
-        return 日志管理.筛选后的日志列表.reversed().map { 日志 in
+        // 先转换为 Array，避免 ReversedCollection 类型问题
+        let 正序列表 = Array(日志管理.筛选后的日志列表).reversed()
+        return 正序列表.map { 日志 in
             "[\(日期格式器.string(from: 日志.时间))] [\(日志.级别.rawValue)] [\(日志.模块)] \(日志.内容)"
         }.joined(separator: "\n")
     }
@@ -289,7 +291,7 @@ struct 调试日志内容区: View {
                 }
             } else {
                 // 纯文本日志视图：使用 UITextView 直接渲染，避免列表渲染卡顿
-                纯文本日志视图(日志文本: .constant(日志纯文本), 自动滚动到底部: true)
+                纯文本日志视图(日志文本: 日志纯文本, 自动滚动到底部: true)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
@@ -839,7 +841,7 @@ private struct 分享视图: UIViewControllerRepresentable {
 /// 纯文本日志视图：使用 UITextView 直接渲染纯文本，避免 SwiftUI 列表渲染开销
 struct 纯文本日志视图: UIViewRepresentable {
     /// 日志文本
-    @Binding var 日志文本: String
+    let 日志文本: String
     /// 是否自动滚动到底部
     var 自动滚动到底部: Bool = true
 
@@ -862,9 +864,9 @@ struct 纯文本日志视图: UIViewRepresentable {
         // 只有文本变化时才更新，避免频繁重绘
         if uiView.text != 日志文本 {
             uiView.text = 日志文本
-            if 自动滚动到底部 {
+            if 自动滚动到底部 && !日志文本.isEmpty {
                 // 滚动到底部
-                let 底部 = NSRange(location: max(0, 日志文本.count - 1), length: 1)
+                let 底部 = NSRange(location: max(0, 日志文本.utf16.count - 1), length: 1)
                 uiView.scrollRangeToVisible(底部)
             }
         }

@@ -49,8 +49,10 @@ struct 网络活动内容区: View {
             }
         }
         .padding(.horizontal, 15)
-        .fullScreenCover(item: $选中连接) { 连接 in
+        .sheet(item: $选中连接) { 连接 in
             连接详情页面(连接: 连接)
+                .presentationDetents([.fraction(0.95)])
+                .presentationDragIndicator(.visible)
         }
     }
 
@@ -495,17 +497,16 @@ struct 连接详情页面: View {
                 .padding(15)
             }
             .background(Color.页面背景)
-            .navigationTitle("连接详情")
+            .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button {
                         关闭()
                     } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: "chevron.left")
-                            Text("返回")
-                        }
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(.secondary)
                     }
                 }
             }

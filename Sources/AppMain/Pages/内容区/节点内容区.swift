@@ -1673,13 +1673,6 @@ private struct 编辑订阅页面: View {
                                 .keyboardType(.URL)
                                 .lineLimit(3...5)
                         }
-
-                        // 订阅信息
-                        VStack(alignment: .leading, spacing: 8) {
-                            信息行(标签: "上次更新", 值: 订阅.上次更新显示)
-                            信息行(标签: "地址", 值: 订阅.地址显示)
-                        }
-                        .padding(.top, 8)
                     }
                     .padding(16)
                     .background(Color.卡片背景)
@@ -1719,23 +1712,6 @@ private struct 编辑订阅页面: View {
                 Button("确定", role: .cancel) {}
             } message: {
                 Text(错误消息)
-            }
-        }
-    }
-
-    /// 信息行
-    private struct 信息行: View {
-        let 标签: String
-        let 值: String
-
-        var body: some View {
-            HStack {
-                Text(标签)
-                    .font(.system(size: 13))
-                    .foregroundColor(.secondary)
-                Spacer()
-                Text(值)
-                    .font(.system(size: 13, weight: .medium))
             }
         }
     }

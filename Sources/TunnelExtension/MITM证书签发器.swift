@@ -92,10 +92,10 @@ final class MITM证书签发器 {
         let 过期时间 = Date().addingTimeInterval(证书有效期)
         缓存队列.async {
             self.证书缓存[标准化域名] = (身份, 过期时间)
-            // 缓存上限：最多缓存 200 张证书，超出清理最旧的
-            if self.证书缓存.count > 200 {
+            // 缓存上限：最多缓存 100 张证书（内存优化：从200降至100），超出清理最旧的
+            if self.证书缓存.count > 100 {
                 let 排序 = self.证书缓存.sorted { $0.value.过期时间 < $1.value.过期时间 }
-                for i in 0..<(self.证书缓存.count - 200) {
+                for i in 0..<(self.证书缓存.count - 100) {
                     self.证书缓存.removeValue(forKey: 排序[i].key)
                 }
             }

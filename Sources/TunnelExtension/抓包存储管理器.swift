@@ -22,8 +22,8 @@ final class 抓包存储管理器: ObservableObject {
     private let AppGroupID = "group.com.newvpn.app"
     /// 抓包记录存储键
     private let 抓包记录键 = "httpCaptureRecords"
-    /// 最大记录数（环形缓冲）
-    private let 最大记录数 = 500
+    /// 最大记录数（环形缓冲，内存优化：从500降至200）
+    private let 最大记录数 = 200
     /// 抓包开关存储键
     private let 抓包开关键 = "httpCaptureEnabled"
     /// 热更新指令键

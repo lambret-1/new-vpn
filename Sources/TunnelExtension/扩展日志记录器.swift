@@ -30,8 +30,8 @@ final class 扩展日志记录器 {
     /// 日志写入队列（串行，避免并发解码-插入-编码-设置导致丢日志）
     private let 写入队列 = DispatchQueue(label: "com.newvpn.extension.log", qos: .utility)
 
-    /// 最大保留日志条数
-    private let 最大条数 = 500
+    /// 最大保留日志条数（内存优化：从500降至200，减少扩展常驻内存）
+    private let 最大条数 = 200
 
     private init() {}
 

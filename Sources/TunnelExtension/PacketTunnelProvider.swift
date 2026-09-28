@@ -583,9 +583,9 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         RunLoop.main.add(统计定时器!, forMode: .common)
     }
 
-    /// 清理超过 30 秒的 DNS 查询开始时间记录，防止字典无限增长导致内存超限
+    /// 清理超过 15 秒的 DNS 查询开始时间记录（内存优化：从30秒降至15秒，防止字典无限增长）
     private func 清理超时的DNS查询开始时间() {
-        let 超时阈值: TimeInterval = 30
+        let 超时阈值: TimeInterval = 15
         扩展数据队列.async {
             let 现在 = Date()
             self.DNS查询开始时间 = self.DNS查询开始时间.filter { _, 开始时间 in

@@ -111,6 +111,12 @@ final class SingBox内核桥接 {
         平台接口.tun文件描述符 = tun文件描述符
         日志回调?(2, "桥接层：TUN 文件描述符已设置到平台接口")
 
+        // Go 运行时内存优化：GOGC=20更激进GC（默认100），GOMEMLIMIT限制堆上限32MB
+        // 这两个参数能显著降低 sing-box 常驻内存，代价是轻微增加 CPU 占用
+        setenv("GOGC", "20", 1)
+        setenv("GOMEMLIMIT", "32MiB", 1)
+        日志回调?(2, "桥接层：Go运行时参数已设置 GOGC=20 GOMEMLIMIT=32MiB")
+
         // 创建服务
         日志回调?(2, "桥接层：调用 LibboxNewService...")
         var 错误: NSError?

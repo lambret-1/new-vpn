@@ -615,18 +615,25 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
     /// 获取当前进程内存占用（字节）
     private func 获取当前进程内存占用() -> UInt64 {
-        // MACH_TASK_BASIC_INFO 常量值为 4，手动定义确保跨平台兼容
-        let MACH_TASK_BASIC_INFO_FLAVOR: task_flavor_t = 4
+        // TASK_BASIC_INFO_64 = 27，64位系统上mach_task_basic_info对应的flavor
+        // 注意：不能用4（TASK_THREADS_ARRAY），否则返回数据被错误解释导致resident_size为垃圾值
+        let TASK_BASIC_INFO_64_FLAVOR: task_flavor_t = 27
         var 任务信息 = mach_task_basic_info()
         var 信息数 = mach_msg_type_number_t(MemoryLayout<mach_task_basic_info>.size / MemoryLayout<integer_t>.size)
 
         let 结果 = withUnsafeMutablePointer(to: &任务信息) { 指针 in
             指针.withMemoryRebound(to: integer_t.self, capacity: Int(信息数)) { 重绑定指针 in
-                task_info(mach_task_self_, MACH_TASK_BASIC_INFO_FLAVOR, 重绑定指针, &信息数)
+                task_info(mach_task_self_, TASK_BASIC_INFO_64_FLAVOR, 重绑定指针, &信息数)
             }
         }
 
         guard 结果 == KERN_SUCCESS else {
+            return 0
+        }
+
+        // 数据校验：resident_size 不应超过设备总内存，异常值返回0
+        let 最大合理内存: UInt64 = 8 * 1024 * 1024 * 1024 // 8GB上限
+        guard 任务信息.resident_size > 0 && 任务信息.resident_size < 最大合理内存 else {
             return 0
         }
 

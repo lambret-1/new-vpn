@@ -51,9 +51,12 @@ final class VPN扩展内存监控器: ObservableObject {
     /// 从 App Group 读取 VPN 扩展内存占用
     private func 读取扩展内存() {
         guard let 共享默认 = 共享默认 else { return }
-        let 内存 = 共享默认.object(forKey: "tunnelMemoryBytes") as? UInt64 ?? 0
+        // 注意：UserDefaults存储UInt64时桥接为NSNumber，读取时必须用as? NSNumber再取uint64Value
+        // 直接as? UInt64会静默失败，始终得到0，导致数值不刷新
+        let 内存对象 = 共享默认.object(forKey: "tunnelMemoryBytes") as? NSNumber
+        let 内存值 = 内存对象?.uint64Value ?? 0
         DispatchQueue.main.async { [weak self] in
-            self?.当前占用字节 = 内存
+            self?.当前占用字节 = 内存值
         }
     }
 

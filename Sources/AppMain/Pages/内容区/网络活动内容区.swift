@@ -132,9 +132,9 @@ private struct 流量统计区: View {
         .cornerRadius(12)
     }
 
-    /// 单个统计卡片
+    /// 单个统计卡片（高度与CPU/内存卡片对齐）
     private func 统计卡片(图标: String, 图标颜色: Color, 标题: String, 数值: String, 单位: String) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
                 Image(systemName: 图标)
                     .font(.system(size: 14))
@@ -144,12 +144,16 @@ private struct 流量统计区: View {
                     .foregroundColor(.secondary)
             }
             Text(数值)
-                .font(.system(size: 24, weight: .bold))
+                .font(.system(size: 22, weight: .bold))
                 .foregroundColor(.primary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.5)
+            // 占位进度条（透明，保持高度一致）
+            RoundedRectangle(cornerRadius: 3)
+                .fill(Color.clear)
+                .frame(height: 6)
             Text(单位)
-                .font(.system(size: 11))
+                .font(.system(size: 10))
                 .foregroundColor(.secondary)
                 .lineLimit(1)
         }

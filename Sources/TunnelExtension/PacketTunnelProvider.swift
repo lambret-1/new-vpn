@@ -9,6 +9,7 @@
 import NetworkExtension
 import Network
 import os
+import Foundation
 
 // MARK: - 隧道提供者
 
@@ -614,12 +615,14 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
     /// 获取当前进程内存占用（字节）
     private func 获取当前进程内存占用() -> UInt64 {
+        // MACH_TASK_BASIC_INFO 常量值为 4，手动定义确保跨平台兼容
+        let MACH_TASK_BASIC_INFO_FLAVOR: task_flavor_t = 4
         var 任务信息 = mach_task_basic_info()
         var 信息数 = mach_msg_type_number_t(MemoryLayout<mach_task_basic_info>.size / MemoryLayout<integer_t>.size)
 
         let 结果 = withUnsafeMutablePointer(to: &任务信息) { 指针 in
             指针.withMemoryRebound(to: integer_t.self, capacity: Int(信息数)) { 重绑定指针 in
-                task_info(mach_task_self_, task_flavor_t(MACH_TASK_BASIC_INFO), 重绑定指针, &信息数)
+                task_info(mach_task_self_, MACH_TASK_BASIC_INFO_FLAVOR, 重绑定指针, &信息数)
             }
         }
 

@@ -243,10 +243,10 @@ final class SingBox配置生成器 {
         }
 
         // Direct 出站（标签大写参考官方客户端）
-        // 动态检测当前活动物理网卡并绑定，避免直连流量回环到 TUN 导致 connection refused
-        let 活动接口 = 检测当前活动物理网卡()
-        NSLog("[SingBox配置] DIRECT 出站绑定物理网卡：%@", 活动接口)
-        出站列表.append(SingBox出站配置.direct出站(标签: "DIRECT", 绑定接口: 活动接口))
+        // 不绑定物理网卡：绑定接口时 sing-box 尝试在物理接口创建 UDP packet 监听器，
+        // iOS 沙盒无原始套接字权限，报 operation not permitted。
+        // 回环防护由路由规则保证：代理服务器地址 + DNS 服务器地址 + 私有/局域网地址均直连
+        出站列表.append(SingBox出站配置.direct出站(标签: "DIRECT", 绑定接口: nil))
 
         // Block 出站
         出站列表.append(SingBox出站配置.block出站(标签: "REJECT"))
@@ -511,9 +511,10 @@ final class SingBox配置生成器 {
 
         return SingBox路由配置(
             final: 最终出站,
-            // 关闭 auto_detect_interface：iOS libbox 的 getInterfaces 返回对象属性不匹配导致 "no available network interface"
-            // 改用 DIRECT 出站的 bind_interface 直接绑定物理网卡
-            autoDetectInterface: false,
+            // 启用 auto_detect_interface：sing-box 在路由层面自动检测活动物理网卡，
+            // 替代 DIRECT 出站的 bind_interface，避免出站层面绑定接口时
+            // 尝试创建 UDP packet 监听器导致 iOS 沙盒 operation not permitted
+            autoDetectInterface: true,
             rules: 规则列表
         )
     }

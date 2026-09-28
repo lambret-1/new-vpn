@@ -50,7 +50,7 @@ struct 策略组内容区: View {
     var body: some View {
         VStack(spacing: 10) {
             // VPN 未连接提示
-            if !隧道管理.已连接 {
+            if 隧道管理.当前状态 != .已连接 {
                 HStack(spacing: 8) {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .foregroundColor(.orange)

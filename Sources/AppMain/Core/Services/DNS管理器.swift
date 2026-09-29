@@ -71,11 +71,17 @@ final class DNS管理器: ObservableObject {
         }
 
         let 新记录 = 记录列表.compactMap { 字典 -> DNS记录模型? in
-            guard let 域名 = 字典["域名"] as? String,
-                  !域名.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+            guard let 原始域名 = 字典["域名"] as? String else { return nil }
+            // 域名去除首尾空格，空域名直接过滤
+            let 域名 = 原始域名.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !域名.isEmpty,
                   let 记录类型字符串 = 字典["记录类型"] as? String else {
                 return nil
             }
+            // 过滤无用记录类型（OPT/SVCB/HTTPS等）
+            let 有效类型: Set<String> = ["A", "AAAA", "CNAME", "MX", "TXT", "NS", "SOA", "PTR", "SRV", "CAA"]
+            guard 有效类型.contains(记录类型字符串.uppercased()) else { return nil }
+
             let 记录类型 = DNS记录类型(rawValue: 记录类型字符串.uppercased()) ?? .A
             let 解析结果 = 字典["解析结果"] as? [String] ?? []
             let TTL = 字典["TTL"] as? Int ?? 300

@@ -754,7 +754,8 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     // MARK: - DNS 查询记录
 
     /// 已知的 DNS 记录类型关键字（用于动态定位，不依赖固定位置）
-    private let 已知记录类型: Set<String> = ["A", "AAAA", "CNAME", "MX", "TXT", "NS", "SOA", "PTR", "SRV", "CAA", "HTTPS", "SVCB"]
+    /// 只保留用户关心的常见类型，过滤 OPT/SVCB/HTTPS 等无用类型
+    private let 已知记录类型: Set<String> = ["A", "AAAA", "CNAME", "MX", "TXT", "NS", "SOA", "PTR", "SRV", "CAA"]
 
     /// 解析 sing-box DNS 日志并记录到共享 UserDefaults
     /// 支持格式：
@@ -793,22 +794,24 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             // 域名始终是第一个字段，去掉末尾的点
             let 原始域名 = 部分[0]
             let 域名 = 原始域名.hasSuffix(".") ? String(原始域名.dropLast()) : 原始域名
+            // 根域名"."或空域名直接跳过（OPT等伪记录）
             guard !域名.isEmpty else { return }
 
             // 计算响应耗时
             let 响应时间 = 计算DNS响应时间(域名: 域名)
 
-            // 缓存命中判断：响应时间小于2毫秒且有解析结果，视为缓存命中
-            // （不再用"无lookup开始时间"判断，因为lookup日志解析不稳定会导致100%误判）
-            let 是否缓存命中 = (响应时间 != nil && 响应时间! < 2)
-            let 来源 = 是否缓存命中 ? "缓存" : "远程"
-
-            // 判断是否 NXDOMAIN
+            // 判断是否 NXDOMAIN（解析失败）
             if 部分.count >= 2 && 部分[1].uppercased() == "NXDOMAIN" {
                 let TTL = 部分.count > 2 ? (Int(部分[2]) ?? 60) : 60
-                保存DNS记录(域名: 域名, 记录类型: "A", 解析结果: [], TTL: TTL, DNS服务器: "sing-box", 来源: 来源, 是否失败: true, 响应时间: 响应时间)
+                // 解析失败不标记为缓存命中
+                保存DNS记录(域名: 域名, 记录类型: "A", 解析结果: [], TTL: TTL, DNS服务器: "sing-box", 来源: "远程", 是否失败: true, 响应时间: 响应时间)
                 return
             }
+
+            // 缓存命中判断：响应时间小于1毫秒且有解析结果，视为缓存命中
+            // （严格判断，避免新网站首次解析被误标为缓存）
+            let 是否缓存命中 = (响应时间 != nil && 响应时间! < 1)
+            let 来源 = 是否缓存命中 ? "缓存" : "远程"
 
             // 动态查找记录类型的位置（不依赖固定位置，兼容不同 sing-box 版本格式）
             var 类型索引 = -1
@@ -823,15 +826,9 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                 }
             }
 
-            // 没找到已知类型，尝试用位置3作为类型（兼容旧格式）
+            // 没找到已知类型（OPT/SVCB/HTTPS等无用类型），直接跳过，不猜测位置
             if 类型索引 == -1 {
-                if 部分.count >= 4 {
-                    记录类型字符串 = 部分[3].uppercased()
-                    类型索引 = 3
-                } else {
-                    // 格式不认识，跳过
-                    return
-                }
+                return
             }
 
             // TTL：类型索引前面的数字字段（通常在域名后面）

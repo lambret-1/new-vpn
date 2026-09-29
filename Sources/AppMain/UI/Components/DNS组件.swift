@@ -247,14 +247,14 @@ struct DNS记录行: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
-            // 第一行：域名（主标题）+ 来源标签
+            // 第一行：域名（主标题）+ 类型标签 + 来源标签
             HStack(spacing: 8) {
                 Text(记录.域名.isEmpty ? "未知域名" : 记录.域名)
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(记录.域名.isEmpty ? .危险色 : .primary)
                     .lineLimit(1)
-
-                Spacer()
+                    .layoutPriority(1)
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
                 // 类型标签 + 来源标签
                 HStack(spacing: 5) {

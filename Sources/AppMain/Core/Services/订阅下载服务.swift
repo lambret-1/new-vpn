@@ -91,10 +91,11 @@ final class 订阅下载服务 {
         请求.httpMethod = "GET"
 
         // 设置 User-Agent
+        // 使用 Clash 风格 UA，确保自适应订阅链接返回包含分流规则的完整 Clash 配置
         if let ua = 订阅.自定义UA, !ua.isEmpty {
             请求.setValue(ua, forHTTPHeaderField: "User-Agent")
         } else {
-            请求.setValue("NewVPN/1.0 (iOS)", forHTTPHeaderField: "User-Agent")
+            请求.setValue("ClashforWindows/0.20.39", forHTTPHeaderField: "User-Agent")
         }
 
         // 设置自定义请求头

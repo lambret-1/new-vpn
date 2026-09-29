@@ -30,13 +30,13 @@ final class SingBox解释器 {
         guard let json数据 = json内容.data(using: .utf8),
               let json = try? JSONSerialization.jsonObject(with: json数据) as? [String: Any] else {
             错误列表.append(解析错误(类型: .JSON解析失败, 描述: "sing-box配置JSON解析失败", 原始内容: json内容, 行号: nil))
-            return 订阅解析结果(格式: .singbox配置, 节点列表: [], 错误列表: 错误列表)
+            return 订阅解析结果(格式: .singbox配置, 节点列表: [], 分流规则列表: [], 错误列表: 错误列表)
         }
 
         // 提取 outbounds 数组
         guard let outbounds = json["outbounds"] as? [[String: Any]] else {
             错误列表.append(解析错误(类型: .格式不支持, 描述: "未找到outbounds配置", 原始内容: nil, 行号: nil))
-            return 订阅解析结果(格式: .singbox配置, 节点列表: [], 错误列表: 错误列表)
+            return 订阅解析结果(格式: .singbox配置, 节点列表: [], 分流规则列表: [], 错误列表: 错误列表)
         }
 
         for (索引, outbound) in outbounds.enumerated() {
@@ -53,7 +53,76 @@ final class SingBox解释器 {
             }
         }
 
-        return 订阅解析结果(格式: .singbox配置, 节点列表: 节点列表, 错误列表: 错误列表)
+        // 解析路由规则
+        let 分流规则 = 解析路由规则(json)
+
+        return 订阅解析结果(格式: .singbox配置, 节点列表: 节点列表, 分流规则列表: 分流规则, 错误列表: 错误列表)
+    }
+
+    // MARK: - 解析路由规则
+
+    /// 从 sing-box 配置中解析路由规则
+    private func 解析路由规则(_ json: [String: Any]) -> [分流规则项] {
+        guard let route = json["route"] as? [String: Any],
+              let rules = route["rules"] as? [[String: Any]] else {
+            return []
+        }
+
+        var 规则列表: [分流规则项] = []
+        var 优先级 = 100
+
+        for 规则字典 in rules {
+            let 出站 = 规则字典["outbound"] as? String ?? "proxy"
+
+            // 转换动作
+            let 规则动作: 分流动作
+            switch 出站.lowercased() {
+            case "direct":
+                规则动作 = .直连
+            case "reject", "block":
+                规则动作 = .拦截
+            default:
+                规则动作 = .代理
+            }
+
+            // 域名精确
+            if let domains = 规则字典["domain"] as? [String] {
+                for 域名 in domains {
+                    规则列表.append(分流规则项(名称: "订阅-域名-\(域名)", 类型: .域名精确, 匹配值: 域名, 动作: 规则动作, 优先级: 优先级))
+                    优先级 += 1
+                }
+            }
+            // 域名后缀
+            if let suffixes = 规则字典["domain_suffix"] as? [String] {
+                for 后缀 in suffixes {
+                    规则列表.append(分流规则项(名称: "订阅-后缀-\(后缀)", 类型: .域名后缀, 匹配值: 后缀, 动作: 规则动作, 优先级: 优先级))
+                    优先级 += 1
+                }
+            }
+            // 域名关键词
+            if let keywords = 规则字典["domain_keyword"] as? [String] {
+                for 关键词 in keywords {
+                    规则列表.append(分流规则项(名称: "订阅-关键词-\(关键词)", 类型: .域名关键词, 匹配值: 关键词, 动作: 规则动作, 优先级: 优先级))
+                    优先级 += 1
+                }
+            }
+            // 域名正则
+            if let regexes = 规则字典["domain_regex"] as? [String] {
+                for 正则 in regexes {
+                    规则列表.append(分流规则项(名称: "订阅-正则-\(正则)", 类型: .正则表达式, 匹配值: 正则, 动作: 规则动作, 优先级: 优先级))
+                    优先级 += 1
+                }
+            }
+            // IP CIDR
+            if let cidrs = 规则字典["ip_cidr"] as? [String] {
+                for cidr in cidrs {
+                    规则列表.append(分流规则项(名称: "订阅-IP段-\(cidr)", 类型: .IP段, 匹配值: cidr, 动作: 规则动作, 优先级: 优先级))
+                    优先级 += 1
+                }
+            }
+        }
+
+        return 规则列表
     }
 
     // MARK: - 解析单个 Outbound

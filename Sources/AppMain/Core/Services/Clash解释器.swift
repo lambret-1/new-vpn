@@ -30,7 +30,7 @@ final class Clash解释器 {
         // 提取 proxies 部分
         guard let proxies部分 = 提取Proxies部分(yaml内容) else {
             错误列表.append(解析错误(类型: .格式不支持, 描述: "未找到proxies配置段", 原始内容: nil, 行号: nil))
-            return 订阅解析结果(格式: .clash配置, 节点列表: [], 错误列表: 错误列表)
+            return 订阅解析结果(格式: .clash配置, 节点列表: [], 分流规则列表: [], 错误列表: 错误列表)
         }
 
         // 解析每个代理节点
@@ -50,7 +50,103 @@ final class Clash解释器 {
             }
         }
 
-        return 订阅解析结果(格式: .clash配置, 节点列表: 节点列表, 错误列表: 错误列表)
+        // 解析分流规则（Clash rules 字段）
+        let 分流规则 = 解析分流规则(yaml内容)
+
+        return 订阅解析结果(格式: .clash配置, 节点列表: 节点列表, 分流规则列表: 分流规则, 错误列表: 错误列表)
+    }
+
+    // MARK: - 解析分流规则
+
+    /// 从 Clash YAML 配置中解析分流规则
+    private func 解析分流规则(_ yaml: String) -> [分流规则项] {
+        let 行列表 = yaml.components(separatedBy: .newlines)
+        var 规则列表: [分流规则项] = []
+        var 在规则段 = false
+        var 优先级 = 100
+
+        for 行 in 行列表 {
+            let 修剪后 = 行.trimmingCharacters(in: .whitespaces)
+
+            // 匹配 rules: 开头（顶层键）
+            if !在规则段 && (修剪后.hasPrefix("rules:") || 修剪后 == "rules:") {
+                在规则段 = true
+                continue
+            }
+
+            // 找到下一个顶层键，结束规则段
+            if 在规则段 && !修剪后.isEmpty && !修剪后.hasPrefix("#") && !修剪后.hasPrefix("-") {
+                if !行.hasPrefix(" ") && !行.hasPrefix("\t") && 修剪后.contains(":") {
+                    break
+                }
+            }
+
+            guard 在规则段, 修剪后.hasPrefix("-") else { continue }
+
+            // 解析规则行：- 类型,匹配值,动作
+            let 规则内容 = 修剪后.dropFirst().trimmingCharacters(in: .whitespaces)
+            let 部分 = 规则内容.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+            guard 部分.count >= 3 else { continue }
+
+            let 类型 = 部分[0].lowercased()
+            let 匹配值 = 部分[1]
+            let 动作 = 部分[2].lowercased()
+
+            // 转换动作
+            let 规则动作: 分流动作
+            switch 动作 {
+            case "proxy", "proxies", "🚀 节点选择", "节点选择":
+                规则动作 = .代理
+            case "direct", "direct", "🎯 全球直连", "全球直连":
+                规则动作 = .直连
+            case "reject", "block", "🛑 全球拦截", "全球拦截", "广告拦截":
+                规则动作 = .拦截
+            default:
+                规则动作 = .代理
+            }
+
+            // 转换类型并创建规则
+            var 规则类型: 分流规则类型?
+            switch 类型 {
+            case "domain":
+                规则类型 = .域名精确
+            case "domain-suffix", "domain_suffix":
+                规则类型 = .域名后缀
+            case "domain-keyword", "domain_keyword":
+                规则类型 = .域名关键词
+            case "domain-regex", "domain_regex":
+                规则类型 = .正则表达式
+            case "ip-cidr", "ip_cidr":
+                规则类型 = .IP段
+            case "ip-cidr6", "ip_cidr6":
+                规则类型 = .IP段
+            case "geoip":
+                // GEOIP 规则转换为 IP 段（简化处理，只匹配国家代码）
+                规则类型 = nil // 暂不支持 GEOIP，跳过
+            case "src-port", "src_port", "dst-port", "dst_port", "port":
+                规则类型 = .端口
+            case "process-name", "process_name":
+                规则类型 = .进程名称
+            case "network":
+                continue // 网络类型规则暂不支持
+            default:
+                continue // 不支持的规则类型跳过
+            }
+
+            guard let 类型 = 规则类型 else { continue }
+
+            let 规则 = 分流规则项(
+                名称: "订阅-\(类型.rawValue)-\(匹配值)",
+                类型: 类型,
+                匹配值: 匹配值,
+                动作: 规则动作,
+                优先级: 优先级
+            )
+            规则列表.append(规则)
+            优先级 += 1
+        }
+
+        return 规则列表
     }
 
     // MARK: - 提取 proxies 部分

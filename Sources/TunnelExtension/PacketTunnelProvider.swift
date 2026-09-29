@@ -731,8 +731,15 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     // MARK: - 诊断数据内存缓冲（二期内存优化）
 
     /// 预加载日志环形缓冲（从 UserDefaults 读取一次，调用前需在 扩展数据队列 上）
+    /// 关键：若缓冲已有内核启动期间写入的新日志，跳过预加载避免旧数据覆盖新日志
     private func 预加载日志缓冲() {
-        guard !日志缓冲已加载, let 共享默认 = 共享默认,
+        guard !日志缓冲已加载 else { return }
+        guard 日志环形缓冲.isEmpty else {
+            // 缓冲已有新数据（内核启动日志），直接标记已加载，不读旧 UserDefaults
+            日志缓冲已加载 = true
+            return
+        }
+        guard let 共享默认 = 共享默认,
               let 日志数据 = 共享默认.data(forKey: "tunnelLogs"),
               let 已存列表 = try? JSONDecoder().decode([扩展日志条目].self, from: 日志数据) else {
             日志缓冲已加载 = true
@@ -745,7 +752,12 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
     /// 预加载 DNS 记录缓冲（调用前需在 扩展数据队列 上）
     private func 预加载DNS记录缓冲() {
-        guard !DNS缓冲已加载, let 共享默认 = 共享默认,
+        guard !DNS缓冲已加载 else { return }
+        guard DNS记录缓冲.isEmpty else {
+            DNS缓冲已加载 = true
+            return
+        }
+        guard let 共享默认 = 共享默认,
               let 记录列表 = 共享默认.array(forKey: "dnsQueryRecords") as? [[String: Any]] else {
             DNS缓冲已加载 = true
             return
@@ -757,7 +769,12 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
     /// 预加载连接记录缓冲（调用前需在 扩展数据队列 上）
     private func 预加载连接记录缓冲() {
-        guard !连接缓冲已加载, let 共享默认 = 共享默认,
+        guard !连接缓冲已加载 else { return }
+        guard 连接记录缓冲.isEmpty else {
+            连接缓冲已加载 = true
+            return
+        }
+        guard let 共享默认 = 共享默认,
               let 记录列表 = 共享默认.array(forKey: "connectionRecords") as? [[String: Any]] else {
             连接缓冲已加载 = true
             return
@@ -835,6 +852,13 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
         // 如果指令时间大于已处理时间，说明有新的清理指令
         guard 指令时间 > 已处理时间 else { return }
+
+        // 防 stale：指令超过 60 秒视为过期（来自上一会话残留），忽略避免新隧道刚启动就被重启内核
+        guard Date().timeIntervalSince1970 - 指令时间 < 60 else {
+            // 标记为已处理，避免每秒重复检测
+            共享默认.set(指令时间, forKey: 已处理键)
+            return
+        }
 
         // 记录已处理时间
         共享默认.set(指令时间, forKey: 已处理键)

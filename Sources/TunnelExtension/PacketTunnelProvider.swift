@@ -60,6 +60,17 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     /// 无锁并发读写字典/UserDefaults 数组会触发 Swift 独占检查崩溃或堆损坏（对应 commit eb043b4 提到的数据竞争）
     private let 扩展数据队列 = DispatchQueue(label: "com.newvpn.app.tunnel.sharedstate", qos: .utility)
 
+    /// 内存采样独立队列（不与日志写入共用，避免日志积压时内存数据不刷新）
+    private let 内存采样队列 = DispatchQueue(label: "com.newvpn.app.tunnel.memorysample", qos: .userInitiated)
+
+    /// 日志队列积压计数器（原子操作），用于在积压时丢弃调试日志
+    private let 日志积压计数 = NSLock()
+    private var _日志积压数 = 0
+    private var 日志积压数: Int {
+        get { 日志积压计数.lock(); defer { 日志积压计数.unlock() }; return _日志积压数 }
+        set { 日志积压计数.lock(); _日志积压数 = newValue; 日志积压计数.unlock() }
+    }
+
     /// sing-box 内核桥接
     private let singBox桥接 = SingBox内核桥接.共享
 
@@ -619,6 +630,8 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         共享默认.set(下行字节, forKey: "downloadBytes")
         共享默认.set(是否运行中, forKey: "tunnelRunning")
         共享默认.set(Date(), forKey: "lastStatsUpdate")
+        // 立即同步，确保主APP跨进程读取到最新值
+        共享默认.synchronize()
     }
 
     /// 获取当前进程内存占用（字节）
@@ -652,10 +665,11 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     // MARK: - 内存采样定时器
 
     /// 启动独立内存采样定时器（每秒采样一次扩展内存写入App Group）
+    /// 使用独立队列，不被日志写入积压阻塞
     private func 启动内存采样定时器() {
         停止内存采样定时器()
 
-        let 定时器 = DispatchSource.makeTimerSource(queue: 扩展数据队列)
+        let 定时器 = DispatchSource.makeTimerSource(queue: 内存采样队列)
         定时器.schedule(deadline: .now(), repeating: 1.0, leeway: .milliseconds(100))
         定时器.setEventHandler { [weak self] in
             guard let self = self, let 共享默认 = self.共享默认 else { return }
@@ -937,20 +951,32 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             return
         }
 
+        // 队列积压保护：如果待写入日志超过100条，丢弃调试级别日志，避免队列无限增长
+        if 级别 == "调试" && 日志积压数 > 100 {
+            return
+        }
+
         let 条目 = 扩展日志条目(id: UUID(), 时间: Date(), 级别: 级别, 模块: 模块, 内容: 内容)
 
         // 保存到共享 UserDefaults（格式与主 App 读取一致）
         // 必须串行化：日志回调来自多个 Go 线程，并发 decode-insert-encode-set 会丢日志并可能损坏
+        日志积压数 += 1
         扩展数据队列.async { [weak self] in
-            guard let 自 = self, let 共享默认 = 自.共享默认 else { return }
+            guard let 自 = self, let 共享默认 = 自.共享默认 else {
+                self?.日志积压数 -= 1
+                return
+            }
+            defer { 自.日志积压数 -= 1 }
+
             var 日志列表: [扩展日志条目] = []
             if let 日志数据 = 共享默认.data(forKey: "tunnelLogs"),
                let 已存列表 = try? JSONDecoder().decode([扩展日志条目].self, from: 日志数据) {
                 日志列表 = 已存列表
             }
             日志列表.insert(条目, at: 0)
-            if 日志列表.count > 500 {
-                日志列表.removeLast(日志列表.count - 500)
+            // 上限200条，减少JSON编解码数据量
+            if 日志列表.count > 200 {
+                日志列表.removeLast(日志列表.count - 200)
             }
             if let 编码数据 = try? JSONEncoder().encode(日志列表) {
                 共享默认.set(编码数据, forKey: "tunnelLogs")

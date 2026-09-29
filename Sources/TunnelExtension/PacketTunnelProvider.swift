@@ -763,21 +763,16 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         记录扩展日志(级别: "信息", 模块: "内存", 内容: "收到内存清理指令，开始执行扩展内存清理，清理前：\(格式化字节(清理前内存))")
 
         // 1. 触发 Go 运行时垃圾回收（通过设置 GOGC 环境变量无法动态触发，这里清理 Swift 侧缓存）
-        // 2. 清理 DNS 查询记录缓存
+        // 2. 清理 DNS 查询记录缓存（全部清除，一条不留）
         共享默认.removeObject(forKey: "dnsQueryRecords")
         DNS记录条数 = 0
-        // 3. 清理扩展日志（保留最近50条）
-        if var 日志列表 = 共享默认.array(forKey: "tunnelLogs") as? [[String: Any]], 日志列表.count > 50 {
-            日志列表 = Array(日志列表.suffix(50))
-            共享默认.set(日志列表, forKey: "tunnelLogs")
-            当前日志条数 = 日志列表.count
-        }
-        // 4. 清理连接记录（保留最近50条）
-        if var 连接列表 = 共享默认.array(forKey: "connectionRecords") as? [[String: Any]], 连接列表.count > 50 {
-            连接列表 = Array(连接列表.suffix(50))
-            共享默认.set(连接列表, forKey: "connectionRecords")
-            连接记录条数 = 连接列表.count
-        }
+        // 3. 清理扩展日志（全部清除，一条不留）
+        共享默认.removeObject(forKey: "tunnelLogs")
+        当前日志条数 = 0
+        上次日志编码字节数 = 0
+        // 4. 清理连接记录（全部清除，一条不留）
+        共享默认.removeObject(forKey: "connectionRecords")
+        连接记录条数 = 0
 
         共享默认.synchronize()
 

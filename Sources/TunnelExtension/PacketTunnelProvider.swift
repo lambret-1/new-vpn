@@ -626,12 +626,12 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     private func 启动状态上报定时器() {
         停止状态上报定时器()
 
-        // 预加载诊断数据环形缓冲（从 UserDefaults 读取一次，后续全内存操作）
-        扩展数据队列.sync {
-            self.预加载日志缓冲()
-            self.预加载DNS记录缓冲()
-            self.预加载连接记录缓冲()
-        }
+        // 注意：不做同步预加载诊断缓冲。
+        // 内核启动期间产生的日志已通过 记录扩展日志() 异步写入内存缓冲，
+        // 首次定时器 tick 会自动将脏缓冲刷新到 UserDefaults。
+        // 同步预加载（扩展数据队列.sync）会阻塞 startTunnel 完成线程，
+        // 与 Go 线程日志回调中的 扩展数据队列.sync 竞争可能导致 completionHandler 延迟，
+        // 使 VPN 状态卡在"正在连接"。
 
         let 定时器 = DispatchSource.makeTimerSource(queue: 内存采样队列)
         定时器.schedule(deadline: .now(), repeating: 1.0, leeway: .milliseconds(100))

@@ -72,6 +72,7 @@ final class DNS管理器: ObservableObject {
 
         let 新记录 = 记录列表.compactMap { 字典 -> DNS记录模型? in
             guard let 域名 = 字典["域名"] as? String,
+                  !域名.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
                   let 记录类型字符串 = 字典["记录类型"] as? String else {
                 return nil
             }

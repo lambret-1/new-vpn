@@ -18,6 +18,8 @@ struct DNS记录页面: View {
     @State private var 搜索关键词 = ""
     /// 选中的记录类型筛选
     @State private var 筛选类型: DNS记录类型?
+    /// 选中的来源筛选
+    @State private var 筛选来源: DNS来源?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -30,6 +32,11 @@ struct DNS记录页面: View {
             AppSearchBar(搜索文字: $搜索关键词, 占位文字: "搜索域名或IP")
                 .padding(.horizontal, 15)
                 .padding(.vertical, 8)
+
+            // 来源筛选标签
+            来源筛选选择器(选中来源: $筛选来源)
+                .padding(.horizontal, 15)
+                .padding(.bottom, 4)
 
             // 记录类型筛选
             筛选类型选择器()
@@ -95,6 +102,10 @@ struct DNS记录页面: View {
             if let 类型 = 筛选类型, 记录.记录类型 != 类型 {
                 return false
             }
+            // 来源筛选
+            if let 来源 = 筛选来源, 记录.来源 != 来源 {
+                return false
+            }
             return true
         }
     }
@@ -137,6 +148,54 @@ private struct DNS统计栏: View {
                     .foregroundColor(.secondary)
             }
             .frame(maxWidth: .infinity)
+        }
+    }
+}
+
+// MARK: - 来源筛选选择器
+
+/// DNS 记录来源筛选选择器（分组标签）
+private struct 来源筛选选择器: View {
+    @Binding var 选中来源: DNS来源?
+
+    private let 来源列表: [DNS来源?] = [nil, .缓存, .远程, .拦截, .直连, .代理]
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(来源列表, id: \.?.rawValue) { 来源 in
+                    Button {
+                        选中来源 = 来源
+                    } label: {
+                        HStack(spacing: 4) {
+                            if let 来源 = 来源 {
+                                Circle()
+                                    .fill(来源颜色(来源))
+                                    .frame(width: 6, height: 6)
+                            }
+                            Text(来源?.rawValue ?? "全部来源")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(选中来源 == 来源 ? .white : .secondary)
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(选中来源 == 来源 ? Color.主题色 : Color.卡片背景)
+                        .cornerRadius(8)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                }
+            }
+        }
+    }
+
+    /// 来源对应颜色
+    private func 来源颜色(_ 来源: DNS来源) -> Color {
+        switch 来源 {
+        case .缓存: return .警告色
+        case .远程: return .主题色
+        case .拦截: return .危险色
+        case .直连: return .成功色
+        case .代理: return .orange
         }
     }
 }

@@ -798,10 +798,15 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             // 计算响应耗时
             let 响应时间 = 计算DNS响应时间(域名: 域名)
 
+            // 缓存命中判断：没有找到对应的 lookup 开始时间，说明 sing-box 直接从缓存返回结果
+            // 缓存命中时不会输出 lookup 日志，直接输出 exchanged
+            let 是否缓存命中 = (响应时间 == nil)
+            let 来源 = 是否缓存命中 ? "缓存" : "远程"
+
             // 判断是否 NXDOMAIN
             if 部分.count >= 2 && 部分[1].uppercased() == "NXDOMAIN" {
                 let TTL = 部分.count > 2 ? (Int(部分[2]) ?? 60) : 60
-                保存DNS记录(域名: 域名, 记录类型: "A", 解析结果: [], TTL: TTL, DNS服务器: "sing-box", 来源: "远程", 是否失败: true, 响应时间: 响应时间)
+                保存DNS记录(域名: 域名, 记录类型: "A", 解析结果: [], TTL: TTL, DNS服务器: "sing-box", 来源: 来源, 是否失败: true, 响应时间: 响应时间)
                 return
             }
 
@@ -841,7 +846,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             // 解析结果：类型索引后面的所有字段
             let 解析结果 = 类型索引 + 1 < 部分.count ? Array(部分[(类型索引 + 1)...]) : []
 
-            保存DNS记录(域名: 域名, 记录类型: 记录类型字符串, 解析结果: 解析结果, TTL: TTL, DNS服务器: "sing-box", 来源: "远程", 是否失败: false, 响应时间: 响应时间)
+            保存DNS记录(域名: 域名, 记录类型: 记录类型字符串, 解析结果: 解析结果, TTL: TTL, DNS服务器: "sing-box", 来源: 来源, 是否失败: false, 响应时间: 响应时间)
             return
         }
 
@@ -874,12 +879,16 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
     /// 保存 DNS 记录到共享 UserDefaults
     private func 保存DNS记录(域名: String, 记录类型: String, 解析结果: [String], TTL: Int, DNS服务器: String, 来源: String, 是否失败: Bool, 响应时间: Int?) {
+        // 容错：空域名直接丢弃，避免UI显示无域名记录
+        let 清理后域名 = 域名.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !清理后域名.isEmpty else { return }
+
         // 解析结果统一去掉末尾的点（CNAME/MX/NS 等域名类型的值带末尾点，IP 类型不受影响）
         let 清理后的结果 = 解析结果.map { 值 -> String in
             值.hasSuffix(".") ? String(值.dropLast()) : 值
         }
         var DNS记录: [String: Any] = [
-            "域名": 域名,
+            "域名": 清理后域名,
             "记录类型": 记录类型,
             "解析结果": 清理后的结果,
             "TTL": TTL,

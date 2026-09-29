@@ -87,6 +87,8 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     private var 重连定时器: Timer?
     /// 是否正在重连中
     private var 正在重连 = false
+    /// 隧道启动时间戳（用于防止启动初期误触发清理重启内核）
+    private var 隧道启动时间: Date?
 
     // MARK: - 一期内存优化：分桶采样与压力监控
 
@@ -267,6 +269,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
                 // 标记运行中
                 self.是否运行中 = true
+                self.隧道启动时间 = Date()
 
                 // 记录启动日志
                 self.记录扩展日志(级别: "信息", 模块: "隧道", 内容: "隧道启动成功，节点：\(self.节点名称 ?? "未知")，sing-box内核：\(内核启动成功 ? "已启用" : "未启用")")
@@ -688,8 +691,13 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         guard let 共享默认 = 共享默认 else { return }
 
         // 如果 sing-box 内核运行中，从内核同步真实流量统计
+        // 注意：libbox 服务对象的 KVC（value(forKey:) / perform(stats)）需在主线程调用，
+        // 原统计定时器为 main RunLoop Timer，二期合并为后台 DispatchSourceTimer 后必须显式切回主线程，
+        // 否则在后台线程访问 Go 运行时对象可能引发异常导致扩展崩溃、隧道启动后秒退
         if singBox运行中 {
-            singBox桥接.更新统计()
+            DispatchQueue.main.sync {
+                singBox桥接.更新统计()
+            }
             上行字节 = singBox桥接.上行字节
             下行字节 = singBox桥接.下行字节
         }
@@ -853,15 +861,28 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         // 如果指令时间大于已处理时间，说明有新的清理指令
         guard 指令时间 > 已处理时间 else { return }
 
-        // 防 stale：指令超过 60 秒视为过期（来自上一会话残留），忽略避免新隧道刚启动就被重启内核
-        guard Date().timeIntervalSince1970 - 指令时间 < 60 else {
-            // 标记为已处理，避免每秒重复检测
+        // 防 stale：指令超过 30 秒视为过期（来自上一会话残留），忽略并标记已处理
+        guard Date().timeIntervalSince1970 - 指令时间 < 30 else {
             共享默认.set(指令时间, forKey: 已处理键)
+            共享默认.removeObject(forKey: 清理指令键)
+            共享默认.synchronize()
             return
         }
 
-        // 记录已处理时间
+        // 启动保护：隧道启动后 10 秒内不执行清理（避免刚启动就重启内核导致启动失败/隧道关闭）
+        if let 启动时间 = 隧道启动时间, Date().timeIntervalSince(启动时间) < 10 {
+            // 标记已处理并清除指令，等下次用户主动触发
+            共享默认.set(指令时间, forKey: 已处理键)
+            共享默认.removeObject(forKey: 清理指令键)
+            共享默认.synchronize()
+            记录扩展日志(级别: "信息", 模块: "内存", 内容: "清理指令在隧道启动10秒保护期内，已忽略")
+            return
+        }
+
+        // 记录已处理时间并立即清除指令、持久化（即使后续重启内核崩溃也不会重复触发）
         共享默认.set(指令时间, forKey: 已处理键)
+        共享默认.removeObject(forKey: 清理指令键)
+        共享默认.synchronize()
 
         // 一期内存优化：记录清理前内存与分桶
         let 清理前内存 = 获取当前进程内存占用()

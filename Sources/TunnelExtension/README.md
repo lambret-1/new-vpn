@@ -92,11 +92,12 @@ VPN 已连接时，主 App 进程的 TCP 连接会被全局 TUN 截获（测到�
 
 扩展进程受 jetsam 限制（通常 15~50MB），需要持续可观测。当前实现：
 
-- **常驻内存采样**：独立 1s `DispatchSourceTimer`（`内存采样队列`），通过 `task_info` + `MACH_TASK_BASIC_INFO` 读取 resident_size，写入 App Group 键 `tunnelMemoryBytes`。
+- **统一状态上报定时器**（二期优化）：合并原统计定时器与内存采样定时器为单个 1s `DispatchSourceTimer`（`内存采样队列`），每秒流程：流量统计 → 清理 DNS 计时表 → 检测清理指令 → 内存+分桶采样 → 批量刷新诊断缓冲 → **一次 synchronize**（从每秒 2 次降到 1 次）。
+- **常驻内存采样**：通过 `task_info` + `MACH_TASK_BASIC_INFO` 读取 resident_size，写入 App Group 键 `tunnelMemoryBytes`。
 - **内存分桶采样**：每秒同时写入 `tunnelMemoryBuckets`，包含日志条数、日志编码字节数、DNS 记录条数、连接记录条数、DNS 计时表条数、系统可用内存（`os_proc_available_memory`）、压力等级。所有值为轻量 Int，避免大对象序列化。
+- **诊断数据内存环形缓冲**（二期优化）：日志/DNS 记录/连接记录不再每条全量解码-编码 UserDefaults（O(n²)），改为写入受 `扩展数据队列` 保护的内存环形缓冲（上限 200/200/100 条），由状态上报定时器每秒批量刷新脏缓冲到 UserDefaults（O(n) 每秒一次）。`读取扩展日志()` 直接从内存缓冲返回最新数据。
 - **系统内存压力源**：`DispatchSourceMemoryPressure`（warning/critical），事件触发时写入 `tunnelMemoryPressureEvent` 并记录扩展日志，在 jetsam 前提前感知。
-- **手动清理前后对比**：主 App 写 `tunnelMemoryCleanupCommand` 触发清理，扩展清理 DNS 记录、日志（保留 50 条）、连接记录（保留 50 条），500ms 后采样并写入 `tunnelMemoryCleanupResult`（含清理前/后字节、释放量、分桶对比）。
-- **计数内存化**：日志/DNS/连接记录条数在写入路径上同步维护内存计数器，避免每秒全量解码 UserDefaults 数组。
+- **一键清理内存**：主 App 写 `tunnelMemoryCleanupCommand` 触发，扩展清除全部 DNS 记录/日志/连接记录（UserDefaults + 内存缓冲，一条不留），随后**重启 sing-box 内核释放 Go 堆**（诊断记录仅 KB 级，常驻主体是 Go 堆约 32MB，重启是唯一能实质回收 RSS 的手段，有 1~3 秒网络瞬断），2 秒后采样并写入 `tunnelMemoryCleanupResult`（含清理前/后字节、释放量、分桶对比）。
 
 ### App Group 内存相关键
 

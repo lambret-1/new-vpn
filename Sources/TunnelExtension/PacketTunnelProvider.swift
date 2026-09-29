@@ -1271,12 +1271,9 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         心跳定时器 = nil
     }
 
-    /// 执行心跳检测：检查 sing-box 内核状态和网络连通性，发送保活包避免系统挂起
+    /// 执行心跳检测：检查 sing-box 内核状态和网络连通性
     private func 执行心跳检测() {
         guard 是否运行中 else { return }
-
-        // 发送网络保活包：定期发起 DNS 查询，让系统认为扩展在活跃工作，避免被挂起回收
-        发送网络保活包()
 
         // 检查 sing-box 内核是否运行
         guard singBox运行中 else {
@@ -1315,24 +1312,6 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             }
         }
         任务.resume()
-    }
-
-    /// 发送网络保活包：通过 DNS 查询保持扩展活跃，避免 iOS 系统挂起 Network Extension
-    private func 发送网络保活包() {
-        // 使用非阻塞方式发送 DNS 查询，不影响心跳检测主流程
-        DispatchQueue.global(qos: .utility).async {
-            let 保活域名 = ["dns.google", "cloudflare.com", "github.com"]
-            let 随机域名 = 保活域名.randomElement() ?? "dns.google"
-            // 发起 DNS 查询，触发网络活动，让系统认为扩展在工作
-            var 请求 = URLRequest(url: URL(string: "https://\(随机域名)")!)
-            请求.timeoutInterval = 3
-            请求.httpMethod = "HEAD"
-            let 会话 = URLSession(configuration: .ephemeral)
-            let 任务 = 会话.dataTask(with: 请求) { _, _, _ in
-                // 保活包不需要处理结果，只要触发网络活动即可
-            }
-            任务.resume()
-        }
     }
 
     /// 触发自动重连（指数退避：3s→6s→12s→30s→60s，上限60s）

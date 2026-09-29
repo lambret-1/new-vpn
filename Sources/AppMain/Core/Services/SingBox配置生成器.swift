@@ -492,9 +492,35 @@ final class SingBox配置生成器 {
         }
 
         // 应用分流规则（仅在规则分流模式下生效）
+        // 优化：域名类和IP类规则使用本地规则集（local rule_set），减少内核内存占用
+        // 其他类型规则（端口/协议/进程等）保持内联
+        var 规则集列表: [SingBox规则集] = []
         if 运行模式 == .规则分流 {
+            // 生成本地规则集文件
+            let 生成的规则集 = 规则集生成器.共享.生成规则集(规则列表: 分流规则)
+
+            // 添加规则集定义和引用规则
+            for 规则集信息 in 生成的规则集 {
+                if let 路径 = 规则集生成器.共享.获取规则集路径(文件名: 规则集信息.文件名) {
+                    // 添加规则集定义
+                    规则集列表.append(SingBox规则集(
+                        tag: 规则集信息.标签,
+                        type: "local",
+                        format: "source",
+                        path: 路径
+                    ))
+                    // 添加引用规则集的路由规则
+                    规则列表.append(SingBox路由规则(
+                        ruleSet: [规则集信息.标签],
+                        outbound: 规则集信息.出站
+                    ))
+                }
+            }
+
+            // 非域名/IP类规则保持内联（端口/协议/进程名称等）
             for 规则 in 分流规则 where 规则.启用 {
-                if let 路由规则 = 分流规则转换为路由规则(规则) {
+                if 是非规则集类型(规则.类型),
+                   let 路由规则 = 分流规则转换为路由规则(规则) {
                     规则列表.append(路由规则)
                 }
             }
@@ -517,8 +543,19 @@ final class SingBox配置生成器 {
             // 会导致 "no available network interface"。
             // 回环防护由系统 NEPacketTunnelNetworkSettings 的 excludedRoutes 排除代理/DNS 地址保证
             autoDetectInterface: false,
-            rules: 规则列表
+            rules: 规则列表,
+            ruleSet: 规则集列表.isEmpty ? nil : 规则集列表
         )
+    }
+
+    /// 判断是否为非规则集类型（端口/协议/进程等不适合放入规则集的类型）
+    private func 是非规则集类型(_ 类型: 分流规则类型) -> Bool {
+        switch 类型 {
+        case .域名精确, .域名后缀, .域名关键词, .正则表达式, .IP地址, .IP段:
+            return false // 这些类型已放入规则集
+        default:
+            return true // 其他类型保持内联
+        }
     }
 
     /// 将分流规则转换为 sing-box 路由规则

@@ -785,39 +785,28 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         }
 
         // 格式1：成功解析 dns: exchanged example.com. 300 IN A 1.2.3.4
+        // CNAME链格式：example.com. 300 IN CNAME cdn.example.com. 300 IN A 1.2.3.4
         if 日志内容.contains("exchanged"),
            let 范围 = 日志内容.range(of: "exchanged ") {
             let 剩余部分 = String(日志内容[范围.upperBound...])
             let 部分 = 剩余部分.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
             guard 部分.count >= 2 else { return }
 
-            // 域名始终是第一个字段，去掉末尾的点
-            let 原始域名 = 部分[0]
-            let 域名 = 原始域名.hasSuffix(".") ? String(原始域名.dropLast()) : 原始域名
-            // 根域名"."或空域名直接跳过（OPT等伪记录）
-            guard !域名.isEmpty else { return }
-
-            // 计算响应耗时
-            let 响应时间 = 计算DNS响应时间(域名: 域名)
-
-            // 判断是否 NXDOMAIN（解析失败）
+            // NXDOMAIN 特殊处理：第二个字段是 NXDOMAIN
             if 部分.count >= 2 && 部分[1].uppercased() == "NXDOMAIN" {
+                let 原始域名 = 部分[0]
+                let 域名 = 原始域名.hasSuffix(".") ? String(原始域名.dropLast()) : 原始域名
+                guard !域名.isEmpty else { return }
+                let 响应时间 = 计算DNS响应时间(域名: 域名)
                 let TTL = 部分.count > 2 ? (Int(部分[2]) ?? 60) : 60
-                // 解析失败不标记为缓存命中
                 保存DNS记录(域名: 域名, 记录类型: "A", 解析结果: [], TTL: TTL, DNS服务器: "sing-box", 来源: "远程", 是否失败: true, 响应时间: 响应时间)
                 return
             }
 
-            // 缓存命中判断：响应时间小于1毫秒且有解析结果，视为缓存命中
-            // （严格判断，避免新网站首次解析被误标为缓存）
-            let 是否缓存命中 = (响应时间 != nil && 响应时间! < 1)
-            let 来源 = 是否缓存命中 ? "缓存" : "远程"
-
-            // 动态查找记录类型的位置（不依赖固定位置，兼容不同 sing-box 版本格式）
+            // 第一步：从左到右查找第一个已知记录类型的位置
             var 类型索引 = -1
             var 记录类型字符串 = "A"
             for (索引, 字段) in 部分.enumerated() {
-                if 索引 == 0 { continue } // 跳过域名
                 let 大写字段 = 字段.uppercased()
                 if 已知记录类型.contains(大写字段) {
                     类型索引 = 索引
@@ -825,23 +814,58 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                     break
                 }
             }
+            // 类型必须在索引1及以后（索引0应该是域名），没找到已知类型直接跳过
+            guard 类型索引 > 0 else { return }
 
-            // 没找到已知类型（OPT/SVCB/HTTPS等无用类型），直接跳过，不猜测位置
-            if 类型索引 == -1 {
-                return
+            // 第二步：从类型位置向左查找域名（最后一个非数字、非"IN"的字段）
+            // 不假设域名在第一个位置，兼容CNAME链等复杂格式
+            var 域名索引 = -1
+            for i in stride(from: 类型索引 - 1, through: 0, by: -1) {
+                let 字段大写 = 部分[i].uppercased()
+                if 字段大写 != "IN" && Int(字段大写) == nil {
+                    域名索引 = i
+                    break
+                }
             }
+            guard 域名索引 >= 0 else { return }
 
-            // TTL：类型索引前面的数字字段（通常在域名后面）
+            let 原始域名 = 部分[域名索引]
+            let 域名 = 原始域名.hasSuffix(".") ? String(原始域名.dropLast()) : 原始域名
+            // 根域名"."或空域名直接跳过（OPT等伪记录）
+            guard !域名.isEmpty else { return }
+
+            // 计算响应耗时
+            let 响应时间 = 计算DNS响应时间(域名: 域名)
+
+            // 缓存命中判断：响应时间小于1毫秒视为缓存命中
+            let 是否缓存命中 = (响应时间 != nil && 响应时间! < 1)
+            let 来源 = 是否缓存命中 ? "缓存" : "远程"
+
+            // TTL：类型前面的数字字段
             var TTL = 300
-            for i in 1..<类型索引 {
+            for i in 0..<类型索引 {
                 if let 数字 = Int(部分[i]) {
                     TTL = 数字
                     break
                 }
             }
 
-            // 解析结果：类型索引后面的所有字段
-            let 解析结果 = 类型索引 + 1 < 部分.count ? Array(部分[(类型索引 + 1)...]) : []
+            // 解析结果：
+            // - 域名类型记录（CNAME/NS/MX/SOA/PTR）：只取类型后面第一个非数字非IN字段，避免CNAME链后续内容混入
+            // - IP类型记录（A/AAAA/TXT/SRV/CAA）：取类型后面的所有字段
+            var 解析结果: [String] = []
+            let 域名类型集合: Set<String> = ["CNAME", "NS", "MX", "SOA", "PTR"]
+            if 域名类型集合.contains(记录类型字符串) {
+                for i in (类型索引 + 1)..<部分.count {
+                    let 字段大写 = 部分[i].uppercased()
+                    if 字段大写 != "IN" && Int(字段大写) == nil {
+                        解析结果 = [部分[i]]
+                        break
+                    }
+                }
+            } else {
+                解析结果 = 类型索引 + 1 < 部分.count ? Array(部分[(类型索引 + 1)...]) : []
+            }
 
             保存DNS记录(域名: 域名, 记录类型: 记录类型字符串, 解析结果: 解析结果, TTL: TTL, DNS服务器: "sing-box", 来源: 来源, 是否失败: false, 响应时间: 响应时间)
             return

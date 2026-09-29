@@ -530,7 +530,8 @@ final class 隧道管理器: NSObject, ObservableObject {
     private func 生成并写入SingBox配置(节点ID: UUID?, 节点名称: String?, 完成: @escaping (Bool) -> Void) {
         // 从 AppState 获取节点信息
         let 状态 = AppState.共享
-        let 所有节点 = 状态.节点分组列表.flatMap { $0.节点列表 }
+        // 优先从节点列表获取，避免节点分组列表未更新导致节点为空
+        let 所有节点 = 状态.节点列表.isEmpty ? 状态.节点分组列表.flatMap { $0.节点列表 } : 状态.节点列表
         let 当前节点 = 节点ID.flatMap { id in 所有节点.first(where: { $0.id == id }) }
 
         // 详细日志：节点分组和数量

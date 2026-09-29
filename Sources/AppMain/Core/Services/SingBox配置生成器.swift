@@ -463,7 +463,7 @@ final class SingBox配置生成器 {
         // 直连 DNS 服务器 IP 直连（223.5.5.5 走 DIRECT）
         // 注意：8.8.8.8/1.1.1.1 是走 proxy 的 DNS 服务器，不能加直连规则，否则会覆盖 detour 导致国外DNS走直连超时
         规则列表.append(SingBox路由规则(
-            ipCidr: ["223.5.5.5/32"],
+            ipCidr: ["223.5.5.5/32", "8.8.8.8/32"],
             outbound: "DIRECT"
         ))
 

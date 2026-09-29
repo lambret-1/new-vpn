@@ -180,6 +180,12 @@ final class 订阅下载服务 {
         } catch {
             print("订阅配置保存失败：\(error.localizedDescription)")
         }
+
+        // 同时保存到 App Group，供扩展端在配置生成失败时作为备用配置
+        if let 共享目录 = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.com.newvpn.app") {
+            let 远程配置路径 = 共享目录.appendingPathComponent("remote_config.json")
+            try? 内容.write(to: 远程配置路径, atomically: true, encoding: .utf8)
+        }
     }
 
     /// 读取本地订阅配置

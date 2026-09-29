@@ -482,7 +482,13 @@ final class 隧道管理器: NSObject, ObservableObject {
             guard let self = self else { return }
 
             if !配置生成成功 {
-                调试日志管理器.共享.警告("隧道", "sing-box 配置生成失败，继续使用默认配置连接")
+                // 配置生成失败时，使用远程订阅的原始配置作为备用
+                let 远程配置可用 = self.使用远程订阅配置()
+                if 远程配置可用 {
+                    调试日志管理器.共享.信息("隧道", "sing-box 配置生成失败，已切换使用远程订阅原始配置")
+                } else {
+                    调试日志管理器.共享.警告("隧道", "sing-box 配置生成失败，且无可用远程配置，使用历史配置连接")
+                }
             }
 
             // 保存配置
@@ -574,6 +580,48 @@ final class 隧道管理器: NSObject, ObservableObject {
         let 成功 = SingBox配置生成器.共享.保存配置(配置, 到路径: 共享路径)
         调试日志管理器.共享.信息("隧道", "sing-box 配置生成\(成功 ? "成功" : "失败")，路径：\(共享路径)")
         完成(成功)
+    }
+
+    /// 使用远程订阅的原始配置作为备用配置
+    /// - Returns: 是否成功使用远程配置
+    private func 使用远程订阅配置() -> Bool {
+        guard let 共享目录 = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.com.newvpn.app") else {
+            return false
+        }
+
+        let 远程配置路径 = 共享目录.appendingPathComponent("remote_config.json")
+        let 目标配置路径 = 共享目录.appendingPathComponent("singbox_config.json")
+
+        // 检查远程配置是否存在
+        guard FileManager.default.fileExists(atPath: 远程配置路径.path) else {
+            调试日志管理器.共享.警告("隧道", "远程订阅配置不存在，请先更新订阅")
+            return false
+        }
+
+        // 读取远程配置内容
+        guard let 配置内容 = try? String(contentsOf: 远程配置路径, encoding: .utf8),
+              !配置内容.isEmpty else {
+            调试日志管理器.共享.警告("隧道", "远程订阅配置为空")
+            return false
+        }
+
+        // 检测配置格式：JSON 格式可能是 sing-box 配置，YAML 格式是 Clash 配置
+        let 修剪后内容 = 配置内容.trimmingCharacters(in: .whitespacesAndNewlines)
+        if 修剪后内容.hasPrefix("{") {
+            // JSON 格式，可能是 sing-box 配置，直接使用
+            do {
+                try 配置内容.write(to: 目标配置路径, atomically: true, encoding: .utf8)
+                调试日志管理器.共享.信息("隧道", "已使用远程订阅原始配置（sing-box JSON格式），大小：\(配置内容.count) 字节")
+                return true
+            } catch {
+                调试日志管理器.共享.错误("隧道", "写入远程配置失败：\(error.localizedDescription)")
+                return false
+            }
+        } else {
+            // YAML 格式（Clash配置），sing-box 无法直接使用
+            调试日志管理器.共享.警告("隧道", "远程订阅配置为 Clash YAML 格式，sing-box 无法直接使用，请确认订阅链接返回 sing-box 格式")
+            return false
+        }
     }
 
     /// 停止隧道连接

@@ -546,7 +546,8 @@ final class SingBox配置生成器 {
             // TikTok
             规则列表.append(SingBox路由规则(
                 domainSuffix: ["tiktok.com", "tiktokcdn.com", "tiktokv.com", "tiktokcdn-us.com", 
-                "x.com","twitter.com",
+                "x.com","twitter.com","tiktok.eu",
+                "tiktok",
         "t.co",
         "twimg.com",
         "periscope.tv",

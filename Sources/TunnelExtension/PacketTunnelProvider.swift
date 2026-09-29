@@ -1324,7 +1324,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             let 保活域名 = ["dns.google", "cloudflare.com", "github.com"]
             let 随机域名 = 保活域名.randomElement() ?? "dns.google"
             // 发起 DNS 查询，触发网络活动，让系统认为扩展在工作
-            let 请求 = URLRequest(url: URL(string: "https://\(随机域名)")!)
+            var 请求 = URLRequest(url: URL(string: "https://\(随机域名)")!)
             请求.timeoutInterval = 3
             请求.httpMethod = "HEAD"
             let 会话 = URLSession(configuration: .ephemeral)

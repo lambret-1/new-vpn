@@ -138,16 +138,9 @@ final class SingBox配置生成器 {
             }
         }
 
-        // 根据运行模式决定默认 DNS 服务器
-        // 全局直连模式：所有域名都走国内直连 DNS，避免依赖代理通道
-        // 规则分流/全局代理：未匹配的域名走代理 DNS（通过隧道查询，避免 DNS 污染）
-        let 默认DNS服务器: String
-        switch 运行模式 {
-        case .全局直连:
-            默认DNS服务器 = "dns_resolver"
-        case .规则分流, .全局代理:
-            默认DNS服务器 = "dns_proxy"
-        }
+        // 默认 DNS 服务器：所有运行模式下，未匹配的域名都走代理 DNS（8.8.8.8 DoH），避免 DNS 污染
+        // 国内域名和代理服务器域名已有专门规则走 dns_resolver（直连）
+        let 默认DNS服务器 = "dns_proxy"
 
         return SingBoxDNS配置(
             servers: 默认服务器,

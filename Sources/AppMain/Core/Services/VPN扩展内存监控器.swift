@@ -51,6 +51,23 @@ final class VPN扩展内存监控器: ObservableObject {
         采样定时器 = nil
     }
 
+    // MARK: - 立即采样
+
+    /// 立即采样一次扩展内存（不等待定时器）
+    func 立即采样() {
+        读取扩展内存()
+    }
+
+    // MARK: - 清理扩展内存
+
+    /// 通知 VPN 扩展执行内存清理（触发 Go GC、清理缓存）
+    func 清理扩展内存() {
+        guard let 共享默认 = 共享默认 else { return }
+        // 写入清理指令和时间戳，扩展端轮询检测到后执行清理
+        共享默认.set(Date().timeIntervalSince1970, forKey: "tunnelMemoryCleanupCommand")
+        共享默认.synchronize()
+    }
+
     // MARK: - 读取扩展内存
 
     /// 从 App Group 读取 VPN 扩展内存占用

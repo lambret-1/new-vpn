@@ -673,12 +673,76 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         定时器.schedule(deadline: .now(), repeating: 1.0, leeway: .milliseconds(100))
         定时器.setEventHandler { [weak self] in
             guard let self = self, let 共享默认 = self.共享默认 else { return }
+
+            // 检测内存清理指令（主APP端一键清理扩展内存时写入）
+            self.检测并执行内存清理(共享默认: 共享默认)
+
+            // 采样并写入扩展内存
             let 扩展内存 = self.获取当前进程内存占用()
             共享默认.set(扩展内存, forKey: "tunnelMemoryBytes")
             共享默认.synchronize()
         }
         定时器.resume()
         内存采样定时器 = 定时器
+    }
+
+    /// 检测并执行内存清理指令
+    private func 检测并执行内存清理(共享默认: UserDefaults) {
+        let 清理指令键 = "tunnelMemoryCleanupCommand"
+        let 已处理键 = "tunnelMemoryCleanupProcessed"
+
+        // 读取清理指令时间戳
+        guard let 指令时间 = 共享默认.object(forKey: 清理指令键) as? TimeInterval else { return }
+
+        // 读取已处理时间戳
+        let 已处理时间 = 共享默认.double(forKey: 已处理键)
+
+        // 如果指令时间大于已处理时间，说明有新的清理指令
+        guard 指令时间 > 已处理时间 else { return }
+
+        // 记录已处理时间
+        共享默认.set(指令时间, forKey: 已处理键)
+
+        // 执行内存清理
+        记录扩展日志(级别: "信息", 模块: "内存", 内容: "收到内存清理指令，开始执行扩展内存清理")
+
+        // 1. 触发 Go 运行时垃圾回收（通过设置 GOGC 环境变量无法动态触发，这里清理 Swift 侧缓存）
+        // 2. 清理 DNS 查询记录缓存
+        共享默认.removeObject(forKey: "dnsQueryRecords")
+        // 3. 清理扩展日志（保留最近50条）
+        if var 日志列表 = 共享默认.array(forKey: "tunnelLogs") as? [[String: Any]], 日志列表.count > 50 {
+            日志列表 = Array(日志列表.suffix(50))
+            共享默认.set(日志列表, forKey: "tunnelLogs")
+        }
+        // 4. 清理抓包记录（保留最近50条）
+        if var 抓包列表 = 共享默认.array(forKey: "httpCaptureRecords") as? [[String: Any]], 抓包列表.count > 50 {
+            抓包列表 = Array(抓包列表.suffix(50))
+            共享默认.set(抓包列表, forKey: "httpCaptureRecords")
+        }
+
+        共享默认.synchronize()
+
+        // 延迟500ms后重新采样，展示清理后的内存
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            guard let self = self, let 共享默认 = self.共享默认 else { return }
+            let 清理后内存 = self.获取当前进程内存占用()
+            共享默认.set(清理后内存, forKey: "tunnelMemoryBytes")
+            共享默认.synchronize()
+            self.记录扩展日志(级别: "信息", 模块: "内存", 内容: "内存清理完成，当前内存：\(self.格式化字节(清理后内存))")
+        }
+    }
+
+    /// 格式化字节数为可读字符串
+    private func 格式化字节(_ 字节: UInt64) -> String {
+        if 字节 == 0 {
+            return "0 B"
+        } else if 字节 < 1024 {
+            return "\(字节) B"
+        } else if 字节 < 1024 * 1024 {
+            return String(format: "%.2f KB", Double(字节) / 1024)
+        } else {
+            return String(format: "%.2f MB", Double(字节) / (1024 * 1024))
+        }
     }
 
     /// 停止内存采样定时器

@@ -128,7 +128,13 @@ private struct 流量统计区: View {
             )
 
             // VPN 扩展内存可视化
-            VPN扩展内存卡片(占用: 扩展内存百分比, 等级: 扩展内存等级, 显示: 扩展内存显示)
+            VPN扩展内存卡片(
+                占用: 扩展内存百分比,
+                等级: 扩展内存等级,
+                显示: 扩展内存显示,
+                立即采样回调: { 扩展内存监控.立即采样() },
+                清理内存回调: { 扩展内存监控.清理扩展内存() }
+            )
 
             // CPU 占用可视化
             CPU占用卡片(使用率: CPU使用率, 等级: CPU等级)
@@ -287,7 +293,7 @@ private struct 流量统计区: View {
     }
 
     /// VPN 扩展内存可视化卡片（带进度条，样式与CPU/内存卡片一致）
-    private func VPN扩展内存卡片(占用: Double, 等级: VPN扩展内存监控器.扩展内存等级, 显示: String) -> some View {
+    private func VPN扩展内存卡片(占用: Double, 等级: VPN扩展内存监控器.扩展内存等级, 显示: String, 立即采样回调: @escaping () -> Void, 清理内存回调: @escaping () -> Void) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             // 标题行
             HStack(spacing: 6) {
@@ -340,6 +346,21 @@ private struct 流量统计区: View {
         .padding(.vertical, 10)
         .background(Color.页面背景)
         .cornerRadius(10)
+        .contentShape(Rectangle())
+        .contextMenu {
+            // 立即采样
+            Button {
+                立即采样回调()
+            } label: {
+                Label("立即采样", systemImage: "arrow.clockwise")
+            }
+            // 一键清理扩展内存
+            Button {
+                清理内存回调()
+            } label: {
+                Label("一键清理内存", systemImage: "trash")
+            }
+        }
     }
 
     /// 格式化字节数

@@ -70,6 +70,12 @@ final class DNS管理器: ObservableObject {
             return
         }
 
+        // 有效类型白名单
+        let 有效类型: Set<String> = ["A", "AAAA", "CNAME", "MX", "TXT", "NS", "SOA", "PTR", "SRV", "CAA"]
+
+        // 同时收集有效记录的原始字典，用于清理App Group旧垃圾记录
+        var 有效原始字典: [[String: Any]] = []
+
         let 新记录 = 记录列表.compactMap { 字典 -> DNS记录模型? in
             guard let 原始域名 = 字典["域名"] as? String else { return nil }
             // 域名去除首尾空格，空域名直接过滤
@@ -79,8 +85,10 @@ final class DNS管理器: ObservableObject {
                 return nil
             }
             // 过滤无用记录类型（OPT/SVCB/HTTPS等）
-            let 有效类型: Set<String> = ["A", "AAAA", "CNAME", "MX", "TXT", "NS", "SOA", "PTR", "SRV", "CAA"]
             guard 有效类型.contains(记录类型字符串.uppercased()) else { return nil }
+
+            // 收集有效记录原始字典
+            有效原始字典.append(字典)
 
             let 记录类型 = DNS记录类型(rawValue: 记录类型字符串.uppercased()) ?? .A
             let 解析结果 = 字典["解析结果"] as? [String] ?? []
@@ -105,6 +113,12 @@ final class DNS管理器: ObservableObject {
                 是否被拦截: 是否失败,
                 拦截规则: 是否失败 ? "解析失败" : nil
             )
+        }
+
+        // 如果过滤掉了垃圾记录，将有效记录重新保存回App Group，清理旧垃圾
+        if 有效原始字典.count < 记录列表.count {
+            共享默认.set(有效原始字典, forKey: "dnsQueryRecords")
+            共享默认.synchronize()
         }
 
         // 合并去重 + 同域名同类型多IP合并

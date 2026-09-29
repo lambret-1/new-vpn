@@ -254,7 +254,6 @@ struct DNS记录行: View {
                     .foregroundColor(记录.域名.isEmpty ? .危险色 : .primary)
                     .lineLimit(1)
                     .layoutPriority(1)
-                    .frame(maxWidth: .infinity, alignment: .leading)
 
                 // 类型标签 + 来源标签
                 HStack(spacing: 5) {

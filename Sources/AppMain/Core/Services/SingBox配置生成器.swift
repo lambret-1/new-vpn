@@ -545,7 +545,7 @@ final class SingBox配置生成器 {
             ))
             // TikTok
             规则列表.append(SingBox路由规则(
-                domainSuffix: ["tiktok.com", "tiktokcdn.com", "tiktokv.com", "tiktokcdn-us.com", "bytedance.com", "douyin.com", "musical.ly"],
+                domainSuffix: ["tiktok.com", "tiktokcdn.com", "tiktokv.com", "tiktokcdn-us.com", "bytedance.com","musical.ly"],
                 outbound: "proxy"
             ))
             // Cloudflare

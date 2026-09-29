@@ -511,8 +511,8 @@ final class SingBox配置生成器 {
                     ))
                     // 添加引用规则集的路由规则
                     规则列表.append(SingBox路由规则(
-                        ruleSet: [规则集信息.标签],
-                        outbound: 规则集信息.出站
+                        outbound: 规则集信息.出站,
+                        ruleSet: [规则集信息.标签]
                     ))
                 }
             }

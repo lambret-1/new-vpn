@@ -776,8 +776,15 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
         共享默认.synchronize()
 
-        // 延迟500ms后重新采样，展示清理后的内存与释放量
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+        // 5. 重启 sing-box 内核以释放 Go 堆（诊断记录仅 KB 级，常驻内存主体是 Go 堆约 32MB，
+        //    仅清记录无法降低 resident；重启内核是唯一能实质回收 RSS 的手段，会有 1~3 秒网络瞬断）
+        if singBox运行中 {
+            记录扩展日志(级别: "信息", 模块: "内存", 内容: "为释放内存重启 sing-box 内核...")
+            重载SingBox配置()
+        }
+
+        // 延迟 2 秒后重新采样（等待内核重启完成、内存回落稳定），展示清理后的内存与释放量
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
             guard let self = self, let 共享默认 = self.共享默认 else { return }
             let 清理后内存 = self.获取当前进程内存占用()
             共享默认.set(清理后内存, forKey: "tunnelMemoryBytes")

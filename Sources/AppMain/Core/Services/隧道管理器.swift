@@ -533,6 +533,9 @@ final class 隧道管理器: NSObject, ObservableObject {
         let 所有节点 = 状态.节点分组列表.flatMap { $0.节点列表 }
         let 当前节点 = 节点ID.flatMap { id in 所有节点.first(where: { $0.id == id }) }
 
+        // 详细日志：节点分组和数量
+        调试日志管理器.共享.信息("隧道", "节点分组数：\(状态.节点分组列表.count)，节点总数：\(所有节点.count)，AppState节点列表数：\(状态.节点列表.count)")
+
         // 检查是否有节点
         guard !所有节点.isEmpty else {
             调试日志管理器.共享.警告("隧道", "节点列表为空，请先添加远程订阅并更新节点")

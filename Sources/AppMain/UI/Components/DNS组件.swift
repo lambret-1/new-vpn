@@ -450,9 +450,6 @@ struct DNS记录详情页面: View {
                     if let 规则 = 记录.拦截规则 {
                         详情行(标签: "拦截规则", 值: 规则)
                     }
-                    if let 备注 = 记录.名称, !备注.isEmpty {
-                        详情行(标签: "备注", 值: 备注)
-                    }
                 }
             }
             .listStyle(.insetGrouped)

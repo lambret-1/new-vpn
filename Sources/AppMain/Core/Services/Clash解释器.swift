@@ -97,7 +97,7 @@ final class Clash解释器 {
             switch 动作 {
             case "proxy", "proxies", "🚀 节点选择", "节点选择":
                 规则动作 = .代理
-            case "direct", "direct", "🎯 全球直连", "全球直连":
+            case "direct", "🎯 全球直连", "全球直连":
                 规则动作 = .直连
             case "reject", "block", "🛑 全球拦截", "全球拦截", "广告拦截":
                 规则动作 = .拦截

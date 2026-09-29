@@ -16,6 +16,12 @@ final class VPN扩展内存监控器: ObservableObject {
 
     /// 当前 VPN 扩展内存占用（字节）
     @Published private(set) var 当前占用字节: UInt64 = 0
+    /// 一期内存优化：扩展内存分桶指标（日志/DNS/连接/计时表/可用内存/压力等级）
+    @Published private(set) var 分桶: [String: Any] = [:]
+    /// 一期内存优化：最近一次系统内存压力事件
+    @Published private(set) var 最近压力事件: [String: Any] = [:]
+    /// 一期内存优化：最近一次手动清理的前后对比结果
+    @Published private(set) var 清理结果: [String: Any] = [:]
     /// 采样定时器（使用DispatchSourceTimer，不受RunLoop模式影响，确保稳定刷新）
     private var 采样定时器: DispatchSourceTimer?
     /// 定时器队列
@@ -70,15 +76,22 @@ final class VPN扩展内存监控器: ObservableObject {
 
     // MARK: - 读取扩展内存
 
-    /// 从 App Group 读取 VPN 扩展内存占用
+    /// 从 App Group 读取 VPN 扩展内存占用与分桶指标
     private func 读取扩展内存() {
         guard let 共享默认 = 共享默认 else { return }
         // 注意：UserDefaults存储UInt64时桥接为NSNumber，读取时必须用as? NSNumber再取uint64Value
         // 直接as? UInt64会静默失败，始终得到0，导致数值不刷新
         let 内存对象 = 共享默认.object(forKey: "tunnelMemoryBytes") as? NSNumber
         let 内存值 = 内存对象?.uint64Value ?? 0
+        // 一期内存优化：读取分桶、压力事件、清理结果
+        let 分桶值 = 共享默认.dictionary(forKey: "tunnelMemoryBuckets") ?? [:]
+        let 压力值 = 共享默认.dictionary(forKey: "tunnelMemoryPressureEvent") ?? [:]
+        let 清理值 = 共享默认.dictionary(forKey: "tunnelMemoryCleanupResult") ?? [:]
         DispatchQueue.main.async { [weak self] in
             self?.当前占用字节 = 内存值
+            self?.分桶 = 分桶值
+            self?.最近压力事件 = 压力值
+            self?.清理结果 = 清理值
         }
     }
 
@@ -139,6 +152,54 @@ final class VPN扩展内存监控器: ObservableObject {
             case .极高: return "危险"
             }
         }
+    }
+
+    // MARK: - 一期内存优化：分桶与压力事件显示
+
+    /// 分桶中的整数值读取（容错）
+    private func 分桶整数(_ 键: String) -> Int {
+        (分桶[键] as? NSNumber)?.intValue ?? 0
+    }
+
+    /// 隧道日志条数
+    var 日志条数: Int { 分桶整数("日志条数") }
+    /// 日志 JSON 编码字节数
+    var 日志编码字节: Int { 分桶整数("日志编码字节") }
+    /// DNS 记录条数
+    var DNS记录条数: Int { 分桶整数("DNS记录条数") }
+    /// 连接记录条数
+    var 连接记录条数: Int { 分桶整数("连接记录条数") }
+    /// DNS 查询计时表条数
+    var DNS计时表条数: Int { 分桶整数("DNS计时表条数") }
+    /// 系统可用内存（字节），-1 表示不可用
+    var 可用内存字节: Int { 分桶整数("可用内存字节") }
+    /// 当前压力等级（normal/warning/critical）
+    var 当前压力等级: String { (分桶["压力等级"] as? String) ?? "normal" }
+
+    /// 可用内存显示文字
+    var 可用内存显示: String {
+        let 值 = 可用内存字节
+        guard 值 > 0 else { return "不可用" }
+        return 字节格式化(UInt64(值))
+    }
+
+    /// 最近压力事件显示文字
+    var 压力事件显示: String {
+        guard !最近压力事件.isEmpty,
+              let 等级 = 最近压力事件["等级"] as? String else { return "无" }
+        return 等级
+    }
+
+    /// 最近一次清理释放的字节数
+    var 清理释放字节: UInt64 {
+        (清理结果["释放字节"] as? NSNumber)?.uint64Value ?? 0
+    }
+
+    /// 最近一次清理释放显示文字
+    var 清理释放显示: String {
+        let 字节 = 清理释放字节
+        guard 字节 > 0 else { return "无" }
+        return 字节格式化(字节)
     }
 
     // MARK: - 辅助方法

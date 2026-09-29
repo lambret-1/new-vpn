@@ -87,3 +87,24 @@ VPN 已连接时，主 App 进程的 TCP 连接会被全局 TUN 截获（测到�
   测到真实 RTT。这与 sing-box 内核 `auto_detect_interface=true` 绑定物理接口出墙是同一机制。
 - 实现为非阻塞 `connect` + `DispatchSource` 监听可写，5 秒超时；失败回 `{"error":"timeout"}`，
   主 App 侧会读取该错误字段并展示，不再静默判定失败。
+
+## 内存监控（一期内存优化）
+
+扩展进程受 jetsam 限制（通常 15~50MB），需要持续可观测。当前实现：
+
+- **常驻内存采样**：独立 1s `DispatchSourceTimer`（`内存采样队列`），通过 `task_info` + `MACH_TASK_BASIC_INFO` 读取 resident_size，写入 App Group 键 `tunnelMemoryBytes`。
+- **内存分桶采样**：每秒同时写入 `tunnelMemoryBuckets`，包含日志条数、日志编码字节数、DNS 记录条数、连接记录条数、DNS 计时表条数、系统可用内存（`os_proc_available_memory`）、压力等级。所有值为轻量 Int，避免大对象序列化。
+- **系统内存压力源**：`DispatchSourceMemoryPressure`（warning/critical），事件触发时写入 `tunnelMemoryPressureEvent` 并记录扩展日志，在 jetsam 前提前感知。
+- **手动清理前后对比**：主 App 写 `tunnelMemoryCleanupCommand` 触发清理，扩展清理 DNS 记录、日志（保留 50 条）、连接记录（保留 50 条），500ms 后采样并写入 `tunnelMemoryCleanupResult`（含清理前/后字节、释放量、分桶对比）。
+- **计数内存化**：日志/DNS/连接记录条数在写入路径上同步维护内存计数器，避免每秒全量解码 UserDefaults 数组。
+
+### App Group 内存相关键
+
+| 键 | 类型 | 说明 |
+|----|------|------|
+| `tunnelMemoryBytes` | UInt64 | 扩展常驻内存（字节） |
+| `tunnelMemoryBuckets` | [String:Any] | 内存分桶指标 |
+| `tunnelMemoryPressureEvent` | [String:Any] | 最近一次系统内存压力事件 |
+| `tunnelMemoryCleanupCommand` | TimeInterval | 主 App 写入的清理指令时间戳 |
+| `tunnelMemoryCleanupProcessed` | TimeInterval | 扩展已处理的清理指令时间戳 |
+| `tunnelMemoryCleanupResult` | [String:Any] | 最近一次清理的前后对比 |

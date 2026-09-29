@@ -90,6 +90,23 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     /// 内存采样定时器（独立DispatchSourceTimer，确保稳定采样写入）
     private var 内存采样定时器: DispatchSourceTimer?
 
+    // MARK: - 一期内存优化：分桶采样与压力监控
+
+    /// 系统内存压力源（warning/critical），用于在 jetsam 前提前感知
+    private var 内存压力源: DispatchSourceMemoryPressure?
+    /// 内存压力事件处理队列（utility，不阻塞采样）
+    private let 内存压力队列 = DispatchQueue(label: "com.newvpn.app.tunnel.memorypressure", qos: .utility)
+    /// 当前隧道日志条数（内存侧计数，避免每秒全量解码 UserDefaults）
+    private var 当前日志条数 = 0
+    /// 上次日志 JSON 编码字节数（反映日志表序列化体积）
+    private var 上次日志编码字节数 = 0
+    /// 当前 DNS 记录条数（内存侧计数）
+    private var DNS记录条数 = 0
+    /// 当前连接记录条数（内存侧计数）
+    private var 连接记录条数 = 0
+    /// 最近一次内存压力等级（normal/warning/critical）
+    private var 最近压力等级 = "normal"
+
     /// 本地抓包代理
     private var 本地抓包代理: 本地HTTP代理?
 
@@ -219,6 +236,9 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                 // 启动独立内存采样定时器（确保扩展内存稳定写入App Group）
                 self.启动内存采样定时器()
 
+                // 一期内存优化：启动系统内存压力监控
+                self.启动内存压力监控()
+
                 // 启动热更新轮询定时器
                 self.启动热更新定时器()
 
@@ -260,6 +280,9 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
         // 停止内存采样定时器
         停止内存采样定时器()
+
+        // 一期内存优化：停止系统内存压力监控
+        停止内存压力监控()
 
         // 停止热更新定时器
         停止热更新定时器()
@@ -662,9 +685,9 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         return UInt64(任务信息.resident_size)
     }
 
-    // MARK: - 内存采样定时器
+    // MARK: - 内存采样定时器（一期内存优化）
 
-    /// 启动独立内存采样定时器（每秒采样一次扩展内存写入App Group）
+    /// 启动独立内存采样定时器（每秒采样一次扩展内存与分桶指标写入App Group）
     /// 使用独立队列，不被日志写入积压阻塞
     private func 启动内存采样定时器() {
         停止内存采样定时器()
@@ -680,13 +703,42 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             // 采样并写入扩展内存
             let 扩展内存 = self.获取当前进程内存占用()
             共享默认.set(扩展内存, forKey: "tunnelMemoryBytes")
+
+            // 一期内存优化：写入内存分桶指标（轻量 Int，不带大对象）
+            let 分桶 = self.采集内存分桶()
+            共享默认.set(分桶, forKey: "tunnelMemoryBuckets")
+
             共享默认.synchronize()
         }
         定时器.resume()
         内存采样定时器 = 定时器
     }
 
-    /// 检测并执行内存清理指令
+    /// 采集内存分桶指标（各诊断数据结构的条数与体积）
+    /// 返回 [String: Any]，全部为 Int，写入 UserDefaults 成本极低
+    private func 采集内存分桶() -> [String: Any] {
+        // DNS 查询计时表与压力等级都在扩展数据队列上保护，同步读取一次
+        var 计时表条数 = 0
+        var 压力等级 = "normal"
+        扩展数据队列.sync {
+            计时表条数 = self.DNS查询开始时间.count
+            压力等级 = self.最近压力等级
+        }
+        // 系统可用内存（iOS 13+），反映进程距离 jetsam 的余量
+        let 可用内存 = os_proc_available_memory()
+        return [
+            "日志条数": 当前日志条数,
+            "日志编码字节": 上次日志编码字节数,
+            "DNS记录条数": DNS记录条数,
+            "连接记录条数": 连接记录条数,
+            "DNS计时表条数": 计时表条数,
+            "可用内存字节": 可用内存 > 0 ? 可用内存 : -1,
+            "Go句柄数": -1, // libbox 未暴露运行时句柄数，预留字段
+            "压力等级": 压力等级
+        ]
+    }
+
+    /// 检测并执行内存清理指令（带清理前后对比埋点）
     private func 检测并执行内存清理(共享默认: UserDefaults) {
         let 清理指令键 = "tunnelMemoryCleanupCommand"
         let 已处理键 = "tunnelMemoryCleanupProcessed"
@@ -703,32 +755,49 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         // 记录已处理时间
         共享默认.set(指令时间, forKey: 已处理键)
 
+        // 一期内存优化：记录清理前内存与分桶
+        let 清理前内存 = 获取当前进程内存占用()
+        let 清理前分桶 = 采集内存分桶()
+
         // 执行内存清理
-        记录扩展日志(级别: "信息", 模块: "内存", 内容: "收到内存清理指令，开始执行扩展内存清理")
+        记录扩展日志(级别: "信息", 模块: "内存", 内容: "收到内存清理指令，开始执行扩展内存清理，清理前：\(格式化字节(清理前内存))")
 
         // 1. 触发 Go 运行时垃圾回收（通过设置 GOGC 环境变量无法动态触发，这里清理 Swift 侧缓存）
         // 2. 清理 DNS 查询记录缓存
         共享默认.removeObject(forKey: "dnsQueryRecords")
+        DNS记录条数 = 0
         // 3. 清理扩展日志（保留最近50条）
         if var 日志列表 = 共享默认.array(forKey: "tunnelLogs") as? [[String: Any]], 日志列表.count > 50 {
             日志列表 = Array(日志列表.suffix(50))
             共享默认.set(日志列表, forKey: "tunnelLogs")
+            当前日志条数 = 日志列表.count
         }
-        // 4. 清理抓包记录（保留最近50条）
-        if var 抓包列表 = 共享默认.array(forKey: "httpCaptureRecords") as? [[String: Any]], 抓包列表.count > 50 {
-            抓包列表 = Array(抓包列表.suffix(50))
-            共享默认.set(抓包列表, forKey: "httpCaptureRecords")
+        // 4. 清理连接记录（保留最近50条）
+        if var 连接列表 = 共享默认.array(forKey: "connectionRecords") as? [[String: Any]], 连接列表.count > 50 {
+            连接列表 = Array(连接列表.suffix(50))
+            共享默认.set(连接列表, forKey: "connectionRecords")
+            连接记录条数 = 连接列表.count
         }
 
         共享默认.synchronize()
 
-        // 延迟500ms后重新采样，展示清理后的内存
+        // 延迟500ms后重新采样，展示清理后的内存与释放量
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
             guard let self = self, let 共享默认 = self.共享默认 else { return }
             let 清理后内存 = self.获取当前进程内存占用()
             共享默认.set(清理后内存, forKey: "tunnelMemoryBytes")
+            // 写入清理前后对比，供主 App 展示释放量
+            let 对比: [String: Any] = [
+                "清理前字节": 清理前内存,
+                "清理后字节": 清理后内存,
+                "释放字节": 清理前内存 > 清理后内存 ? 清理前内存 - 清理后内存 : 0,
+                "清理前分桶": 清理前分桶,
+                "清理后分桶": self.采集内存分桶(),
+                "时间": Date().timeIntervalSince1970
+            ]
+            共享默认.set(对比, forKey: "tunnelMemoryCleanupResult")
             共享默认.synchronize()
-            self.记录扩展日志(级别: "信息", 模块: "内存", 内容: "内存清理完成，当前内存：\(self.格式化字节(清理后内存))")
+            self.记录扩展日志(级别: "信息", 模块: "内存", 内容: "内存清理完成，当前内存：\(self.格式化字节(清理后内存))，释放：\(self.格式化字节(清理前内存 > 清理后内存 ? 清理前内存 - 清理后内存 : 0))")
         }
     }
 
@@ -749,6 +818,53 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     private func 停止内存采样定时器() {
         内存采样定时器?.cancel()
         内存采样定时器 = nil
+    }
+
+    // MARK: - 系统内存压力监控（一期内存优化）
+
+    /// 启动系统内存压力源（warning / critical）
+    /// 在 jetsam 杀进程前提前感知，记录事件供主 App 展示
+    private func 启动内存压力监控() {
+        停止内存压力监控()
+
+        let 源 = DispatchSource.makeMemoryPressureSource(eventMask: [.warning, .critical], queue: 内存压力队列)
+        源.setEventHandler { [weak self] in
+            guard let self = self else { return }
+            let 事件 = 源.data
+            let 等级: String
+            if 事件.contains(.critical) {
+                等级 = "critical"
+            } else if 事件.contains(.warning) {
+                等级 = "warning"
+            } else {
+                等级 = "normal"
+            }
+            // 压力等级走扩展数据队列保护，与采样端读取串行化
+            self.扩展数据队列.async { self.最近压力等级 = 等级 }
+            let 常驻 = self.获取当前进程内存占用()
+            self.记录扩展日志(级别: "警告", 模块: "内存", 内容: "系统内存压力事件：\(等级)，当前常驻：\(self.格式化字节(常驻))")
+
+            // 写入最近压力事件到 App Group，供主 App 展示
+            if let 共享默认 = self.共享默认 {
+                let 事件: [String: Any] = [
+                    "等级": 等级,
+                    "常驻字节": 常驻,
+                    "时间": Date().timeIntervalSince1970
+                ]
+                共享默认.set(事件, forKey: "tunnelMemoryPressureEvent")
+                共享默认.synchronize()
+            }
+        }
+        源.resume()
+        内存压力源 = 源
+        记录扩展日志(级别: "信息", 模块: "内存", 内容: "系统内存压力监控已启动")
+    }
+
+    /// 停止系统内存压力源
+    private func 停止内存压力监控() {
+        内存压力源?.cancel()
+        内存压力源 = nil
+        最近压力等级 = "normal"
     }
 
     // MARK: - DNS 查询记录
@@ -922,6 +1038,8 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             if 记录列表.count > 200 {
                 记录列表 = Array(记录列表.prefix(200))
             }
+            // 一期内存优化：同步内存侧计数
+            self.DNS记录条数 = 记录列表.count
             共享默认.set(记录列表, forKey: "dnsQueryRecords")
         }
     }
@@ -984,6 +1102,8 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             if 记录列表.count > 100 {
                 记录列表 = Array(记录列表.prefix(100))
             }
+            // 一期内存优化：同步内存侧计数
+            self.连接记录条数 = 记录列表.count
             共享默认.set(记录列表, forKey: "connectionRecords")
         }
     }
@@ -1064,7 +1184,10 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             if 日志列表.count > 200 {
                 日志列表.removeLast(日志列表.count - 200)
             }
+            // 一期内存优化：同步内存侧计数与编码体积，供分桶采样使用
+            自.当前日志条数 = 日志列表.count
             if let 编码数据 = try? JSONEncoder().encode(日志列表) {
+                自.上次日志编码字节数 = 编码数据.count
                 共享默认.set(编码数据, forKey: "tunnelLogs")
             }
         }

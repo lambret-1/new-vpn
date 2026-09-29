@@ -145,20 +145,21 @@ final class 规则集生成器 {
     }
 
     /// 将分流规则转换为 sing-box 源规则
+    /// 注意：sing-box source 格式要求所有字段为数组
     private func 转换为源规则(_ 规则: 分流规则项) -> SingBox源规则? {
         switch 规则.类型 {
         case .域名精确:
-            return SingBox源规则(domain: 规则.匹配值)
+            return SingBox源规则(domain: [规则.匹配值])
         case .域名后缀:
-            return SingBox源规则(domainSuffix: 规则.匹配值)
+            return SingBox源规则(domainSuffix: [规则.匹配值])
         case .域名关键词:
-            return SingBox源规则(domainKeyword: 规则.匹配值)
+            return SingBox源规则(domainKeyword: [规则.匹配值])
         case .正则表达式:
-            return SingBox源规则(domainRegex: 规则.匹配值)
+            return SingBox源规则(domainRegex: [规则.匹配值])
         case .IP地址:
-            return SingBox源规则(ipCidr: "\(规则.匹配值)/32")
+            return SingBox源规则(ipCidr: ["\(规则.匹配值)/32"])
         case .IP段:
-            return SingBox源规则(ipCidr: 规则.匹配值)
+            return SingBox源规则(ipCidr: [规则.匹配值])
         default:
             return nil // 其他类型不生成规则集，保持内联
         }
@@ -199,17 +200,18 @@ struct SingBox源规则集: Codable {
 }
 
 /// sing-box 源规则（仅支持域名和IP类）
+/// 注意：sing-box source 格式要求所有字段为数组，不能是单个字符串
 struct SingBox源规则: Codable, Hashable {
-    /// 精确域名
-    var domain: String?
-    /// 域名后缀
-    var domainSuffix: String?
-    /// 域名关键词
-    var domainKeyword: String?
-    /// 域名正则
-    var domainRegex: String?
-    /// IP CIDR
-    var ipCidr: String?
+    /// 精确域名列表
+    var domain: [String]?
+    /// 域名后缀列表
+    var domainSuffix: [String]?
+    /// 域名关键词列表
+    var domainKeyword: [String]?
+    /// 域名正则列表
+    var domainRegex: [String]?
+    /// IP CIDR 列表
+    var ipCidr: [String]?
 
     /// 是否域名类规则
     var is域名类: Bool {

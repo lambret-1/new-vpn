@@ -28,8 +28,8 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     /// 下行字节数
     private var 下行字节: UInt64 = 0
 
-    /// 统计更新定时器（二期内存优化：合并为统一状态上报 DispatchSourceTimer）
-    private var 状态上报定时器: DispatchSourceTimer?
+    /// 统计更新定时器
+    private var 统计定时器: Timer?
 
     /// 隧道配置
     private var 隧道配置: [String: Any] = [:]
@@ -87,8 +87,8 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     private var 重连定时器: Timer?
     /// 是否正在重连中
     private var 正在重连 = false
-    /// 隧道启动时间戳（用于防止启动初期误触发清理重启内核）
-    private var 隧道启动时间: Date?
+    /// 内存采样定时器（独立DispatchSourceTimer，确保稳定采样写入）
+    private var 内存采样定时器: DispatchSourceTimer?
 
     // MARK: - 一期内存优化：分桶采样与压力监控
 
@@ -106,27 +106,6 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     private var 连接记录条数 = 0
     /// 最近一次内存压力等级（normal/warning/critical）
     private var 最近压力等级 = "normal"
-
-    // MARK: - 二期内存优化：诊断数据内存环形缓冲（替代每条全量读写 UserDefaults）
-
-    /// 隧道日志环形缓冲（受 扩展数据队列 保护）
-    private var 日志环形缓冲: [扩展日志条目] = []
-    /// 日志缓冲是否已从 UserDefaults 预加载
-    private var 日志缓冲已加载 = false
-    /// 日志缓冲是否脏（需要刷新到 UserDefaults）
-    private var 日志缓冲脏 = false
-    /// DNS 记录环形缓冲（受 扩展数据队列 保护）
-    private var DNS记录缓冲: [[String: Any]] = []
-    /// DNS 记录缓冲是否已预加载
-    private var DNS缓冲已加载 = false
-    /// DNS 记录缓冲是否脏
-    private var DNS缓冲脏 = false
-    /// 连接记录环形缓冲（受 扩展数据队列 保护）
-    private var 连接记录缓冲: [[String: Any]] = []
-    /// 连接记录缓冲是否已预加载
-    private var 连接缓冲已加载 = false
-    /// 连接记录缓冲是否脏
-    private var 连接缓冲脏 = false
 
     /// 本地抓包代理
     private var 本地抓包代理: 本地HTTP代理?
@@ -251,8 +230,11 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                     self.启动数据包处理()
                 }
 
-                // 二期内存优化：启动统一状态上报定时器（合并原统计定时器+内存采样定时器，每秒一次 synchronize）
-                self.启动状态上报定时器()
+                // 启动统计定时器
+                self.启动统计定时器()
+
+                // 启动独立内存采样定时器（确保扩展内存稳定写入App Group）
+                self.启动内存采样定时器()
 
                 // 一期内存优化：启动系统内存压力监控
                 self.启动内存压力监控()
@@ -269,7 +251,6 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
                 // 标记运行中
                 self.是否运行中 = true
-                self.隧道启动时间 = Date()
 
                 // 记录启动日志
                 self.记录扩展日志(级别: "信息", 模块: "隧道", 内容: "隧道启动成功，节点：\(self.节点名称 ?? "未知")，sing-box内核：\(内核启动成功 ? "已启用" : "未启用")")
@@ -294,8 +275,11 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         // 停止数据包处理
         停止数据包处理()
 
-        // 二期内存优化：停止统一状态上报定时器
-        停止状态上报定时器()
+        // 停止统计定时器
+        停止统计定时器()
+
+        // 停止内存采样定时器
+        停止内存采样定时器()
 
         // 一期内存优化：停止系统内存压力监控
         停止内存压力监控()
@@ -311,10 +295,8 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         重连定时器 = nil
         正在重连 = false
 
-        // 保存最终统计（二期优化：保存统计数据不再 synchronize，此处统一刷新缓冲并落盘）
+        // 保存最终统计
         保存统计数据()
-        刷新诊断缓冲()
-        共享默认?.synchronize()
 
         // 记录停止日志
         记录扩展日志(级别: "信息", 模块: "隧道", 内容: "隧道已停止，原因：\(停止原因描述(reason))")
@@ -622,57 +604,17 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         // 下行字节 += UInt64(响应数据.count)
     }
 
-    // MARK: - 状态上报（二期内存优化：合并统计+内存采样定时器，诊断数据内存缓冲批量落盘）
+    // MARK: - 流量统计
 
-    /// 启动统一状态上报定时器（每秒一次，合并原统计定时器与内存采样定时器）
-    /// 每秒流程：流量统计 → 清理DNS计时表 → 检测清理指令 → 内存+分桶采样 → 批量刷新诊断缓冲 → 一次 synchronize
-    private func 启动状态上报定时器() {
-        停止状态上报定时器()
+    /// 启动统计定时器
+    private func 启动统计定时器() {
+        停止统计定时器()
 
-        // 注意：不做同步预加载诊断缓冲。
-        // 内核启动期间产生的日志已通过 记录扩展日志() 异步写入内存缓冲，
-        // 首次定时器 tick 会自动将脏缓冲刷新到 UserDefaults。
-        // 同步预加载（扩展数据队列.sync）会阻塞 startTunnel 完成线程，
-        // 与 Go 线程日志回调中的 扩展数据队列.sync 竞争可能导致 completionHandler 延迟，
-        // 使 VPN 状态卡在"正在连接"。
-
-        let 定时器 = DispatchSource.makeTimerSource(queue: 内存采样队列)
-        定时器.schedule(deadline: .now(), repeating: 1.0, leeway: .milliseconds(100))
-        定时器.setEventHandler { [weak self] in
-            guard let self = self else { return }
-
-            // 1. 流量统计（写 UserDefaults，不 synchronize）
-            self.保存统计数据()
-
-            // 2. 清理超时 DNS 查询计时表
-            self.清理超时的DNS查询开始时间()
-
-            // 3. 检测内存清理指令（用户触发，低频）
-            if let 共享默认 = self.共享默认 {
-                self.检测并执行内存清理(共享默认: 共享默认)
-            }
-
-            // 4. 采样扩展内存与分桶指标
-            if let 共享默认 = self.共享默认 {
-                let 扩展内存 = self.获取当前进程内存占用()
-                共享默认.set(扩展内存, forKey: "tunnelMemoryBytes")
-                共享默认.set(self.采集内存分桶(), forKey: "tunnelMemoryBuckets")
-            }
-
-            // 5. 批量刷新诊断缓冲（日志/DNS/连接，仅脏缓冲编码写盘）
-            self.刷新诊断缓冲()
-
-            // 6. 全流程仅一次 synchronize（二期优化：从每秒 2 次降到 1 次）
-            self.共享默认?.synchronize()
+        统计定时器 = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+            self?.保存统计数据()
+            self?.清理超时的DNS查询开始时间()
         }
-        定时器.resume()
-        状态上报定时器 = 定时器
-    }
-
-    /// 停止统一状态上报定时器
-    private func 停止状态上报定时器() {
-        状态上报定时器?.cancel()
-        状态上报定时器 = nil
+        RunLoop.main.add(统计定时器!, forMode: .common)
     }
 
     /// 清理超过 15 秒的 DNS 查询开始时间记录（内存优化：从30秒降至15秒，防止字典无限增长）
@@ -686,26 +628,33 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         }
     }
 
-    /// 保存统计数据到共享 UserDefaults（不调用 synchronize，由状态上报定时器统一落盘）
+    /// 停止统计定时器
+    private func 停止统计定时器() {
+        统计定时器?.invalidate()
+        统计定时器 = nil
+    }
+
+    /// 保存统计数据到共享 UserDefaults
     private func 保存统计数据() {
         guard let 共享默认 = 共享默认 else { return }
 
         // 如果 sing-box 内核运行中，从内核同步真实流量统计
-        // 注意：libbox 服务对象的 KVC（value(forKey:) / perform(stats)）需在主线程调用，
-        // 原统计定时器为 main RunLoop Timer，二期合并为后台 DispatchSourceTimer 后必须显式切回主线程，
-        // 否则在后台线程访问 Go 运行时对象可能引发异常导致扩展崩溃、隧道启动后秒退
         if singBox运行中 {
-            DispatchQueue.main.sync {
-                singBox桥接.更新统计()
-            }
+            singBox桥接.更新统计()
             上行字节 = singBox桥接.上行字节
             下行字节 = singBox桥接.下行字节
         }
+
+        // 采样 VPN 扩展进程内存占用，写入共享存储供主 APP 显示
+        let 扩展内存 = 获取当前进程内存占用()
+        共享默认.set(扩展内存, forKey: "tunnelMemoryBytes")
 
         共享默认.set(上行字节, forKey: "uploadBytes")
         共享默认.set(下行字节, forKey: "downloadBytes")
         共享默认.set(是否运行中, forKey: "tunnelRunning")
         共享默认.set(Date(), forKey: "lastStatsUpdate")
+        // 立即同步，确保主APP跨进程读取到最新值
+        共享默认.synchronize()
     }
 
     /// 获取当前进程内存占用（字节）
@@ -736,110 +685,52 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         return UInt64(任务信息.resident_size)
     }
 
-    // MARK: - 诊断数据内存缓冲（二期内存优化）
+    // MARK: - 内存采样定时器（一期内存优化）
 
-    /// 预加载日志环形缓冲（从 UserDefaults 读取一次，调用前需在 扩展数据队列 上）
-    /// 关键：若缓冲已有内核启动期间写入的新日志，跳过预加载避免旧数据覆盖新日志
-    private func 预加载日志缓冲() {
-        guard !日志缓冲已加载 else { return }
-        guard 日志环形缓冲.isEmpty else {
-            // 缓冲已有新数据（内核启动日志），直接标记已加载，不读旧 UserDefaults
-            日志缓冲已加载 = true
-            return
-        }
-        guard let 共享默认 = 共享默认,
-              let 日志数据 = 共享默认.data(forKey: "tunnelLogs"),
-              let 已存列表 = try? JSONDecoder().decode([扩展日志条目].self, from: 日志数据) else {
-            日志缓冲已加载 = true
-            return
-        }
-        日志环形缓冲 = 已存列表
-        当前日志条数 = 已存列表.count
-        日志缓冲已加载 = true
-    }
+    /// 启动独立内存采样定时器（每秒采样一次扩展内存与分桶指标写入App Group）
+    /// 使用独立队列，不被日志写入积压阻塞
+    private func 启动内存采样定时器() {
+        停止内存采样定时器()
 
-    /// 预加载 DNS 记录缓冲（调用前需在 扩展数据队列 上）
-    private func 预加载DNS记录缓冲() {
-        guard !DNS缓冲已加载 else { return }
-        guard DNS记录缓冲.isEmpty else {
-            DNS缓冲已加载 = true
-            return
-        }
-        guard let 共享默认 = 共享默认,
-              let 记录列表 = 共享默认.array(forKey: "dnsQueryRecords") as? [[String: Any]] else {
-            DNS缓冲已加载 = true
-            return
-        }
-        DNS记录缓冲 = 记录列表
-        DNS记录条数 = 记录列表.count
-        DNS缓冲已加载 = true
-    }
+        let 定时器 = DispatchSource.makeTimerSource(queue: 内存采样队列)
+        定时器.schedule(deadline: .now(), repeating: 1.0, leeway: .milliseconds(100))
+        定时器.setEventHandler { [weak self] in
+            guard let self = self, let 共享默认 = self.共享默认 else { return }
 
-    /// 预加载连接记录缓冲（调用前需在 扩展数据队列 上）
-    private func 预加载连接记录缓冲() {
-        guard !连接缓冲已加载 else { return }
-        guard 连接记录缓冲.isEmpty else {
-            连接缓冲已加载 = true
-            return
-        }
-        guard let 共享默认 = 共享默认,
-              let 记录列表 = 共享默认.array(forKey: "connectionRecords") as? [[String: Any]] else {
-            连接缓冲已加载 = true
-            return
-        }
-        连接记录缓冲 = 记录列表
-        连接记录条数 = 记录列表.count
-        连接缓冲已加载 = true
-    }
+            // 检测内存清理指令（主APP端一键清理扩展内存时写入）
+            self.检测并执行内存清理(共享默认: 共享默认)
 
-    /// 批量刷新诊断缓冲到 UserDefaults（仅编码脏缓冲，每秒由状态上报定时器调用一次）
-    private func 刷新诊断缓冲() {
-        guard let 共享默认 = 共享默认 else { return }
-        扩展数据队列.sync {
-            // 日志缓冲：JSON 编码写盘
-            if self.日志缓冲脏 {
-                if let 编码数据 = try? JSONEncoder().encode(self.日志环形缓冲) {
-                    self.上次日志编码字节数 = 编码数据.count
-                    共享默认.set(编码数据, forKey: "tunnelLogs")
-                }
-                self.日志缓冲脏 = false
-            }
-            // DNS 记录缓冲：直接写数组
-            if self.DNS缓冲脏 {
-                共享默认.set(self.DNS记录缓冲, forKey: "dnsQueryRecords")
-                self.DNS缓冲脏 = false
-            }
-            // 连接记录缓冲：直接写数组
-            if self.连接缓冲脏 {
-                共享默认.set(self.连接记录缓冲, forKey: "connectionRecords")
-                self.连接缓冲脏 = false
-            }
+            // 采样并写入扩展内存
+            let 扩展内存 = self.获取当前进程内存占用()
+            共享默认.set(扩展内存, forKey: "tunnelMemoryBytes")
+
+            // 一期内存优化：写入内存分桶指标（轻量 Int，不带大对象）
+            let 分桶 = self.采集内存分桶()
+            共享默认.set(分桶, forKey: "tunnelMemoryBuckets")
+
+            共享默认.synchronize()
         }
+        定时器.resume()
+        内存采样定时器 = 定时器
     }
 
     /// 采集内存分桶指标（各诊断数据结构的条数与体积）
     /// 返回 [String: Any]，全部为 Int，写入 UserDefaults 成本极低
     private func 采集内存分桶() -> [String: Any] {
-        // 诊断缓冲计数与 DNS 计时表、压力等级都在扩展数据队列上保护，同步读取一次
+        // DNS 查询计时表与压力等级都在扩展数据队列上保护，同步读取一次
         var 计时表条数 = 0
         var 压力等级 = "normal"
-        var 日志数 = 0
-        var DNS数 = 0
-        var 连接数 = 0
         扩展数据队列.sync {
             计时表条数 = self.DNS查询开始时间.count
             压力等级 = self.最近压力等级
-            日志数 = self.当前日志条数
-            DNS数 = self.DNS记录条数
-            连接数 = self.连接记录条数
         }
         // 系统可用内存（iOS 13+），反映进程距离 jetsam 的余量
         let 可用内存 = os_proc_available_memory()
         return [
-            "日志条数": 日志数,
+            "日志条数": 当前日志条数,
             "日志编码字节": 上次日志编码字节数,
-            "DNS记录条数": DNS数,
-            "连接记录条数": 连接数,
+            "DNS记录条数": DNS记录条数,
+            "连接记录条数": 连接记录条数,
             "DNS计时表条数": 计时表条数,
             "可用内存字节": 可用内存 > 0 ? 可用内存 : -1,
             "Go句柄数": -1, // libbox 未暴露运行时句柄数，预留字段
@@ -861,28 +752,8 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         // 如果指令时间大于已处理时间，说明有新的清理指令
         guard 指令时间 > 已处理时间 else { return }
 
-        // 防 stale：指令超过 30 秒视为过期（来自上一会话残留），忽略并标记已处理
-        guard Date().timeIntervalSince1970 - 指令时间 < 30 else {
-            共享默认.set(指令时间, forKey: 已处理键)
-            共享默认.removeObject(forKey: 清理指令键)
-            共享默认.synchronize()
-            return
-        }
-
-        // 启动保护：隧道启动后 10 秒内不执行清理（避免刚启动就重启内核导致启动失败/隧道关闭）
-        if let 启动时间 = 隧道启动时间, Date().timeIntervalSince(启动时间) < 10 {
-            // 标记已处理并清除指令，等下次用户主动触发
-            共享默认.set(指令时间, forKey: 已处理键)
-            共享默认.removeObject(forKey: 清理指令键)
-            共享默认.synchronize()
-            记录扩展日志(级别: "信息", 模块: "内存", 内容: "清理指令在隧道启动10秒保护期内，已忽略")
-            return
-        }
-
-        // 记录已处理时间并立即清除指令、持久化（即使后续重启内核崩溃也不会重复触发）
+        // 记录已处理时间
         共享默认.set(指令时间, forKey: 已处理键)
-        共享默认.removeObject(forKey: 清理指令键)
-        共享默认.synchronize()
 
         // 一期内存优化：记录清理前内存与分桶
         let 清理前内存 = 获取当前进程内存占用()
@@ -891,27 +762,22 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         // 执行内存清理
         记录扩展日志(级别: "信息", 模块: "内存", 内容: "收到内存清理指令，开始执行扩展内存清理，清理前：\(格式化字节(清理前内存))")
 
-        // 二期内存优化：清理 UserDefaults + 内存环形缓冲（全部清除，一条不留）
+        // 1. 触发 Go 运行时垃圾回收（通过设置 GOGC 环境变量无法动态触发，这里清理 Swift 侧缓存）
+        // 2. 清理 DNS 查询记录缓存（全部清除，一条不留）
         共享默认.removeObject(forKey: "dnsQueryRecords")
+        DNS记录条数 = 0
+        // 3. 清理扩展日志（全部清除，一条不留）
         共享默认.removeObject(forKey: "tunnelLogs")
+        当前日志条数 = 0
+        上次日志编码字节数 = 0
+        // 4. 清理连接记录（全部清除，一条不留）
         共享默认.removeObject(forKey: "connectionRecords")
-        扩展数据队列.sync {
-            self.日志环形缓冲.removeAll()
-            self.当前日志条数 = 0
-            self.上次日志编码字节数 = 0
-            self.日志缓冲脏 = false
-            self.DNS记录缓冲.removeAll()
-            self.DNS记录条数 = 0
-            self.DNS缓冲脏 = false
-            self.连接记录缓冲.removeAll()
-            self.连接记录条数 = 0
-            self.连接缓冲脏 = false
-        }
+        连接记录条数 = 0
 
         共享默认.synchronize()
 
-        // 重启 sing-box 内核以释放 Go 堆（诊断记录仅 KB 级，常驻内存主体是 Go 堆约 32MB，
-        // 仅清记录无法降低 resident；重启内核是唯一能实质回收 RSS 的手段，会有 1~3 秒网络瞬断）
+        // 5. 重启 sing-box 内核以释放 Go 堆（诊断记录仅 KB 级，常驻内存主体是 Go 堆约 32MB，
+        //    仅清记录无法降低 resident；重启内核是唯一能实质回收 RSS 的手段，会有 1~3 秒网络瞬断）
         if singBox运行中 {
             记录扩展日志(级别: "信息", 模块: "内存", 内容: "为释放内存重启 sing-box 内核...")
             重载SingBox配置()
@@ -948,6 +814,12 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         } else {
             return String(format: "%.2f MB", Double(字节) / (1024 * 1024))
         }
+    }
+
+    /// 停止内存采样定时器
+    private func 停止内存采样定时器() {
+        内存采样定时器?.cancel()
+        内存采样定时器 = nil
     }
 
     // MARK: - 系统内存压力监控（一期内存优化）
@@ -1161,15 +1033,16 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             DNS记录["响应时间"] = 耗时
         }
 
-        // 二期内存优化：写入内存环形缓冲，不再每条整表读写 UserDefaults
-        扩展数据队列.async { [weak self] in
-            guard let self = self else { return }
-            self.DNS记录缓冲.insert(DNS记录, at: 0)
-            if self.DNS记录缓冲.count > 200 {
-                self.DNS记录缓冲 = Array(self.DNS记录缓冲.prefix(200))
+        DispatchQueue.main.async {
+            guard let 共享默认 = self.共享默认 else { return }
+            var 记录列表 = 共享默认.array(forKey: "dnsQueryRecords") as? [[String: Any]] ?? []
+            记录列表.insert(DNS记录, at: 0)
+            if 记录列表.count > 200 {
+                记录列表 = Array(记录列表.prefix(200))
             }
-            self.DNS记录条数 = self.DNS记录缓冲.count
-            self.DNS缓冲脏 = true
+            // 一期内存优化：同步内存侧计数
+            self.DNS记录条数 = 记录列表.count
+            共享默认.set(记录列表, forKey: "dnsQueryRecords")
         }
     }
 
@@ -1212,12 +1085,14 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
               !域名或IP.hasPrefix("192.168."),
               !域名或IP.hasPrefix("172.16.") else { return }
 
-        // 二期内存优化：写入内存环形缓冲，不再每条整表读写 UserDefaults
+        // 串行化写入
         扩展数据队列.async { [weak self] in
-            guard let self = self else { return }
+            guard let self = self, let 共享默认 = self.共享默认 else { return }
+
+            var 记录列表 = 共享默认.array(forKey: "connectionRecords") as? [[String: Any]] ?? []
 
             // 去重：最近10条内相同域名不重复记录
-            let 最近域名 = Set(self.连接记录缓冲.prefix(10).compactMap { $0["域名"] as? String })
+            let 最近域名 = Set(记录列表.prefix(10).compactMap { $0["域名"] as? String })
             guard !最近域名.contains(域名或IP) else { return }
 
             let 连接记录: [String: Any] = [
@@ -1225,12 +1100,13 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                 "时间": Date().timeIntervalSince1970
             ]
 
-            self.连接记录缓冲.insert(连接记录, at: 0)
-            if self.连接记录缓冲.count > 100 {
-                self.连接记录缓冲 = Array(self.连接记录缓冲.prefix(100))
+            记录列表.insert(连接记录, at: 0)
+            if 记录列表.count > 100 {
+                记录列表 = Array(记录列表.prefix(100))
             }
-            self.连接记录条数 = self.连接记录缓冲.count
-            self.连接缓冲脏 = true
+            // 一期内存优化：同步内存侧计数
+            self.连接记录条数 = 记录列表.count
+            共享默认.set(记录列表, forKey: "connectionRecords")
         }
     }
 
@@ -1290,23 +1166,32 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
         let 条目 = 扩展日志条目(id: UUID(), 时间: Date(), 级别: 级别, 模块: 模块, 内容: 内容)
 
-        // 二期内存优化：写入内存环形缓冲，不再每条解码/编码 UserDefaults（O(n)→O(1)）
-        // 由状态上报定时器每秒批量刷新脏缓冲到 UserDefaults
+        // 保存到共享 UserDefaults（格式与主 App 读取一致）
+        // 必须串行化：日志回调来自多个 Go 线程，并发 decode-insert-encode-set 会丢日志并可能损坏
         日志积压数 += 1
         扩展数据队列.async { [weak self] in
-            guard let 自 = self else {
+            guard let 自 = self, let 共享默认 = 自.共享默认 else {
                 self?.日志积压数 -= 1
                 return
             }
             defer { 自.日志积压数 -= 1 }
 
-            自.日志环形缓冲.insert(条目, at: 0)
-            // 上限200条
-            if 自.日志环形缓冲.count > 200 {
-                自.日志环形缓冲.removeLast(自.日志环形缓冲.count - 200)
+            var 日志列表: [扩展日志条目] = []
+            if let 日志数据 = 共享默认.data(forKey: "tunnelLogs"),
+               let 已存列表 = try? JSONDecoder().decode([扩展日志条目].self, from: 日志数据) {
+                日志列表 = 已存列表
             }
-            自.当前日志条数 = 自.日志环形缓冲.count
-            自.日志缓冲脏 = true
+            日志列表.insert(条目, at: 0)
+            // 上限200条，减少JSON编解码数据量
+            if 日志列表.count > 200 {
+                日志列表.removeLast(日志列表.count - 200)
+            }
+            // 一期内存优化：同步内存侧计数与编码体积，供分桶采样使用
+            自.当前日志条数 = 日志列表.count
+            if let 编码数据 = try? JSONEncoder().encode(日志列表) {
+                自.上次日志编码字节数 = 编码数据.count
+                共享默认.set(编码数据, forKey: "tunnelLogs")
+            }
         }
 
         // 输出到系统日志
@@ -1322,13 +1207,14 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         }
     }
 
-    /// 读取扩展日志（供主 App 通过 IPC 查询）—— 二期优化：从内存环形缓冲读取，保证最新
+    /// 读取扩展日志（供主 App 通过 IPC 查询）
     private func 读取扩展日志() -> [[String: Any]] {
-        var 快照: [扩展日志条目] = []
-        扩展数据队列.sync {
-            快照 = self.日志环形缓冲
+        guard let 共享默认 = 共享默认,
+              let 日志数据 = 共享默认.data(forKey: "tunnelLogs"),
+              let 日志列表 = try? JSONDecoder().decode([扩展日志条目].self, from: 日志数据) else {
+            return []
         }
-        return 快照.map { [
+        return 日志列表.map { [
             "id": $0.id.uuidString,
             "time": $0.时间.timeIntervalSince1970,
             "level": $0.级别,

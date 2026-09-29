@@ -232,46 +232,43 @@ private struct 筛选类型选择器: View {
 
 // MARK: - DNS 记录行
 
-/// 单条 DNS 查询记录行
+/// 单条 DNS 查询记录行（重构版：域名+类型+来源一行，解析结果一行，元信息一行）
 struct DNS记录行: View {
     let 记录: DNS记录模型
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            // 第一行：域名 + 类型标签 + 来源
+        VStack(alignment: .leading, spacing: 5) {
+            // 第一行：域名（主标题）+ 来源标签
             HStack(spacing: 8) {
-                Text(记录.域名)
-                    .font(.system(size: 14, weight: .medium))
+                Text(记录.域名.isEmpty ? "未知域名" : 记录.域名)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(记录.域名.isEmpty ? .危险色 : .primary)
                     .lineLimit(1)
-
-                Text(记录.记录类型.rawValue)
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 5)
-                    .padding(.vertical, 2)
-                    .background(记录.记录类型 == .A ? Color.主题色 : Color.警告色)
-                    .cornerRadius(4)
 
                 Spacer()
 
-                // 来源标签
-                来源标签(来源: 记录.来源)
+                // 类型标签 + 来源标签
+                HStack(spacing: 5) {
+                    类型标签(类型: 记录.记录类型)
+                    来源标签(来源: 记录.来源)
+                }
             }
 
-            // 第二行：解析结果
+            // 第二行：解析结果（多个IP合并显示）
             if !记录.解析结果.isEmpty {
                 Text(记录.结果显示)
                     .font(.system(size: 12))
                     .foregroundColor(.secondary)
-                    .lineLimit(2)
+                    .lineLimit(3)
+                    .fixedSize(horizontal: false, vertical: true)
             } else {
                 Text("无解析结果")
                     .font(.system(size: 12))
                     .foregroundColor(.危险色)
             }
 
-            // 第三行：时间 + 响应时间 + DNS服务器
-            HStack(spacing: 12) {
+            // 第三行：时间 + 响应时间 + DNS服务器 + TTL
+            HStack(spacing: 10) {
                 Text(记录.时间显示)
                     .font(.system(size: 11))
                     .foregroundColor(.secondary)
@@ -281,6 +278,10 @@ struct DNS记录行: View {
                         .font(.system(size: 11))
                         .foregroundColor(响应颜色(响应))
                 }
+
+                Text("TTL:\(记录.TTL)s")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
 
                 Text(记录.DNS服务器)
                     .font(.system(size: 11))
@@ -304,6 +305,26 @@ struct DNS记录行: View {
         )
     }
 
+    /// 类型标签
+    private func 类型标签(类型: DNS记录类型) -> some View {
+        let 颜色: Color
+        switch 类型 {
+        case .A: 颜色 = .主题色
+        case .AAAA: 颜色 = .purple
+        case .CNAME: 颜色 = .orange
+        case .MX: 颜色 = .green
+        case .TXT: 颜色 = .gray
+        default: 颜色 = .secondary
+        }
+        return Text(类型.rawValue)
+            .font(.system(size: 10, weight: .semibold))
+            .foregroundColor(.white)
+            .padding(.horizontal, 5)
+            .padding(.vertical, 2)
+            .background(颜色)
+            .cornerRadius(4)
+    }
+
     /// 来源标签
     private func 来源标签(来源: DNS来源) -> some View {
         let (文字, 颜色): (String, Color)
@@ -312,7 +333,7 @@ struct DNS记录行: View {
         case .远程: (文字, 颜色) = ("远程", .主题色)
         case .拦截: (文字, 颜色) = ("拦截", .危险色)
         case .直连: (文字, 颜色) = ("直连", .成功色)
-        case .代理: (文字, 颜色) = ("代理", .警告色)
+        case .代理: (文字, 颜色) = ("代理", .orange)
         }
 
         return Text(文字)

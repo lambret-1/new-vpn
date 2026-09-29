@@ -798,9 +798,9 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             // 计算响应耗时
             let 响应时间 = 计算DNS响应时间(域名: 域名)
 
-            // 缓存命中判断：没有找到对应的 lookup 开始时间，说明 sing-box 直接从缓存返回结果
-            // 缓存命中时不会输出 lookup 日志，直接输出 exchanged
-            let 是否缓存命中 = (响应时间 == nil)
+            // 缓存命中判断：响应时间小于2毫秒且有解析结果，视为缓存命中
+            // （不再用"无lookup开始时间"判断，因为lookup日志解析不稳定会导致100%误判）
+            let 是否缓存命中 = (响应时间 != nil && 响应时间! < 2)
             let 来源 = 是否缓存命中 ? "缓存" : "远程"
 
             // 判断是否 NXDOMAIN

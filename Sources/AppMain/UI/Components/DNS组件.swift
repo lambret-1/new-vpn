@@ -20,6 +20,8 @@ struct DNS记录页面: View {
     @State private var 筛选类型: DNS记录类型?
     /// 选中的来源筛选
     @State private var 筛选来源: DNS来源?
+    /// 选中的记录（用于详情页）
+    @State private var 选中的记录: DNS记录模型?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -54,6 +56,10 @@ struct DNS记录页面: View {
                 List {
                     ForEach(筛选后的记录) { 记录 in
                         DNS记录行(记录: 记录)
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                选中的记录 = 记录
+                            }
                             .listRowInsets(EdgeInsets(top: 4, leading: 15, bottom: 4, trailing: 15))
                             .listRowBackground(Color.clear)
                             .listRowSeparator(.hidden)
@@ -66,6 +72,9 @@ struct DNS记录页面: View {
             }
         }
         .background(Color.页面背景)
+        .sheet(item: $选中的记录) { 记录 in
+            DNS记录详情页面(记录: 记录)
+        }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 HStack(spacing: 16) {
@@ -352,6 +361,142 @@ struct DNS记录行: View {
         case 50..<200: return .警告色
         default: return .危险色
         }
+    }
+}
+
+// MARK: - DNS 记录详情页面
+
+/// DNS 记录详情页面（点击卡片弹出）
+struct DNS记录详情页面: View {
+    let 记录: DNS记录模型
+    @Environment(\.dismiss) private var 关闭
+
+    var body: some View {
+        NavigationStack {
+            List {
+                // 域名和状态
+                Section {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(记录.域名.isEmpty ? "未知域名" : 记录.域名)
+                            .font(.system(size: 18, weight: .bold))
+                            .foregroundColor(记录.域名.isEmpty ? .危险色 : .primary)
+                            .lineLimit(2)
+
+                        HStack(spacing: 8) {
+                            // 类型标签
+                            Text(记录.记录类型.rawValue)
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 3)
+                                .background(Color.主题色)
+                                .cornerRadius(4)
+
+                            // 来源标签
+                            Text(记录.来源.rawValue)
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(来源颜色)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 3)
+                                .background(来源颜色.opacity(0.1))
+                                .cornerRadius(4)
+
+                            if 记录.是否被拦截 {
+                                Text("已拦截")
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundColor(.危险色)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 3)
+                                    .background(Color.危险色.opacity(0.1))
+                                    .cornerRadius(4)
+                            }
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
+
+                // 解析结果
+                Section("解析结果") {
+                    if 记录.解析结果.isEmpty {
+                        Label("无解析结果", systemImage: "xmark.circle")
+                            .foregroundColor(.危险色)
+                    } else {
+                        ForEach(Array(记录.解析结果.enumerated()), id: \.offset) { 索引, IP in
+                            HStack {
+                                Image(systemName: "network")
+                                    .foregroundColor(.主题色)
+                                    .frame(width: 20)
+                                Text(IP)
+                                    .font(.system(size: 14, design: .monospaced))
+                                    .textSelection(.enabled)
+                                Spacer()
+                                Text("第\(索引 + 1)个")
+                                    .font(.system(size: 11))
+                                    .foregroundColor(.secondary)
+                            }
+                            .padding(.vertical, 2)
+                        }
+                    }
+                }
+
+                // 详细信息
+                Section("详细信息") {
+                    详情行(标签: "查询时间", 值: 时间完整显示)
+                    详情行(标签: "响应时间", 值: 记录.响应时间 != nil ? "\(记录.响应时间!)ms" : "未记录")
+                    详情行(标签: "TTL", 值: "\(记录.TTL)秒")
+                    详情行(标签: "DNS服务器", 值: 记录.DNS服务器)
+                    详情行(标签: "记录类型", 值: 记录.记录类型.rawValue)
+                    详情行(标签: "来源", 值: 记录.来源.rawValue)
+                    if let 规则 = 记录.拦截规则 {
+                        详情行(标签: "拦截规则", 值: 规则)
+                    }
+                    if let 备注 = 记录.名称, !备注.isEmpty {
+                        详情行(标签: "备注", 值: 备注)
+                    }
+                }
+            }
+            .listStyle(.insetGrouped)
+            .navigationTitle("DNS 解析详情")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("关闭") { 关闭() }
+                }
+            }
+        }
+    }
+
+    /// 来源颜色
+    private var 来源颜色: Color {
+        switch 记录.来源 {
+        case .缓存: return .警告色
+        case .远程: return .主题色
+        case .拦截: return .危险色
+        case .直连: return .成功色
+        case .代理: return .orange
+        }
+    }
+
+    /// 完整时间显示
+    private var 时间完整显示: String {
+        let 格式 = DateFormatter()
+        格式.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        return 格式.string(from: 记录.查询时间)
+    }
+
+    /// 详情行
+    private func 详情行(标签: String, 值: String) -> some View {
+        HStack {
+            Text(标签)
+                .font(.system(size: 14))
+                .foregroundColor(.secondary)
+            Spacer()
+            Text(值)
+                .font(.system(size: 14))
+                .foregroundColor(.primary)
+                .multilineTextAlignment(.trailing)
+        }
+        .padding(.vertical, 2)
     }
 }
 

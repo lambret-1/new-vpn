@@ -156,6 +156,10 @@ private struct 分组规则管理页面: View {
     @State private var 显示添加规则 = false
     @State private var 编辑的规则: 分流规则项?
     @State private var 搜索关键词 = ""
+    @State private var 编辑模式 = false
+    @State private var 选中的规则 = Set<UUID>()
+    @State private var 显示批量移动 = false
+    @State private var 显示批量复制 = false
 
     /// 当前分组在管理器中的索引
     private var 分组索引: Int? {
@@ -182,6 +186,14 @@ private struct 分组规则管理页面: View {
                 AppSearchBar(搜索文字: $搜索关键词, 占位文字: "搜索规则")
                     .frame(maxWidth: .infinity)
                 Button {
+                    编辑模式.toggle()
+                    选中的规则.removeAll()
+                } label: {
+                    Image(systemName: 编辑模式 ? "checkmark.circle.fill" : "checkmark.circle")
+                        .font(.system(size: 22))
+                        .foregroundColor(编辑模式 ? .主题色 : .secondary)
+                }
+                Button {
                     显示添加规则 = true
                 } label: {
                     Image(systemName: "plus.circle.fill")
@@ -191,6 +203,57 @@ private struct 分组规则管理页面: View {
             }
             .padding(.horizontal, 15)
             .padding(.vertical, 8)
+
+            // 批量操作栏
+            if 编辑模式 {
+                HStack(spacing: 8) {
+                    Text("已选 \(选中的规则.count) 条")
+                        .font(.system(size: 13))
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    Button("全选") {
+                        选中的规则 = Set(规则列表.map { $0.id })
+                    }
+                    .font(.system(size: 13))
+                    .foregroundColor(.主题色)
+                    Button("取消") {
+                        选中的规则.removeAll()
+                    }
+                    .font(.system(size: 13))
+                    .foregroundColor(.secondary)
+                }
+                .padding(.horizontal, 15)
+                .padding(.vertical, 6)
+
+                HStack(spacing: 8) {
+                    批量按钮(标题: "启用", 图标: "checkmark.circle", 颜色: .成功色) {
+                        let 规则 = 规则列表.filter { 选中的规则.contains($0.id) }
+                        分流管理.批量切换规则启用(规则, 启用: true)
+                        编辑模式 = false
+                        选中的规则.removeAll()
+                    }
+                    批量按钮(标题: "禁用", 图标: "xmark.circle", 颜色: .警告色) {
+                        let 规则 = 规则列表.filter { 选中的规则.contains($0.id) }
+                        分流管理.批量切换规则启用(规则, 启用: false)
+                        编辑模式 = false
+                        选中的规则.removeAll()
+                    }
+                    批量按钮(标题: "移动", 图标: "folder", 颜色: .主题色) {
+                        显示批量移动 = true
+                    }
+                    批量按钮(标题: "复制", 图标: "doc.on.doc", 颜色: .蓝色) {
+                        显示批量复制 = true
+                    }
+                    批量按钮(标题: "删除", 图标: "trash", 颜色: .危险色) {
+                        let 规则 = 规则列表.filter { 选中的规则.contains($0.id) }
+                        分流管理.批量删除规则(规则)
+                        编辑模式 = false
+                        选中的规则.removeAll()
+                    }
+                }
+                .padding(.horizontal, 15)
+                .padding(.bottom, 8)
+            }
 
             // 规则列表
             if 规则列表.isEmpty {
@@ -205,22 +268,44 @@ private struct 分组规则管理页面: View {
             } else {
                 List {
                     ForEach(规则列表) { 规则 in
-                        规则行视图(规则: Binding(
-                            get: { 规则 },
-                            set: { 新规则 in
-                                if let 索引 = 分组索引,
-                                   let 规则索引 = 分流管理.配置.分组列表[索引].规则列表.firstIndex(where: { $0.id == 规则.id }) {
-                                    分流管理.配置.分组列表[索引].规则列表[规则索引] = 新规则
-                                    分流管理.保存配置()
+                        HStack(spacing: 10) {
+                            if 编辑模式 {
+                                Image(systemName: 选中的规则.contains(规则.id) ? "checkmark.circle.fill" : "circle")
+                                    .foregroundColor(选中的规则.contains(规则.id) ? .主题色 : .secondary)
+                                    .font(.system(size: 20))
+                                    .onTapGesture {
+                                        if 选中的规则.contains(规则.id) {
+                                            选中的规则.remove(规则.id)
+                                        } else {
+                                            选中的规则.insert(规则.id)
+                                        }
+                                    }
+                            }
+                            规则行视图(规则: Binding(
+                                get: { 规则 },
+                                set: { 新规则 in
+                                    if let 索引 = 分组索引,
+                                       let 规则索引 = 分流管理.配置.分组列表[索引].规则列表.firstIndex(where: { $0.id == 规则.id }) {
+                                        分流管理.配置.分组列表[索引].规则列表[规则索引] = 新规则
+                                        分流管理.保存配置()
+                                    }
+                                }
+                            ))
+                            .onTapGesture {
+                                if 编辑模式 {
+                                    if 选中的规则.contains(规则.id) {
+                                        选中的规则.remove(规则.id)
+                                    } else {
+                                        选中的规则.insert(规则.id)
+                                    }
+                                } else {
+                                    编辑的规则 = 规则
                                 }
                             }
-                        ))
-                        .onTapGesture {
-                            编辑的规则 = 规则
+                            .listRowInsets(EdgeInsets(top: 4, leading: 15, bottom: 4, trailing: 15))
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
                         }
-                        .listRowInsets(EdgeInsets(top: 4, leading: 15, bottom: 4, trailing: 15))
-                        .listRowBackground(Color.clear)
-                        .listRowSeparator(.hidden)
                     }
                     .onDelete { 索引集 in
                         guard let 分组索引 = 分组索引 else { return }
@@ -242,6 +327,44 @@ private struct 分组规则管理页面: View {
             规则编辑页面(规则: 规则, 分组: 分组)
                 .environmentObject(分流管理)
         }
+        .sheet(isPresented: $显示批量移动) {
+            选择分组页面(标题: "批量移动到分组") { 目标分组 in
+                let 规则 = 规则列表.filter { 选中的规则.contains($0.id) }
+                规则.forEach { 分流管理.移动规则($0, 到分组: 目标分组) }
+                编辑模式 = false
+                选中的规则.removeAll()
+            }
+            .environmentObject(分流管理)
+        }
+        .sheet(isPresented: $显示批量复制) {
+            选择分组页面(标题: "批量复制到分组") { 目标分组 in
+                let 规则 = 规则列表.filter { 选中的规则.contains($0.id) }
+                规则.forEach { 分流管理.复制规则($0, 到分组: 目标分组) }
+                编辑模式 = false
+                选中的规则.removeAll()
+            }
+            .environmentObject(分流管理)
+        }
+    }
+
+    /// 批量操作按钮
+    private func 批量按钮(标题: String, 图标: String, 颜色: Color, 操作: @escaping () -> Void) -> some View {
+        Button(action: 操作) {
+            VStack(spacing: 4) {
+                Image(systemName: 图标)
+                    .font(.system(size: 16))
+                Text(标题)
+                    .font(.system(size: 11))
+            }
+            .foregroundColor(颜色)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 8)
+            .background(Color.卡片背景)
+            .cornerRadius(8)
+        }
+        .buttonStyle(PlainButtonStyle())
+        .disabled(选中的规则.isEmpty)
+        .opacity(选中的规则.isEmpty ? 0.4 : 1.0)
     }
 }
 
@@ -546,6 +669,8 @@ private struct 分分组视图: View {
 struct 规则行视图: View {
     @Binding var 规则: 分流规则项
     @EnvironmentObject private var 分流管理: 分流规则管理器
+    @State private var 显示移动分组 = false
+    @State private var 显示复制分组 = false
 
     var body: some View {
         HStack(spacing: 10) {
@@ -606,6 +731,36 @@ struct 规则行视图: View {
         .background(Color.卡片背景)
         .cornerRadius(8)
         .opacity(规则.启用 ? 1.0 : 0.5)
+        .contentShape(Rectangle())
+        .contextMenu {
+            Button {
+                显示复制分组 = true
+            } label: {
+                Label("复制到其他分组", systemImage: "doc.on.doc")
+            }
+            Button {
+                显示移动分组 = true
+            } label: {
+                Label("移动到其他分组", systemImage: "folder")
+            }
+            Button(role: .destructive) {
+                分流管理.删除规则(规则)
+            } label: {
+                Label("删除规则", systemImage: "trash")
+            }
+        }
+        .sheet(isPresented: $显示移动分组) {
+            选择分组页面(标题: "移动到分组") { 目标分组 in
+                分流管理.移动规则(规则, 到分组: 目标分组)
+            }
+            .environmentObject(分流管理)
+        }
+        .sheet(isPresented: $显示复制分组) {
+            选择分组页面(标题: "复制到分组") { 目标分组 in
+                分流管理.复制规则(规则, 到分组: 目标分组)
+            }
+            .environmentObject(分流管理)
+        }
     }
 
     /// 动作颜色
@@ -616,6 +771,49 @@ struct 规则行视图: View {
         case .拦截, .拒绝: return .危险色
         case .全局代理: return .警告色
         case .放行: return .次要文字
+        }
+    }
+}
+
+// MARK: - 选择分组页面
+
+/// 选择分组页面（用于移动/复制规则）
+private struct 选择分组页面: View {
+    @EnvironmentObject private var 分流管理: 分流规则管理器
+    @Environment(\.dismiss) private var 关闭
+    let 标题: String
+    let 完成: (分流规则分组) -> Void
+
+    var body: some View {
+        NavigationStack {
+            List {
+                ForEach(分流管理.配置.分组列表) { 分组 in
+                    Button {
+                        完成(分组)
+                        关闭()
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: 分组.图标)
+                                .foregroundColor(.主题色)
+                            Text(分组.名称)
+                                .foregroundColor(.primary)
+                            Spacer()
+                            Text("\(分组.规则列表.count) 条")
+                                .foregroundColor(.secondary)
+                                .font(.system(size: 12))
+                        }
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                }
+            }
+            .listStyle(.insetGrouped)
+            .navigationTitle(标题)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("取消") { 关闭() }
+                }
+            }
         }
     }
 }

@@ -528,21 +528,107 @@ final class SingBox配置生成器 {
 
         // 全局直连模式：指定域名强制走代理（GitHub/谷歌YouTube/Telegram/TikTok/Cloudflare）
         if 运行模式 == .全局直连 {
-            // GitHub
-            规则列表.append(SingBox路由规则(
-                domainSuffix: ["github.com", "github.io", "githubusercontent.com", "githubassets.com", "githubapp.com"],
-                outbound: "proxy"
-            ))
-            // 谷歌 YouTube
-            规则列表.append(SingBox路由规则(
-                domainSuffix: ["google.com", "youtube.com", "googlevideo.com", "ytimg.com", "ggpht.com", "googleapis.com", "gstatic.com", "googleusercontent.com"],
-                outbound: "proxy"
-            ))
-            // Telegram 纸飞机
-            规则列表.append(SingBox路由规则(
-                domainSuffix: ["telegram.org", "t.me", "telegram.me", "telegram.dog", "telegra.ph", "tg.dev"],
-                outbound: "proxy"
-            ))
+            // GitHub 完整域名
+规则列表.append(SingBox路由规则(
+    domainSuffix: [
+        "github.com",
+        "github.io",
+        "githubusercontent.com",
+        "githubassets.com",
+        "githubapp.com",
+        "githubstatus.com",
+        "github.dev",
+        "ghcr.io",
+        "gist.github.com",
+        "codeload.github.com",
+        "raw.githubusercontent.com",
+        "avatars.githubusercontent.com",
+        "objects.githubusercontent.com",
+        "github.blog",
+        "github.community",
+        "githubassets.com",
+        "githubpreview.dev"
+    ],
+    outbound: "proxy"
+))
+          // YouTube 完整域名
+规则列表.append(SingBox路由规则(
+    domainSuffix: [
+        "youtube.com",
+        "youtu.be",
+        "ytimg.com",
+        "googlevideo.com",
+        "youtube-nocookie.com",
+        "ggpht.com",
+        "youtube.googleapis.com",
+        "youtubei.googleapis.com",
+        "gvt1.com",
+        "gvt2.com",
+        "video.google.com"
+    ],
+    outbound: "proxy"
+))
+// Google 完整域名（搜索/Gmail/地图/Play/Google Gemini）
+规则列表.append(SingBox路由规则(
+    domainSuffix: [
+        "google.com",
+        "googleapis.com",
+        "gstatic.com",
+        "googleusercontent.com",
+        "gmail.com",
+        "ggpht.com",
+        "gvt1.com",
+        "gvt2.com",
+        "g.co",
+        "goo.gl",
+        "1e100.net",
+        "fonts.gstatic.com",
+        "fonts.googleapis.com",
+        "maps.googleapis.com",
+        "maps.gstatic.com",
+        "play.google.com",
+        "translate.googleapis.com",
+        "generativelanguage.googleapis.com",
+        "gemini.google.com",
+        "ai.google.dev",
+        "aistudio.google.com",
+        "recaptcha.net",
+        "android.com",
+        "appspot.com",
+        "blogspot.com",
+        "firebase.com",
+        "gcr.io",
+        "google.hk",
+        "google.com.hk"
+    ],
+    outbound: "proxy"
+))
+            // Telegram 完整域名
+规则列表.append(SingBox路由规则(
+    domainSuffix: [
+        "telegram.org",
+        "t.me",
+        "telegram.me",
+        "telegram.tg",
+        "tdesktop.com",
+        "telegra.ph",
+        "telesco.pe",
+        "telegram-cdn.org",
+        "cdn-telegram.org",
+        "fragment.com",
+        "graph.org",
+        "comments.app",
+        "contest.com",
+        "quiz.directory",
+        "tg.dev",
+        "tx.me",
+        "telegram.dog",
+        "telega.one",
+        "telegram.space",
+        "usercontent.dev"
+    ],
+    outbound: "proxy"
+))
             
 // TikTok
 规则列表.append(SingBox路由规则(
@@ -609,11 +695,30 @@ final class SingBox配置生成器 {
     outbound: "proxy"
 ))
            
-            // Cloudflare
-            规则列表.append(SingBox路由规则(
-                domainSuffix: ["cloudflare.com", "cloudflare.net", "workers.dev", "cloudflareapps.com", "cloudflareinsights.com", "cf-ipfs.com"],
-                outbound: "proxy"
-            ))
+            // Cloudflare CF 完整域名
+规则列表.append(SingBox路由规则(
+    domainSuffix: [
+        "cloudflare.com",
+        "cloudflare.net",
+        "cloudflare-cdn.com",
+        "cfdata.org",
+        "cf-ns.com",
+        "cf-ns.net",
+        "cf-ns.org",
+        "cflns.io",
+        "workers.dev",
+        "pages.dev",
+        "trycloudflare.com",
+        "1.1.1.1",
+        "cloudflareinsights.com",
+        "w3s.link",
+        "speed.cloudflare.com",
+        "turn.cloudflare.com",
+        "chat.cloudflare.com",
+        "zerotrust.cloudflare.com"
+    ],
+    outbound: "proxy"
+))
         }
 
         // 根据运行模式决定最终出站

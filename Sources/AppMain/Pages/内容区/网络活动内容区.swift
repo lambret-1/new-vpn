@@ -43,6 +43,18 @@ struct 网络活动内容区: View {
                 扩展内存清理: { 扩展内存监控.清理扩展内存() }
             )
 
+            // 一期内存优化：扩展内存分桶可视化
+            扩展内存分桶卡片(
+                日志条数: 扩展内存监控.日志条数,
+                DNS记录条数: 扩展内存监控.DNS记录条数,
+                连接记录条数: 扩展内存监控.连接记录条数,
+                DNS计时表条数: 扩展内存监控.DNS计时表条数,
+                可用内存显示: 扩展内存监控.可用内存显示,
+                压力等级: 扩展内存监控.当前压力等级,
+                压力事件显示: 扩展内存监控.压力事件显示,
+                清理释放显示: 扩展内存监控.清理释放显示
+            )
+
             // 连接记录列表
             if 状态.网络连接列表.isEmpty {
                 空状态视图()
@@ -379,6 +391,136 @@ private struct 流量统计区: View {
             return String(format: "%.1fM", Double(字节) / (1024 * 1024))
         } else {
             return String(format: "%.1fG", Double(字节) / (1024 * 1024 * 1024))
+        }
+    }
+}
+
+// MARK: - 扩展内存分桶卡片（一期内存优化）
+
+/// 扩展内存分桶可视化卡片：展示各诊断数据结构条数占比、可用内存、压力事件、清理释放量
+private struct 扩展内存分桶卡片: View {
+    let 日志条数: Int
+    let DNS记录条数: Int
+    let 连接记录条数: Int
+    let DNS计时表条数: Int
+    let 可用内存显示: String
+    let 压力等级: String
+    let 压力事件显示: String
+    let 清理释放显示: String
+
+    /// 分桶定义（颜色 + 标题 + 条数）
+    private var 分桶列表: [(标题: String, 条数: Int, 颜色: Color)] {
+        [
+            ("日志", 日志条数, Color(red: 0.20, green: 0.55, blue: 0.95)),
+            ("DNS", DNS记录条数, Color(red: 0.20, green: 0.70, blue: 0.45)),
+            ("连接", 连接记录条数, Color(red: 0.90, green: 0.55, blue: 0.15)),
+            ("计时", DNS计时表条数, Color(red: 0.60, green: 0.40, blue: 0.85))
+        ]
+    }
+
+    /// 分桶总条数
+    private var 总条数: Int {
+        分桶列表.reduce(0) { $0 + $1.条数 }
+    }
+
+    /// 压力等级显示与颜色
+    private var 压力等级显示: (文字: String, 颜色: Color) {
+        switch 压力等级 {
+        case "critical": return ("危险", .red)
+        case "warning": return ("警告", .orange)
+        default: return ("正常", .green)
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // 标题行
+            HStack(spacing: 6) {
+                Image(systemName: "chart.bar.doc.horizontal")
+                    .font(.system(size: 14))
+                    .foregroundColor(.blue)
+                Text("扩展内存分桶")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.secondary)
+                Spacer()
+                Text(压力等级显示.文字)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(压力等级显示.颜色)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(压力等级显示.颜色.opacity(0.15))
+                    .cornerRadius(4)
+            }
+
+            // 堆叠占比条
+            if 总条数 > 0 {
+                GeometryReader { 几何 in
+                    HStack(spacing: 2) {
+                        ForEach(Array(分桶列表.enumerated()), id: \.offset) { _, 桶 in
+                            if 桶.条数 > 0 {
+                                Rectangle()
+                                    .fill(桶.颜色)
+                                    .frame(width: 几何.size.width * CGFloat(Double(桶.条数) / Double(总条数)))
+                            }
+                        }
+                    }
+                    .cornerRadius(3)
+                }
+                .frame(height: 8)
+            } else {
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(Color.secondary.opacity(0.2))
+                    .frame(height: 8)
+            }
+
+            // 图例 + 数值（两列）
+            LazyVGrid(columns: [
+                GridItem(.flexible(), spacing: 8),
+                GridItem(.flexible(), spacing: 8)
+            ], spacing: 6) {
+                ForEach(Array(分桶列表.enumerated()), id: \.offset) { _, 桶 in
+                    HStack(spacing: 5) {
+                        Circle()
+                            .fill(桶.颜色)
+                            .frame(width: 7, height: 7)
+                        Text(桶.标题)
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        Text("\(桶.条数)")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(.primary)
+                    }
+                }
+            }
+
+            // 底部信息行
+            HStack(spacing: 12) {
+                信息项(标题: "可用内存", 值: 可用内存显示)
+                Divider()
+                    .frame(height: 16)
+                信息项(标题: "压力事件", 值: 压力事件显示)
+                Divider()
+                    .frame(height: 16)
+                信息项(标题: "上次释放", 值: 清理释放显示)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(Color.卡片背景)
+        .cornerRadius(12)
+    }
+
+    /// 底部信息项
+    private func 信息项(标题: String, 值: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(标题)
+                .font(.system(size: 10))
+                .foregroundColor(.secondary)
+            Text(值)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(.primary)
+                .lineLimit(1)
         }
     }
 }

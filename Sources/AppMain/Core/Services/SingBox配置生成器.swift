@@ -545,9 +545,23 @@ final class SingBox配置生成器 {
             ))
             // TikTok
             规则列表.append(SingBox路由规则(
-                domainSuffix: ["tiktok.com", "tiktokcdn.com", "tiktokv.com", "tiktokcdn-us.com", "bytedance.com","musical.ly"],
+                domainSuffix: ["tiktok.com", "tiktokcdn.com", "tiktokv.com", "tiktokcdn-us.com", 
+                "x.com","twitter.com",
+        "t.co",
+        "twimg.com",
+        "periscope.tv",
+        "pscp.tv",
+        "ads-twitter.com",
+        "tweetdeck.com",
+        "twttr.com",
+        "twtrdns.net",
+        "tellapart.com",
+        "x.ai",
+        "grok.com",
+        "xai.com","musical.ly"],
                 outbound: "proxy"
             ))
+           
             // Cloudflare
             规则列表.append(SingBox路由规则(
                 domainSuffix: ["cloudflare.com", "cloudflare.net", "workers.dev", "cloudflareapps.com", "cloudflareinsights.com", "cf-ipfs.com"],

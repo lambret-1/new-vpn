@@ -526,6 +526,35 @@ final class SingBox配置生成器 {
             }
         }
 
+        // 全局直连模式：指定域名强制走代理（GitHub/谷歌YouTube/Telegram/TikTok/Cloudflare）
+        if 运行模式 == .全局直连 {
+            // GitHub
+            规则列表.append(SingBox路由规则(
+                domainSuffix: ["github.com", "github.io", "githubusercontent.com", "githubassets.com", "githubapp.com"],
+                outbound: "proxy"
+            ))
+            // 谷歌 YouTube
+            规则列表.append(SingBox路由规则(
+                domainSuffix: ["google.com", "youtube.com", "googlevideo.com", "ytimg.com", "ggpht.com", "googleapis.com", "gstatic.com", "googleusercontent.com"],
+                outbound: "proxy"
+            ))
+            // Telegram 纸飞机
+            规则列表.append(SingBox路由规则(
+                domainSuffix: ["telegram.org", "t.me", "telegram.me", "telegram.dog", "telegra.ph", "tg.dev"],
+                outbound: "proxy"
+            ))
+            // TikTok
+            规则列表.append(SingBox路由规则(
+                domainSuffix: ["tiktok.com", "tiktokcdn.com", "tiktokv.com", "tiktokcdn-us.com", "bytedance.com", "douyin.com", "musical.ly"],
+                outbound: "proxy"
+            ))
+            // Cloudflare
+            规则列表.append(SingBox路由规则(
+                domainSuffix: ["cloudflare.com", "cloudflare.net", "workers.dev", "cloudflareapps.com", "cloudflareinsights.com", "cf-ipfs.com"],
+                outbound: "proxy"
+            ))
+        }
+
         // 根据运行模式决定最终出站
         // 全局直连：所有未匹配流量直接连接
         // 规则分流/全局代理：所有未匹配流量走代理

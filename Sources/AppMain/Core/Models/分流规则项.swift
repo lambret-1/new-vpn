@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import CryptoKit
 
 // MARK: - 分流规则类型
 
@@ -478,17 +479,14 @@ struct 分流配置模型: Codable {
 extension String {
     /// 基于字符串内容生成稳定的 UUID 字符串（相同字符串始终生成相同UUID）
     var 稳定UUID字符串: String {
-        // 使用 MD5 哈希前16字节作为 UUID
         let 数据 = Data(self.utf8)
-        var 哈希 = [UInt8](repeating: 0, count: Int(CC_MD5_DIGEST_LENGTH))
-        数据.withUnsafeBytes { 指针 in
-            _ = CC_MD5(指针.baseAddress, CC_LONG(数据.count), &哈希)
-        }
+        let 哈希 = Insecure.MD5.hash(data: 数据)
+        var 字节 = Array(哈希)
         // 设置 UUID 版本号为 3 (name-based MD5)
-        哈希[6] = (哈希[6] & 0x0F) | 0x30
-        哈希[8] = (哈希[8] & 0x3F) | 0x80
+        字节[6] = (字节[6] & 0x0F) | 0x30
+        字节[8] = (字节[8] & 0x3F) | 0x80
         // 格式化为 UUID 字符串
-        let 字节 = 哈希.map { String(format: "%02x", $0) }
-        return "\(字节[0...3].joined())\(字节[4...5].joined())-\(字节[6...7].joined())-\(字节[8...9].joined())-\(字节[10...11].joined())-\(字节[12...15].joined())"
+        let 十六进制 = 字节.map { String(format: "%02x", $0) }
+        return "\(十六进制[0...3].joined())\(十六进制[4...5].joined())-\(十六进制[6...7].joined())-\(十六进制[8...9].joined())-\(十六进制[10...11].joined())-\(十六进制[12...15].joined())"
     }
 }

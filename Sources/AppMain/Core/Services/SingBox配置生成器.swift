@@ -543,11 +543,39 @@ final class SingBox配置生成器 {
                 domainSuffix: ["telegram.org", "t.me", "telegram.me", "telegram.dog", "telegra.ph", "tg.dev"],
                 outbound: "proxy"
             ))
-            // TikTok
-            规则列表.append(SingBox路由规则(
-                domainSuffix: ["tiktok.com", "tiktokcdn.com", "tiktokv.com", "tiktokcdn-us.com", 
-                "x.com","twitter.com","tiktokv.eu",
-            "tiktokcdn-eu.com",
+            
+// TikTok
+规则列表.append(SingBox路由规则(
+    domainSuffix: [
+        "tiktok.com",
+        "tiktokcdn.com",
+        "tiktokcdn-us.com",
+        "tiktokcdn-eu.com",
+        "tiktokv.com",
+        "tiktokv.us",
+        "tiktokv.eu",
+        "tiktokd.net",
+        "tiktokd.org",
+        "tik-tokapi.com",
+        "tiktokmusic.app",
+        "tiktokshop.com",
+        "tiktokglobalshop.com",
+        "tiktokglobalshopv.com",
+        "tiktok-row.net",
+        "ttwebview.com",
+        "byteoversea.com",
+        "ibyteimg.com",
+        "ibytedtos.com",
+        "muscdn.com",
+        "musical.ly"
+    ],
+    outbound: "proxy"
+))
+// X (Twitter) 完整域名
+规则列表.append(SingBox路由规则(
+    domainSuffix: [
+        "x.com",
+        "twitter.com",
         "t.co",
         "twimg.com",
         "periscope.tv",
@@ -559,9 +587,27 @@ final class SingBox配置生成器 {
         "tellapart.com",
         "x.ai",
         "grok.com",
-        "xai.com","musical.ly"],
-                outbound: "proxy"
-            ))
+        "xai.com",
+        "vine.co",
+        "twitterstatus.com",
+        "cdn.twitter.com",
+        "analytics.twitter.com"
+    ],
+    outbound: "proxy"
+))
+// OpenAI(ChatGPT) 完整域名
+规则列表.append(SingBox路由规则(
+    domainSuffix: [
+        "openai.com",
+        "chat.openai.com",
+        "chatgpt.com",
+        "oaistatic.com",
+        "oaiusercontent.com",
+        "oaistatsig.com",
+        "sora.com"
+    ],
+    outbound: "proxy"
+))
            
             // Cloudflare
             规则列表.append(SingBox路由规则(

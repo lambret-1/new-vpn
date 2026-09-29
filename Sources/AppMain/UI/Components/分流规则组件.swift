@@ -1342,7 +1342,7 @@ private struct 导入预设选项页面: View {
                             .foregroundColor(.white)
                     }
                     .padding(24)
-                    .background(Color.灰色3)
+                    .background(Color(UIColor.systemGray6))
                     .cornerRadius(16)
                 }
                 .transition(.opacity)

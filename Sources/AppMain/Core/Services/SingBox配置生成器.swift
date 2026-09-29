@@ -748,6 +748,12 @@ final class SingBox配置生成器 {
 
     /// 将分流规则转换为 sing-box 路由规则
     private func 分流规则转换为路由规则(_ 规则: 分流规则项) -> SingBox路由规则? {
+        // 容错：匹配值为空直接跳过（除了"全部"类型）
+        let 匹配值 = 规则.匹配值.trimmingCharacters(in: .whitespacesAndNewlines)
+        if 匹配值.isEmpty && 规则.类型 != .全部 {
+            return nil
+        }
+
         let 出站标签: String
         switch 规则.动作 {
         case .直连: 出站标签 = "DIRECT"
@@ -761,27 +767,58 @@ final class SingBox配置生成器 {
 
         switch 规则.类型 {
         case .域名精确:
-            路由规则.domain = [规则.匹配值]
-        case .域名后缀:
-            路由规则.domainSuffix = [规则.匹配值]
-        case .域名关键词:
-            路由规则.domainKeyword = [规则.匹配值]
-        case .正则表达式:
-            路由规则.domainRegex = [规则.匹配值]
-        case .IP地址:
-            路由规则.ipCidr = ["\(规则.匹配值)/32"]
-        case .IP段:
-            路由规则.ipCidr = [规则.匹配值]
-        case .端口:
-            if let 端口 = Int(规则.匹配值) {
-                路由规则.port = [端口]
+            // 容错：域名不能包含空格、斜杠、协议前缀
+            if 匹配值.contains(" ") || 匹配值.contains("/") || 匹配值.hasPrefix("http") {
+                return nil
             }
+            路由规则.domain = [匹配值]
+        case .域名后缀:
+            if 匹配值.contains(" ") || 匹配值.contains("/") || 匹配值.hasPrefix(".") || 匹配值.hasPrefix("http") {
+                return nil
+            }
+            路由规则.domainSuffix = [匹配值]
+        case .域名关键词:
+            if 匹配值.count < 2 {
+                return nil
+            }
+            路由规则.domainKeyword = [匹配值]
+        case .正则表达式:
+            // 容错：验证正则表达式是否合法
+            do {
+                _ = try NSRegularExpression(pattern: 匹配值)
+            } catch {
+                return nil
+            }
+            路由规则.domainRegex = [匹配值]
+        case .IP地址:
+            // 容错：验证IP格式，失败自动补/32
+            路由规则.ipCidr = ["\(匹配值)/32"]
+        case .IP段:
+            // 容错：必须包含/
+            if !匹配值.contains("/") {
+                return nil
+            }
+            路由规则.ipCidr = [匹配值]
+        case .端口:
+            // 容错：端口必须是1-65535的整数
+            guard let 端口 = Int(匹配值), 端口 >= 1 && 端口 <= 65535 else {
+                return nil
+            }
+            路由规则.port = [端口]
         case .端口范围:
-            路由规则.portRange = [规则.匹配值]
+            // 容错：端口范围格式验证
+            if !匹配值.contains("-") {
+                return nil
+            }
+            路由规则.portRange = [匹配值]
         case .协议:
-            路由规则.protocol_ = [规则.匹配值.lowercased()]
+            let 合法协议 = ["tcp", "udp", "icmp", "all"]
+            if !合法协议.contains(匹配值.lowercased()) {
+                return nil
+            }
+            路由规则.protocol_ = [匹配值.lowercased()]
         case .进程名称:
-            路由规则.processName = [规则.匹配值]
+            路由规则.processName = [匹配值]
         case .用户代理:
             // sing-box 不直接支持 UA 匹配，跳过
             return nil

@@ -46,10 +46,24 @@ final class 分流规则管理器: ObservableObject {
         }
     }
 
-    /// 保存配置
+    /// 保存配置（同步，用于少量数据修改）
     func 保存配置() {
         if let 数据 = try? JSONEncoder().encode(配置) {
             UserDefaults.standard.set(数据, forKey: 配置存储键)
+        }
+    }
+
+    /// 异步保存配置（用于大量数据修改，避免主线程卡顿）
+    /// 调用前需在主线程完成配置修改，此方法仅在后台线程执行编码和写入
+    func 异步保存配置(完成: (() -> Void)? = nil) {
+        let 配置快照 = 配置
+        DispatchQueue.global(qos: .userInitiated).async {
+            if let 数据 = try? JSONEncoder().encode(配置快照) {
+                UserDefaults.standard.set(数据, forKey: 配置存储键)
+            }
+            DispatchQueue.main.async {
+                完成?()
+            }
         }
     }
 

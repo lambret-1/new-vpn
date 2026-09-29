@@ -140,8 +140,6 @@ struct 分流规则设置页面: View {
             NavigationStack {
                 预设规则页面()
                     .environmentObject(分流管理)
-                    .navigationTitle("预设规则集")
-                    .navigationBarTitleDisplayMode(.inline)
             }
         }
     }
@@ -160,6 +158,10 @@ private struct 分组规则管理页面: View {
     @State private var 选中的规则 = Set<UUID>()
     @State private var 显示批量移动 = false
     @State private var 显示批量复制 = false
+    /// 单条规则移动到分组
+    @State private var 显示移动单条规则: 分流规则项?
+    /// 待删除的规则（用于确认弹窗）
+    @State private var 待删除规则: 分流规则项?
 
     /// 当前分组在管理器中的索引
     private var 分组索引: Int? {
@@ -302,6 +304,26 @@ private struct 分组规则管理页面: View {
                                     编辑的规则 = 规则
                                 }
                             }
+                            .contextMenu {
+                                // 编辑规则
+                                Button {
+                                    编辑的规则 = 规则
+                                } label: {
+                                    Label("编辑规则", systemImage: "pencil")
+                                }
+                                // 移动到其他分组
+                                Button {
+                                    显示移动单条规则 = 规则
+                                } label: {
+                                    Label("移动到分组", systemImage: "folder")
+                                }
+                                // 删除规则
+                                Button(role: .destructive) {
+                                    待删除规则 = 规则
+                                } label: {
+                                    Label("删除规则", systemImage: "trash")
+                                }
+                            }
                             .listRowInsets(EdgeInsets(top: 4, leading: 15, bottom: 4, trailing: 15))
                             .listRowBackground(Color.clear)
                             .listRowSeparator(.hidden)
@@ -344,6 +366,24 @@ private struct 分组规则管理页面: View {
                 选中的规则.removeAll()
             }
             .environmentObject(分流管理)
+        }
+        // 单条规则移动到分组
+        .sheet(item: $显示移动单条规则) { 规则 in
+            选择分组页面(标题: "移动到分组") { 目标分组 in
+                分流管理.移动规则(规则, 到分组: 目标分组)
+            }
+            .environmentObject(分流管理)
+        }
+        // 删除规则确认弹窗
+        .alert(item: $待删除规则) { 规则 in
+            Alert(
+                title: Text("删除规则"),
+                message: Text("确定要删除规则「\(规则.名称)」吗？此操作不可撤销。"),
+                primaryButton: .destructive(Text("删除")) {
+                    分流管理.删除规则(规则)
+                },
+                secondaryButton: .cancel(Text("取消"))
+            )
         }
     }
 
@@ -508,8 +548,10 @@ struct 分流规则页面: View {
                 .environmentObject(分流管理)
         }
         .sheet(isPresented: $显示预设规则) {
-            预设规则页面()
-                .environmentObject(分流管理)
+            NavigationStack {
+                预设规则页面()
+                    .environmentObject(分流管理)
+            }
         }
         .sheet(isPresented: $显示规则测试) {
             规则测试页面()
@@ -837,6 +879,8 @@ struct 规则编辑页面: View {
     @State private var 启用 = true
     @State private var 优先级 = 100
     @State private var 备注 = ""
+    /// 验证错误信息
+    @State private var 验证错误 = ""
 
     init(规则: 分流规则项?, 分组: 分流规则分组? = nil) {
         self.规则 = 规则
@@ -921,9 +965,26 @@ struct 规则编辑页面: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("保存") {
-                        保存规则()
+                        if let 错误 = 验证规则() {
+                            验证错误 = 错误
+                        } else {
+                            验证错误 = ""
+                            保存规则()
+                        }
                     }
                     .disabled(名称.isEmpty || 匹配值.isEmpty)
+                }
+            }
+            // 验证错误提示
+            if !验证错误.isEmpty {
+                Section {
+                    HStack(spacing: 8) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundColor(.警告色)
+                        Text(验证错误)
+                            .font(.system(size: 13))
+                            .foregroundColor(.警告色)
+                    }
                 }
             }
         }
@@ -946,6 +1007,128 @@ struct 规则编辑页面: View {
         case .地理区域: return "CN"
         case .全部: return "*"
         }
+    }
+
+    /// 验证规则格式（避免无效规则导致内核无法启动）
+    /// 返回nil表示验证通过，返回错误信息表示验证失败
+    private func 验证规则() -> String? {
+        let 值 = 匹配值.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        switch 类型 {
+        case .域名精确, .域名后缀:
+            // 域名格式验证：不能包含空格、斜杠、协议前缀
+            if 值.contains(" ") || 值.contains("/") || 值.hasPrefix("http://") || 值.hasPrefix("https://") {
+                return "域名格式不正确，不能包含空格、斜杠或协议前缀"
+            }
+            if 值.isEmpty {
+                return "域名不能为空"
+            }
+            // 域名后缀不能以点开头
+            if 类型 == .域名后缀 && 值.hasPrefix(".") {
+                return "域名后缀不能以点开头"
+            }
+
+        case .域名关键词:
+            if 值.isEmpty {
+                return "关键词不能为空"
+            }
+            if 值.count < 2 {
+                return "关键词至少需要2个字符"
+            }
+
+        case .正则表达式:
+            // 验证正则表达式是否合法
+            do {
+                _ = try NSRegularExpression(pattern: 值)
+            } catch {
+                return "正则表达式格式不正确：\(error.localizedDescription)"
+            }
+
+        case .IP地址:
+            // 验证IPv4或IPv6格式
+            if 验证IPv4(值) == false && 验证IPv6(值) == false {
+                return "IP地址格式不正确，请输入合法的IPv4或IPv6地址"
+            }
+
+        case .IP段:
+            // 验证CIDR格式
+            if !值.contains("/") {
+                return "IP段格式不正确，应为 地址/前缀长度，例如 10.0.0.0/8"
+            }
+            let 部分 = 值.split(separator: "/")
+            if 部分.count != 2 {
+                return "IP段格式不正确"
+            }
+            let 地址部分 = String(部分[0])
+            let 前缀部分 = String(部分[1])
+            if 验证IPv4(地址部分) {
+                guard let 前缀 = Int(前缀部分), 前缀 >= 0 && 前缀 <= 32 else {
+                    return "IPv4前缀长度应为0-32"
+                }
+            } else if 验证IPv6(地址部分) {
+                guard let 前缀 = Int(前缀部分), 前缀 >= 0 && 前缀 <= 128 else {
+                    return "IPv6前缀长度应为0-128"
+                }
+            } else {
+                return "IP段地址格式不正确"
+            }
+
+        case .端口:
+            guard let 端口 = Int(值), 端口 >= 1 && 端口 <= 65535 else {
+                return "端口号应为1-65535的整数"
+            }
+
+        case .端口范围:
+            if !值.contains("-") {
+                return "端口范围格式不正确，应为 起始-结束，例如 1000-2000"
+            }
+            let 部分 = 值.split(separator: "-")
+            if 部分.count != 2 {
+                return "端口范围格式不正确"
+            }
+            guard let 起始 = Int(String(部分[0])), let 结束 = Int(String(部分[1])),
+                  起始 >= 1 && 起始 <= 65535 && 结束 >= 1 && 结束 <= 65535 && 起始 <= 结束 else {
+                return "端口范围应为1-65535，且起始不大于结束"
+            }
+
+        case .协议:
+            let 合法协议 = ["TCP", "UDP", "ICMP", "ALL"]
+            if !合法协议.contains(值.uppercased()) {
+                return "协议类型应为 TCP、UDP、ICMP 或 ALL"
+            }
+
+        case .进程名称, .用户代理, .地理区域, .全部:
+            if 值.isEmpty {
+                return "匹配值不能为空"
+            }
+        }
+
+        // 优先级验证
+        if 优先级 < 0 || 优先级 > 99999 {
+            return "优先级应为0-99999的整数"
+        }
+
+        return nil
+    }
+
+    /// 验证IPv4地址格式
+    private func 验证IPv4(_ 值: String) -> Bool {
+        let 部分 = 值.split(separator: ".")
+        guard 部分.count == 4 else { return false }
+        for 段 in 部分 {
+            guard let 数字 = Int(String(段)), 数字 >= 0 && 数字 <= 255 else { return false }
+            // 不允许前导零（除了0本身）
+            if 段.count > 1 && 段.hasPrefix("0") { return false }
+        }
+        return true
+    }
+
+    /// 验证IPv6地址格式（简化验证）
+    private func 验证IPv6(_ 值: String) -> Bool {
+        // 包含冒号且字符合法
+        guard 值.contains(":") else { return false }
+        let 合法字符 = CharacterSet(charactersIn: "0123456789abcdefABCDEF:")
+        return 值.rangeOfCharacter(from: 合法字符.inverted) == nil
     }
 
     /// 保存规则
@@ -992,10 +1175,12 @@ struct 预设规则页面: View {
     @Environment(\.dismiss) private var 关闭
     @State private var 选中的预设: 预设规则集?
     @State private var 显示导入选项 = false
+    /// 页面是否已加载（解决sheet弹出时List空白问题）
+    @State private var 页面已加载 = false
 
     var body: some View {
-        NavigationStack {
-            List {
+        List {
+            if 页面已加载 {
                 ForEach(预设规则集.所有预设) { 预设 in
                     Button {
                         选中的预设 = 预设
@@ -1033,20 +1218,35 @@ struct 预设规则页面: View {
                     }
                     .buttonStyle(PlainButtonStyle())
                 }
-            }
-            .listStyle(.insetGrouped)
-            .navigationTitle("预设规则集")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("关闭") { 关闭() }
+            } else {
+                // 加载中占位
+                HStack {
+                    Spacer()
+                    ProgressView()
+                        .padding(.vertical, 40)
+                    Spacer()
                 }
+                .listRowBackground(Color.clear)
             }
-            .sheet(isPresented: $显示导入选项) {
-                if let 预设 = 选中的预设 {
-                    导入预设选项页面(预设: 预设)
-                        .environmentObject(分流管理)
-                }
+        }
+        .listStyle(.insetGrouped)
+        .navigationTitle("预设规则集")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button("关闭") { 关闭() }
+            }
+        }
+        .sheet(isPresented: $显示导入选项) {
+            if let 预设 = 选中的预设 {
+                导入预设选项页面(预设: 预设)
+                    .environmentObject(分流管理)
+            }
+        }
+        .onAppear {
+            // 延迟一帧渲染，解决sheet弹出时List空白问题
+            DispatchQueue.main.async {
+                页面已加载 = true
             }
         }
     }
@@ -1061,6 +1261,10 @@ private struct 导入预设选项页面: View {
     let 预设: 预设规则集
     @State private var 选中的导入方式: 导入方式 = .创建新分组
     @State private var 选中的分组索引 = 0
+    /// 导入中状态
+    @State private var 导入中 = false
+    /// 导入进度文字
+    @State private var 导入进度文字 = ""
 
     /// 导入方式
     enum 导入方式: String, CaseIterable {
@@ -1119,11 +1323,29 @@ private struct 导入预设选项页面: View {
                     Button("取消") { 关闭() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("导入") {
+                    Button(导入中 ? "导入中..." : "导入") {
                         执行导入()
-                        关闭()
                     }
+                    .disabled(导入中)
                 }
+            }
+            // 导入进度遮罩
+            if 导入中 {
+                ZStack {
+                    Color.black.opacity(0.4)
+                        .ignoresSafeArea()
+                    VStack(spacing: 16) {
+                        ProgressView()
+                            .scaleEffect(1.5)
+                        Text(导入进度文字)
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundColor(.white)
+                    }
+                    .padding(24)
+                    .background(Color.灰色3)
+                    .cornerRadius(16)
+                }
+                .transition(.opacity)
             }
         }
     }
@@ -1144,19 +1366,36 @@ private struct 导入预设选项页面: View {
 
     /// 执行导入
     private func 执行导入() {
-        switch 选中的导入方式 {
-        case .创建新分组:
-            分流管理.应用预设规则集(预设)
-        case .追加到分组:
-            if 选中的分组索引 < 分流管理.配置.分组列表.count {
-                let 目标分组 = 分流管理.配置.分组列表[选中的分组索引]
-                分流管理.导入预设规则(预设, 追加到分组: 目标分组)
+        导入中 = true
+        导入进度文字 = "正在准备导入..."
+
+        // 延迟一帧让UI先显示进度
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            导入进度文字 = "正在导入 \(预设.规则列表.count) 条规则..."
+
+            // 主线程修改配置（数组追加很快，不会卡顿）
+            switch 选中的导入方式 {
+            case .创建新分组:
+                分流管理.应用预设规则集(预设)
+            case .追加到分组:
+                if 选中的分组索引 < 分流管理.配置.分组列表.count {
+                    let 目标分组 = 分流管理.配置.分组列表[选中的分组索引]
+                    分流管理.导入预设规则(预设, 追加到分组: 目标分组)
+                }
+            case .覆盖所有规则:
+                分流管理.配置.分组列表.removeAll()
+                分流管理.应用预设规则集(预设)
+            case .合并去重:
+                合并去重导入()
             }
-        case .覆盖所有规则:
-            分流管理.配置.分组列表.removeAll()
-            分流管理.应用预设规则集(预设)
-        case .合并去重:
-            合并去重导入()
+
+            导入进度文字 = "正在保存配置..."
+
+            // 后台线程异步保存（JSON编码大量规则可能耗时）
+            分流管理.异步保存配置 {
+                导入中 = false
+                关闭()
+            }
         }
     }
 

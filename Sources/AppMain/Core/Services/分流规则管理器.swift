@@ -292,7 +292,11 @@ final class 分流规则管理器: ObservableObject {
     /// 规则统计
     var 统计: (总规则数: Int, 启用规则数: Int, 总命中数: Int, 分组数: Int) {
         let 所有规则 = 配置.分组列表.flatMap { $0.规则列表 }
-        let 启用规则 = 所有规则.filter { $0.启用 }
+        // 启用规则数：只统计启用分组中的启用规则（分组关闭时其下规则不生效）
+        let 启用规则 = 配置.分组列表
+            .filter { $0.启用 }
+            .flatMap { $0.规则列表 }
+            .filter { $0.启用 }
         let 总命中 = 所有规则.reduce(0) { $0 + $1.命中次数 }
         return (所有规则.count, 启用规则.count, 总命中, 配置.分组列表.count)
     }

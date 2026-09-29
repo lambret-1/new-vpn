@@ -753,9 +753,8 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
     // MARK: - DNS 查询记录
 
-    /// 已知的 DNS 记录类型关键字（用于动态定位，不依赖固定位置）
-    /// 只保留用户关心的常见类型，过滤 OPT/SVCB/HTTPS 等无用类型
-    private let 已知记录类型: Set<String> = ["A", "AAAA", "CNAME", "MX", "TXT", "NS", "SOA", "PTR", "SRV", "CAA"]
+    /// 已知的 DNS 记录类型（只保留 A/AAAA，CNAME等中间跳转不单独显示）
+    private let 已知记录类型: Set<String> = ["A", "AAAA"]
 
     /// 解析 sing-box DNS 日志并记录到共享 UserDefaults
     /// 支持格式：
@@ -785,7 +784,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         }
 
         // 格式1：成功解析 dns: exchanged example.com. 300 IN A 1.2.3.4
-        // CNAME链格式：example.com. 300 IN CNAME cdn.example.com. 300 IN A 1.2.3.4
+        // 简化格式：dns: exchanged A example.com. 1.2.3.4（类型在前）
         if 日志内容.contains("exchanged"),
            let 范围 = 日志内容.range(of: "exchanged ") {
             let 剩余部分 = String(日志内容[范围.upperBound...])
@@ -803,35 +802,38 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                 return
             }
 
-            // 第一步：从左到右查找第一个已知记录类型的位置
+            // 确定域名和类型位置：
+            // - 如果第一个字段是 A/AAAA，则类型在前，域名在第二个字段
+            // - 否则域名在第一个字段，类型在后面
+            var 域名索引 = 0
             var 类型索引 = -1
             var 记录类型字符串 = "A"
-            for (索引, 字段) in 部分.enumerated() {
-                let 大写字段 = 字段.uppercased()
-                if 已知记录类型.contains(大写字段) {
-                    类型索引 = 索引
-                    记录类型字符串 = 大写字段
-                    break
+
+            if 已知记录类型.contains(部分[0].uppercased()) {
+                // 类型在前格式：A example.com. 1.2.3.4
+                记录类型字符串 = 部分[0].uppercased()
+                域名索引 = 1
+                类型索引 = 0
+            } else {
+                // 域名在前格式：example.com. 300 IN A 1.2.3.4
+                域名索引 = 0
+                // 从第二个字段开始找类型
+                for i in 1..<部分.count {
+                    if 已知记录类型.contains(部分[i].uppercased()) {
+                        类型索引 = i
+                        记录类型字符串 = 部分[i].uppercased()
+                        break
+                    }
                 }
             }
-            // 类型必须在索引1及以后（索引0应该是域名），没找到已知类型直接跳过
-            guard 类型索引 > 0 else { return }
 
-            // 第二步：从类型位置向左查找域名（最后一个非数字、非"IN"的字段）
-            // 不假设域名在第一个位置，兼容CNAME链等复杂格式
-            var 域名索引 = -1
-            for i in stride(from: 类型索引 - 1, through: 0, by: -1) {
-                let 字段大写 = 部分[i].uppercased()
-                if 字段大写 != "IN" && Int(字段大写) == nil {
-                    域名索引 = i
-                    break
-                }
-            }
-            guard 域名索引 >= 0 else { return }
+            // 没找到类型直接跳过（CNAME/OPT等无用类型）
+            guard 类型索引 >= 0 else { return }
+            guard 域名索引 < 部分.count else { return }
 
+            // 提取域名
             let 原始域名 = 部分[域名索引]
             let 域名 = 原始域名.hasSuffix(".") ? String(原始域名.dropLast()) : 原始域名
-            // 根域名"."或空域名直接跳过（OPT等伪记录）
             guard !域名.isEmpty else { return }
 
             // 计算响应耗时
@@ -841,31 +843,21 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             let 是否缓存命中 = (响应时间 != nil && 响应时间! < 1)
             let 来源 = 是否缓存命中 ? "缓存" : "远程"
 
-            // TTL：类型前面的数字字段
+            // TTL：域名和类型之间的数字字段
             var TTL = 300
-            for i in 0..<类型索引 {
-                if let 数字 = Int(部分[i]) {
-                    TTL = 数字
-                    break
-                }
-            }
-
-            // 解析结果：
-            // - 域名类型记录（CNAME/NS/MX/SOA/PTR）：只取类型后面第一个非数字非IN字段，避免CNAME链后续内容混入
-            // - IP类型记录（A/AAAA/TXT/SRV/CAA）：取类型后面的所有字段
-            var 解析结果: [String] = []
-            let 域名类型集合: Set<String> = ["CNAME", "NS", "MX", "SOA", "PTR"]
-            if 域名类型集合.contains(记录类型字符串) {
-                for i in (类型索引 + 1)..<部分.count {
-                    let 字段大写 = 部分[i].uppercased()
-                    if 字段大写 != "IN" && Int(字段大写) == nil {
-                        解析结果 = [部分[i]]
+            let TTL起始 = min(域名索引, 类型索引) + 1
+            let TTL结束 = max(域名索引, 类型索引)
+            if TTL起始 < TTL结束 {
+                for i in TTL起始..<TTL结束 {
+                    if let 数字 = Int(部分[i]) {
+                        TTL = 数字
                         break
                     }
                 }
-            } else {
-                解析结果 = 类型索引 + 1 < 部分.count ? Array(部分[(类型索引 + 1)...]) : []
             }
+
+            // 解析结果：类型后面的所有字段（只保留A/AAAA，后面都是IP）
+            let 解析结果 = 类型索引 + 1 < 部分.count ? Array(部分[(类型索引 + 1)...]) : []
 
             保存DNS记录(域名: 域名, 记录类型: 记录类型字符串, 解析结果: 解析结果, TTL: TTL, DNS服务器: "sing-box", 来源: 来源, 是否失败: false, 响应时间: 响应时间)
             return

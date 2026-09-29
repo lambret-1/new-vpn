@@ -70,8 +70,8 @@ final class DNS管理器: ObservableObject {
             return
         }
 
-        // 有效类型白名单
-        let 有效类型: Set<String> = ["A", "AAAA", "CNAME", "MX", "TXT", "NS", "SOA", "PTR", "SRV", "CAA"]
+        // 有效类型白名单（只保留A/AAAA，CNAME等中间跳转不单独显示）
+        let 有效类型: Set<String> = ["A", "AAAA"]
 
         // 同时收集有效记录的原始字典，用于清理App Group旧垃圾记录
         var 有效原始字典: [[String: Any]] = []
